@@ -38,7 +38,7 @@ export const Home: React.FC = () => {
   };
 
   return (
-    <>
+    <div className="home-page">
       <style>{`
         .hero {
             position: relative;
@@ -368,6 +368,6 @@ export const Home: React.FC = () => {
           )}
         </div>
       </section>
-    </>
+    </div>
   );
 };

@@ -121,6 +121,9 @@ ul {
 
 .card:hover {
   box-shadow: var(--shadow-hover);
+}
+
+.home-page .card:hover {
   transform: translateY(-5px);
 }
 
