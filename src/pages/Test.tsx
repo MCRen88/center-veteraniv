@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
+import { casesDb } from '../data/casesDb';
 
 type TestMode = 'training' | 'exam' | null;
 
@@ -29,6 +30,158 @@ export const Test: React.FC = () => {
   const [timePerQuestion, setTimePerQuestion] = useState<{ [key: number]: number }>({});
   const [answerChanges, setAnswerChanges] = useState<{ [key: number]: number }>({});
 
+  const [showCases, setShowCases] = useState(false);
+  const [currentCaseIndex, setCurrentCaseIndex] = useState(0);
+  const [caseAnswers, setCaseAnswers] = useState<number[]>([]);
+  const [casesFinished, setCasesFinished] = useState(false);
+  const [casesScore, setCasesScore] = useState(0);
+  const [caseShowFeedback, setCaseShowFeedback] = useState(false);
+  const [examEndTime, setExamEndTime] = useState<number | null>(null);
+  const isRestored = useRef(false);
+
+  const isImpersonating = !!state.originalAdminUser;
+
+  const exitTest = () => {
+    if (state.currentUser) {
+      localStorage.removeItem(`lms_active_test_state_${state.currentUser.id}`);
+    }
+    navigate('/dashboard');
+  };
+
+  // Restore test state from localStorage on mount/when currentUser is loaded
+  useEffect(() => {
+    if (!state.currentUser || isRestored.current) return;
+    const saved = localStorage.getItem(`lms_active_test_state_${state.currentUser.id}`);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.mode) {
+          setMode(parsed.mode);
+          setCurrentQuestionIndex(parsed.currentQuestionIndex ?? 0);
+          if (parsed.testQuestions && parsed.testQuestions.length > 0) {
+            setTestQuestions(parsed.testQuestions);
+          }
+          setAnswers(parsed.answers ?? []);
+          setShowExplanation(parsed.showExplanation ?? false);
+          setIsFinished(parsed.isFinished ?? false);
+          setScore(parsed.score ?? 0);
+          
+          let calculatedTimeLeft = parsed.timeLeft ?? 3600;
+          if (parsed.mode === 'exam' && parsed.examEndTime) {
+            const remaining = Math.round((parsed.examEndTime - Date.now()) / 1000);
+            calculatedTimeLeft = remaining > 0 ? remaining : 0;
+          }
+          setTimeLeft(calculatedTimeLeft);
+          setExamEndTime(parsed.examEndTime ?? null);
+          
+          setWarnings(parsed.warnings ?? 0);
+          setWasTerminated(parsed.wasTerminated ?? false);
+          setQuestionStartTime(parsed.questionStartTime ?? Date.now());
+          setTimePerQuestion(parsed.timePerQuestion ?? {});
+          setAnswerChanges(parsed.answerChanges ?? {});
+          setShowCases(parsed.showCases ?? false);
+          setCurrentCaseIndex(parsed.currentCaseIndex ?? 0);
+          setCaseAnswers(parsed.caseAnswers ?? []);
+          setCasesFinished(parsed.casesFinished ?? false);
+          setCasesScore(parsed.casesScore ?? 0);
+          setCaseShowFeedback(parsed.caseShowFeedback ?? false);
+        }
+      } catch (e) {
+        console.error("Error restoring test state:", e);
+      }
+    }
+    isRestored.current = true;
+  }, [state.currentUser]);
+
+  // Save test state to localStorage on state changes
+  useEffect(() => {
+    if (!state.currentUser || !isRestored.current) return;
+    if (mode) {
+      const stateToSave = {
+        mode,
+        currentQuestionIndex,
+        testQuestions,
+        answers,
+        showExplanation,
+        isFinished,
+        score,
+        timeLeft,
+        warnings,
+        wasTerminated,
+        questionStartTime,
+        timePerQuestion,
+        answerChanges,
+        showCases,
+        currentCaseIndex,
+        caseAnswers,
+        casesFinished,
+        casesScore,
+        caseShowFeedback,
+        examEndTime
+      };
+      localStorage.setItem(`lms_active_test_state_${state.currentUser.id}`, JSON.stringify(stateToSave));
+    } else {
+      localStorage.removeItem(`lms_active_test_state_${state.currentUser.id}`);
+    }
+  }, [
+    state.currentUser,
+    mode,
+    currentQuestionIndex,
+    testQuestions,
+    answers,
+    showExplanation,
+    isFinished,
+    score,
+    timeLeft,
+    warnings,
+    wasTerminated,
+    questionStartTime,
+    timePerQuestion,
+    answerChanges,
+    showCases,
+    currentCaseIndex,
+    caseAnswers,
+    casesFinished,
+    casesScore,
+    caseShowFeedback,
+    examEndTime
+  ]);
+
+
+
+  const startCases = () => {
+    setShowCases(true);
+    setCurrentCaseIndex(0);
+    setCaseAnswers(new Array(casesDb.length).fill(-1));
+    setCasesFinished(false);
+    setCasesScore(0);
+    setCaseShowFeedback(false);
+  };
+
+  const handleCaseAnswer = (optionIndex: number) => {
+    if (caseShowFeedback) return;
+    const newCaseAnswers = [...caseAnswers];
+    newCaseAnswers[currentCaseIndex] = optionIndex;
+    setCaseAnswers(newCaseAnswers);
+    setCaseShowFeedback(true);
+  };
+
+  const nextCase = () => {
+    setCaseShowFeedback(false);
+    if (currentCaseIndex < casesDb.length - 1) {
+      setCurrentCaseIndex(currentCaseIndex + 1);
+    } else {
+      let correctCount = 0;
+      casesDb.forEach((c, idx) => {
+        if (caseAnswers[idx] === c.correctAnswer) {
+          correctCount++;
+        }
+      });
+      setCasesScore(correctCount);
+      setCasesFinished(true);
+    }
+  };
+
   const goToQuestion = (nextIdx: number) => {
     const now = Date.now();
     const elapsed = Math.round((now - questionStartTime) / 1000);
@@ -48,30 +201,6 @@ export const Test: React.FC = () => {
     }
   }, [state.questions, mode]);
 
-  const currentUser = state.currentUser;
-
-  // Protected Route Check
-  if (!currentUser) {
-    return (
-      <div className="container mt-5 mb-5 text-center">
-        <h3>Доступ обмежено</h3>
-        <p className="mt-3 mb-4">Для проходження тестування необхідно увійти в систему.</p>
-        <button className="btn btn-primary" onClick={() => navigate('/login')}>Увійти</button>
-      </div>
-    );
-  }
-
-  if (!currentUser.testPermission) {
-    return (
-      <div className="container mt-5 mb-5 text-center">
-        <h3>Доступ до тестування закрито</h3>
-        <p className="mt-3 mb-4 text-muted" style={{ maxWidth: '600px', margin: '0 auto' }}>
-          Очікуйте підтвердження від адміністратора. Адміністратор надасть вам дозвіл після перевірки вашої заяви та документів.
-        </p>
-        <button className="btn btn-outline" onClick={() => navigate('/dashboard')}>Повернутися до кабінету</button>
-      </div>
-    );
-  }
 
   const startTest = (selectedMode: TestMode) => {
     setMode(selectedMode);
@@ -83,12 +212,21 @@ export const Test: React.FC = () => {
     setQuestionStartTime(Date.now());
     setTimePerQuestion({});
     setAnswerChanges({});
+
+    setShowCases(false);
+    setCurrentCaseIndex(0);
+    setCaseAnswers([]);
+    setCasesFinished(false);
+    setCasesScore(0);
+    setCaseShowFeedback(false);
     
     if (selectedMode === 'exam') {
       const shuffled = [...state.questions].sort(() => 0.5 - Math.random());
       setTestQuestions(shuffled);
+      setExamEndTime(Date.now() + 3600 * 1000);
     } else {
       setTestQuestions(state.questions);
+      setExamEndTime(null);
     }
     
     setAnswers(new Array(state.questions.length).fill(-1));
@@ -325,6 +463,13 @@ export const Test: React.FC = () => {
     terminateTestRef.current = terminateTest;
   });
 
+  // Auto-submit test if time left becomes 0 in exam mode
+  useEffect(() => {
+    if (mode === 'exam' && timeLeft === 0 && !isFinished && !isSubmitting) {
+      finishTest();
+    }
+  }, [mode, timeLeft, isFinished, isSubmitting, finishTest]);
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -415,7 +560,7 @@ export const Test: React.FC = () => {
             <div class="cert-watermark">ЗОІППО</div>
             <div class="cert-title">СЕРТИФІКАТ</div>
             <div style="font-size: 20px;">про проходження онлайн-тестування</div>
-            <div class="cert-name">${currentUser.name}</div>
+            <div class="cert-name">${currentUser?.name || ''}</div>
             <div style="font-size: 18px; line-height: 1.5; margin-bottom: 40px;">
               Успішно пройшов(ла) тестування на знання професійного стандарту<br>
               "Фахівець із супроводу ветеранів війни та демобілізованих осіб"<br><br>
@@ -433,7 +578,207 @@ export const Test: React.FC = () => {
     }
   };
 
+  const currentUser = state.currentUser;
+
+  // Protected Route Check
+  if (!currentUser) {
+    return (
+      <div className="container mt-5 mb-5 text-center">
+        <h3>Доступ обмежено</h3>
+        <p className="mt-3 mb-4">Для проходження тестування необхідно увійти в систему.</p>
+        <button className="btn btn-primary" onClick={() => navigate('/login')}>Увійти</button>
+      </div>
+    );
+  }
+
+  if (currentUser.role === 'user' && !currentUser.testPermission && !isFinished && !showCases && !mode && !isImpersonating) {
+    const hasPreviousScores = currentUser.testScores && currentUser.testScores.length > 0;
+    return (
+      <div className="container mt-5 mb-5 text-center">
+        <h3>Доступ до тестування закрито</h3>
+        <p className="mt-3 mb-4 text-muted" style={{ maxWidth: '600px', margin: '0 auto' }}>
+          {hasPreviousScores 
+            ? "Ви вже пройшли тестування. Повторна спроба можлива лише з дозволу адміністратора."
+            : "Очікуйте підтвердження від адміністратора. Адміністратор надасть вам дозвіл після перевірки вашої заяви та документів."}
+        </p>
+        <button className="btn btn-outline" onClick={exitTest}>Повернутися до кабінету</button>
+      </div>
+    );
+  }
+
   if (isFinished) {
+    if (showCases) {
+      if (casesFinished) {
+        return (
+          <div className="container mt-5 mb-5">
+            <div className="card text-center" style={{ maxWidth: '800px', margin: '0 auto', padding: '40px' }}>
+              <div style={{ fontSize: '70px', marginBottom: '20px' }}>🏆</div>
+              <h2 style={{ fontFamily: 'Comfortaa, sans-serif' }}>Завершено оцінювання кейсів</h2>
+              <p style={{ fontSize: '20px', margin: '20px 0 30px' }}>
+                Ви успішно розв'язали <strong>{casesScore} з {casesDb.length}</strong> професійних кейсів.
+              </p>
+              
+              <div className="alert alert-info mb-4" style={{ textAlign: 'left', lineHeight: 1.6 }}>
+                <strong>Аналіз результату:</strong><br />
+                {casesScore >= 8 ? (
+                  "Відмінний результат! Ви продемонстрували глибоке розуміння професійного стандарту фахівця із супроводу ветеранів, етичних норм, законодавства та принципів кейс-менеджменту. Ви готові до вирішення складних реальних ситуацій."
+                ) : casesScore >= 5 ? (
+                  "Хороший результат. Ви орієнтуєтеся в основних ситуаціях, проте деякі рішення потребують більш детального вивчення законодавчої бази (зокрема, щодо захисту персональних даних та протидії домашньому насильству)."
+                ) : (
+                  "Рекомендується додатково опрацювати нормативно-правові акти та професійний стандарт. Деякі з ваших рішень можуть створювати юридичні або етичні ризики для клієнтів та організації."
+                )}
+              </div>
+
+              <div className="mt-4 d-flex justify-content-center gap-3">
+                <button className="btn btn-outline" onClick={exitTest}>
+                  В кабінет
+                </button>
+                <button className="btn btn-primary" onClick={() => setShowCases(false)}>
+                  Назад до результатів тесту
+                </button>
+                 {(currentUser.role !== 'user' || currentUser.testPermission || isImpersonating) && (
+                  <button className="btn btn-primary" style={{ background: '#3498db' }} onClick={startCases}>
+                    Спробувати кейси ще раз
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      const currentCase = casesDb[currentCaseIndex];
+      const hasSelectedOption = caseAnswers[currentCaseIndex] !== -1;
+
+      return (
+        <>
+          <style>{`
+            .case-container {
+              max-width: 850px;
+              margin: 0 auto;
+            }
+            .situation-box {
+              background: var(--bg-light);
+              border-left: 5px solid var(--blue);
+              padding: 20px;
+              border-radius: 4px;
+              font-size: 16px;
+              line-height: 1.6;
+              margin-bottom: 25px;
+              color: var(--text-dark);
+            }
+            .option-card-case {
+              padding: 18px 22px;
+              border: 2px solid #e2e8f0;
+              border-radius: 8px;
+              margin-bottom: 12px;
+              cursor: pointer;
+              transition: all 0.2s ease;
+              font-size: 15px;
+              line-height: 1.5;
+              background: white;
+              text-align: left;
+            }
+            .option-card-case:hover {
+              border-color: #cbd5e1;
+              background: #f8fafc;
+              transform: translateY(-1px);
+            }
+            .option-card-case.correct {
+              border-color: #10b981;
+              background: #ecfdf5;
+              color: #065f46;
+              font-weight: 500;
+            }
+            .option-card-case.wrong {
+              border-color: #ef4444;
+              background: #fef2f2;
+              color: #991b1b;
+            }
+            .option-card-case.selected {
+              border-color: var(--blue);
+              background: rgba(81, 144, 207, 0.05);
+            }
+            .badge-step {
+              background: var(--light-blue);
+              color: white;
+              padding: 4px 10px;
+              border-radius: 20px;
+              font-size: 13px;
+              font-weight: bold;
+            }
+          `}</style>
+
+          <div className="container mt-4 mb-5 case-container">
+            <div className="d-flex justify-content-between align-items-center mb-4">
+              <span className="badge-step">Кейс {currentCaseIndex + 1} з {casesDb.length}</span>
+              <span className="text-muted" style={{ fontSize: '14px', fontWeight: 500 }}>
+                Практичний блок оцінювання
+              </span>
+            </div>
+
+            <div className="card">
+              <h2 style={{ fontSize: '22px', color: 'var(--dark-blue)', marginBottom: '20px', fontFamily: 'Comfortaa, sans-serif' }}>
+                {currentCase.title}
+              </h2>
+
+              <div className="situation-box">
+                <strong>Опис ситуації:</strong><br />
+                {currentCase.situation}
+              </div>
+
+              <h3 style={{ fontSize: '18px', lineHeight: 1.4, marginBottom: '20px', fontWeight: 600 }}>
+                {currentCase.question}
+              </h3>
+
+              <div className="options-list">
+                {currentCase.options.map((opt, idx) => {
+                  let cardClass = "option-card-case";
+                  if (caseAnswers[currentCaseIndex] === idx) cardClass += " selected";
+                  
+                  if (caseShowFeedback) {
+                    if (idx === currentCase.correctAnswer) cardClass += " correct";
+                    else if (caseAnswers[currentCaseIndex] === idx) cardClass += " wrong";
+                  }
+
+                  return (
+                    <div
+                      key={idx}
+                      className={cardClass}
+                      onClick={() => handleCaseAnswer(idx)}
+                    >
+                      <strong>{String.fromCharCode(65 + idx)})</strong> {opt}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {caseShowFeedback && (
+                <div className="alert alert-success mt-4" style={{ borderLeft: '5px solid #10b981', background: '#f0fdf4', textAlign: 'left' }}>
+                  <h4 className="alert-heading" style={{ fontSize: '16px', color: '#15803d', marginBottom: '8px' }}>
+                    {caseAnswers[currentCaseIndex] === currentCase.correctAnswer ? "✅ Правильне рішення!" : "❌ Не зовсім правильний вибір"}
+                  </h4>
+                  <p style={{ fontSize: '14px', margin: 0, color: '#166534', lineHeight: 1.5 }}>
+                    <strong>Обґрунтування:</strong> {currentCase.explanation}
+                  </p>
+                </div>
+              )}
+
+              <div className="d-flex justify-content-end mt-4">
+                <button
+                  className="btn btn-primary"
+                  onClick={nextCase}
+                  disabled={!hasSelectedOption}
+                >
+                  {currentCaseIndex === casesDb.length - 1 ? "Завершити блок кейсів" : "Наступний кейс"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      );
+    }
+
     const percentage = Math.round((score / testQuestions.length) * 100);
     const passed = percentage >= 75 && !wasTerminated;
 
@@ -460,11 +805,18 @@ export const Test: React.FC = () => {
           </div>
           
           <div className="mt-4 d-flex justify-content-center gap-3">
-            <button className="btn btn-outline" onClick={() => navigate('/dashboard')}>В кабінет</button>
-            <button className="btn btn-primary" onClick={() => startTest(mode)}>Спробувати ще раз</button>
+            <button className="btn btn-outline" onClick={exitTest}>В кабінет</button>
+            {(currentUser.role !== 'user' || currentUser.testPermission || isImpersonating) && (
+              <button className="btn btn-primary" onClick={() => startTest(mode)}>Спробувати ще раз</button>
+            )}
             {passed && !wasTerminated && (
               <button className="btn btn-primary" style={{ background: '#2ecc71' }} onClick={downloadCert}>
                 Завантажити сертифікат
+              </button>
+            )}
+            {!wasTerminated && (
+              <button className="btn btn-primary" style={{ background: '#3498db' }} onClick={startCases}>
+                Перейти до професійних кейсів
               </button>
             )}
           </div>

@@ -29,6 +29,11 @@ CREATE POLICY "Admins can update profiles"
 ON public.profiles FOR UPDATE
 USING ( get_user_role() = 'admin' );
 
+CREATE POLICY "Users can revoke own test permission"
+ON public.profiles FOR UPDATE
+USING ( auth.uid() = id )
+WITH CHECK ( auth.uid() = id AND role = 'user' AND test_permission = false );
+
 CREATE POLICY "Admins can delete profiles"
 ON public.profiles FOR DELETE
 USING ( get_user_role() = 'admin' );
@@ -53,10 +58,10 @@ CREATE POLICY "Users can read own test scores or admins/teachers can read all"
 ON public.test_scores FOR SELECT
 USING ( auth.uid() = user_id OR get_user_role() IN ('admin', 'teacher') );
 
--- Users can insert their own test scores
-CREATE POLICY "Users can insert own test scores"
+-- Users can insert their own test scores or admins/teachers can insert
+CREATE POLICY "Users can insert own test scores or admins/teachers can insert"
 ON public.test_scores FOR INSERT
-WITH CHECK ( auth.uid() = user_id );
+WITH CHECK ( auth.uid() = user_id OR get_user_role() IN ('admin', 'teacher') );
 
 
 -- 4. REGISTRY RLS

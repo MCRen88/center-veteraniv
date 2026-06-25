@@ -1,5 +1,15 @@
 CREATE SCHEMA IF NOT EXISTS auth;
 
+-- Define a dummy auth.uid() function so dependent objects and functions compile on database initialization.
+-- GoTrue (auth container) will overwrite this function with its own implementation later.
+CREATE OR REPLACE FUNCTION auth.uid()
+RETURNS uuid
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT null::uuid;
+$$;
+
 -- Create the roles if they do not exist
 DO $$
 BEGIN
@@ -17,6 +27,8 @@ BEGIN
   END IF;
 END
 $$;
+
+ALTER ROLE service_role BYPASSRLS;
 
 -- Grant permissions to anon and authenticated
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
@@ -53,6 +65,7 @@ CREATE TABLE public.test_scores (
   score integer NOT NULL,
   total integer NOT NULL,
   passed boolean NOT NULL,
+  details jsonb,
   created_at timestamptz DEFAULT now()
 );
 

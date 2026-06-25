@@ -21,6 +21,10 @@ export const AdminDashboard: React.FC = () => {
   // Selected user for details modal
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
 
+  // User Analytics view state
+  const [viewingUserAnalyticsId, setViewingUserAnalyticsId] = useState<string | null>(null);
+  const [selectedAttemptId, setSelectedAttemptId] = useState<string | null>(null);
+
   // Selected application for details modal
   const [selectedApp, setSelectedApp] = useState<any | null>(null);
 
@@ -228,11 +232,587 @@ export const AdminDashboard: React.FC = () => {
     alert("Дані користувача успішно оновлено!");
   };
 
-  const handleDeleteUser = async (userId: string, userName: string) => {
-    if (confirm(`Ви впевнені, що хочете остаточно видалити користувача "${userName}" та всі результати його тестування?`)) {
-      await adminDeleteUser(userId);
-      alert("Користувача видалено!");
+  const printDiagnosticReport = (user: any, score: any) => {
+    if (!user || !score) return;
+    const percentage = Math.round((score.score / score.total) * 100);
+    const date = new Date(score.created_at).toLocaleString('uk-UA');
+    const details = score.details;
+    const behavior = details?.behaviorProfile;
+
+    const reportWindow = window.open('', '_blank');
+    if (reportWindow) {
+      reportWindow.document.write(`
+        <html><head><title>Діагностичний звіт: ${user.name}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+        <style>
+          body { font-family: 'Roboto', sans-serif; padding: 40px; color: #2c3e50; line-height: 1.5; background: #fff; }
+          .header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid #34495e; padding-bottom: 20px; }
+          .title { font-family: 'Comfortaa', sans-serif; font-size: 26px; color: #2c3e50; font-weight: bold; margin-bottom: 10px; }
+          .subtitle { font-size: 16px; color: #7f8c8d; text-transform: uppercase; letter-spacing: 1px; }
+          .meta-section { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; background: #f8f9fa; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; }
+          .meta-item { font-size: 14px; }
+          .meta-item strong { color: #2c3e50; }
+          .section-title { font-family: 'Comfortaa', sans-serif; font-size: 20px; color: #2c3e50; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin: 30px 0 15px; }
+          .badge { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; color: #fff; }
+          .badge.passed { background-color: #2ecc71; }
+          .badge.failed { background-color: #e74c3c; }
+          .table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
+          .table th, .table td { padding: 10px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+          .table th { background-color: #f8f9fa; color: #2c3e50; font-weight: bold; }
+          .portrait-box { background: #fafdff; border-left: 5px solid #3498db; padding: 20px; border-radius: 4px; margin-bottom: 25px; }
+          .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+          .bullet-list { padding-left: 20px; margin: 0; }
+          .bullet-list li { margin-bottom: 5px; }
+          @media print {
+            body { padding: 0; }
+            .no-print { display: none; }
+          }
+        </style>
+        </head><body>
+          <div class="header">
+            <div class="title">ДІАГНОСТИЧНИЙ ЗВІТ КАНДИДАТА</div>
+            <div class="subtitle">Результати оцінювання професійних знань</div>
+          </div>
+          
+          <div class="meta-section">
+            <div class="meta-item">
+              <strong>Кандидат:</strong> ${user.name}<br/>
+              <strong>Email:</strong> ${user.email}<br/>
+              <strong>ID:</strong> ${user.id}
+            </div>
+            <div class="meta-item">
+              <strong>Дата тестування:</strong> ${date}<br/>
+              <strong>Режим:</strong> ${score.mode === 'exam' ? '🎯 Екзамен' : '📝 Тренування'}<br/>
+              <strong>Оцінка:</strong> ${score.score} з ${score.total} (${percentage}%) &nbsp;
+              <span class="badge ${score.passed ? 'passed' : 'failed'}">${score.passed ? 'Складено' : 'Не складено'}</span>
+            </div>
+          </div>
+
+          <div class="section-title">🧠 Психометричний портрет та поведінковий профіль</div>
+          ${behavior ? `
+            <div class="portrait-box">
+              <p><strong>Манера відповідей:</strong> ${behavior.style} | <strong>Впевненість:</strong> ${behavior.confidence} | <strong>Темп:</strong> ${behavior.speedCategory}</p>
+              <p style="margin-top: 10px;">${behavior.description}</p>
+            </div>
+            <div class="grid-2">
+              <div>
+                <strong style="color: #27ae60;">✓ Сильні сторони:</strong>
+                <ul class="bullet-list" style="margin-top: 8px;">
+                  ${behavior.strengths?.map((s: string) => `<li>${s}</li>`).join('') || '<li>Немає даних</li>'}
+                </ul>
+              </div>
+              <div>
+                <strong style="color: #c0392b;">✗ Зони ризику / Слабкості:</strong>
+                <ul class="bullet-list" style="margin-top: 8px;">
+                  ${behavior.weaknesses?.map((w: string) => `<li>${w}</li>`).join('') || '<li>Немає даних</li>'}
+                </ul>
+              </div>
+            </div>
+            <div style="margin-top: 20px; background: #f0f7ff; padding: 15px; border-radius: 6px; border-left: 4px solid #3498db;">
+              <strong>🔮 Прогноз професійної успішності:</strong>
+              <p style="margin: 5px 0 0; font-size: 13px;">${behavior.forecast}</p>
+            </div>
+            <div style="margin-top: 15px; background: #f4fbf7; padding: 15px; border-radius: 6px; border-left: 4px solid #2ecc71;">
+              <strong>💡 Рекомендації для кандидата:</strong>
+              <p style="margin: 5px 0 0; font-size: 13px;">${behavior.recommendations}</p>
+            </div>
+          ` : `
+            <p class="text-muted">Дані психометричного аналізу відсутні для цієї спроби.</p>
+          `}
+
+          <div class="section-title">📊 Аналіз успішності за трудовими функціями</div>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Код</th>
+                <th>Трудова функція</th>
+                <th style="text-align: center;">Результат</th>
+                <th style="text-align: center;">Успішність (%)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${(() => {
+                const catStats: { [key: string]: { correct: number; total: number; name: string } } = {};
+                if (details && details.questions) {
+                  details.questions.forEach((q: any) => {
+                    const catId = q.catId || q.catName?.split('.')[0] || 'Інше';
+                    const catName = q.catName || 'Інша категорія';
+                    if (!catStats[catId]) {
+                      catStats[catId] = { correct: 0, total: 0, name: catName };
+                    }
+                    catStats[catId].total++;
+                    if (q.selected === q.correct) {
+                      catStats[catId].correct++;
+                    }
+                  });
+                }
+                const sortedKeys = Object.keys(catStats).sort();
+                if (sortedKeys.length === 0) return '<tr><td colspan="4" style="text-align:center;">Немає даних</td></tr>';
+                return sortedKeys.map(k => {
+                  const stat = catStats[k];
+                  const rate = Math.round((stat.correct / stat.total) * 100);
+                  return `
+                    <tr>
+                      <td style="font-weight: bold; width: 40px;">${k}</td>
+                      <td>${stat.name}</td>
+                      <td style="text-align: center; width: 80px;">${stat.correct} з ${stat.total}</td>
+                      <td style="text-align: center; font-weight: bold; width: 120px; color: ${rate >= 75 ? '#27ae60' : rate >= 60 ? '#d35400' : '#c0392b'}">${rate}%</td>
+                    </tr>
+                  `;
+                }).join('');
+              })()}
+            </tbody>
+          </table>
+
+          <div style="margin-top: 40px; text-align: center; font-size: 11px; color: #7f8c8d;" class="no-print">
+            <button onclick="window.print()" style="padding: 10px 20px; font-size: 14px; background: #3498db; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-bottom: 20px;">Надрукувати звіт</button>
+          </div>
+        </body></html>
+      `);
+      reportWindow.document.close();
     }
+  };
+
+  const renderUserAnalytics = () => {
+    const viewingUser = state.users.find(u => u.id === viewingUserAnalyticsId);
+    if (!viewingUser) return null;
+
+    const attempts = viewingUser.testScores || [];
+    const selectedAttempt = attempts.find(s => s.id === selectedAttemptId) || (attempts[0] || null);
+
+    // Compute basic statistics
+    const totalAttempts = attempts.length;
+    const bestScore = totalAttempts > 0 ? Math.max(...attempts.map(s => s.score)) : 0;
+    const avgScore = totalAttempts > 0 ? Math.round(attempts.reduce((acc, s) => acc + s.score, 0) / totalAttempts) : 0;
+    
+    const attemptsWithTime = attempts.filter(s => s.details && s.details.totalTime);
+    const avgTime = attemptsWithTime.length > 0
+      ? Math.round(attemptsWithTime.reduce((acc, s) => acc + s.details.totalTime, 0) / attemptsWithTime.length)
+      : 0;
+
+    // Compute cohort statistics
+    const allScores = (state.users || []).flatMap(u => u.testScores || []);
+    const cohortAvgPercent = allScores.length > 0
+      ? Math.round(allScores.reduce((acc, s) => acc + (s.score / s.total * 100), 0) / allScores.length)
+      : 0;
+
+    const selectedAttemptPercent = selectedAttempt
+      ? Math.round((selectedAttempt.score / selectedAttempt.total) * 100)
+      : 0;
+
+    // Compute labor functions stats for selected attempt
+    const catStats: { [key: string]: { correct: number; total: number; name: string } } = {};
+    if (selectedAttempt && selectedAttempt.details && selectedAttempt.details.questions) {
+      selectedAttempt.details.questions.forEach((q: any) => {
+        const catId = q.catId || q.catName?.split('.')[0] || 'Інше';
+        const catName = q.catName || 'Інша категорія';
+        if (!catStats[catId]) {
+          catStats[catId] = { correct: 0, total: 0, name: catName };
+        }
+        catStats[catId].total++;
+        if (q.selected === q.correct) {
+          catStats[catId].correct++;
+        }
+      });
+    }
+
+    const sortedCatKeys = Object.keys(catStats).sort();
+
+    return (
+      <div className="user-analytics-view">
+        {/* Back and Title Header */}
+        <div className="card mb-4" style={{ background: '#fff', borderLeft: '5px solid var(--blue)' }}>
+          <div className="d-flex justify-content-between align-items-center flex-wrap" style={{ gap: '15px' }}>
+            <div>
+              <button 
+                className="btn btn-outline mb-2" 
+                style={{ padding: '6px 12px', fontSize: '13px' }}
+                onClick={() => {
+                  setViewingUserAnalyticsId(null);
+                  setSelectedAttemptId(null);
+                }}
+              >
+                ← Назад до користувачів
+              </button>
+              <h2 style={{ fontFamily: 'Comfortaa, cursive', margin: '5px 0' }}>Діагностика: {viewingUser.name}</h2>
+              <p className="text-muted" style={{ margin: 0, fontSize: '14px' }}>
+                Email: <strong>{viewingUser.email}</strong> | Роль:{' '}
+                <span className="badge" style={{ background: viewingUser.role === 'admin' ? '#e74c3c' : viewingUser.role === 'teacher' ? '#9b59b6' : '#3498db', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '11px' }}>
+                  {viewingUser.role}
+                </span>
+              </p>
+            </div>
+            
+            <div className="d-flex align-items-center flex-wrap" style={{ gap: '15px' }}>
+              {viewingUser.role === 'user' && (
+                <div className="d-flex align-items-center" style={{ gap: '15px', background: '#f8fafd', padding: '12px 20px', borderRadius: '8px', border: '1px solid #e1e8ed' }}>
+                  <div>
+                    <span className="text-muted" style={{ fontSize: '11px', display: 'block' }}>Поточний допуск</span>
+                    <span style={{ fontWeight: 'bold', color: viewingUser.testPermission ? '#2ecc71' : '#e74c3c' }}>
+                      {viewingUser.testPermission ? '✅ Допущено' : '❌ Заборонено'}
+                    </span>
+                  </div>
+                  {isAdmin && (
+                    <button 
+                      className="btn btn-primary" 
+                      style={{ padding: '6px 12px', fontSize: '13px', background: viewingUser.testPermission ? '#e74c3c' : '#2ecc71', borderColor: viewingUser.testPermission ? '#e74c3c' : '#2ecc71' }}
+                      onClick={() => grantTestPermission(viewingUser.id, !viewingUser.testPermission)}
+                    >
+                      {viewingUser.testPermission ? 'Блокувати' : 'Надати допуск'}
+                    </button>
+                  )}
+                </div>
+              )}
+              {isAdmin && viewingUser.id !== currentUser.id && (
+                <button 
+                  className="btn btn-primary animate-hover"
+                  style={{ padding: '12px 20px', fontSize: '13px', background: '#34495e', borderColor: '#34495e', color: 'white', borderRadius: '8px' }}
+                  onClick={() => {
+                    impersonateUser(viewingUser.id);
+                    setViewingUserAnalyticsId(null);
+                    setSelectedAttemptId(null);
+                    navigate('/dashboard');
+                  }}
+                >
+                  👤 Увійти як цей користувач
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* 4 Cards Stats Summary */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '30px' }}>
+          <div className="card text-center" style={{ padding: '20px', background: '#fff' }}>
+            <span style={{ fontSize: '30px' }}>🎯</span>
+            <h3 style={{ fontSize: '24px', color: 'var(--dark-blue)', margin: '8px 0 2px', fontFamily: 'Comfortaa, cursive' }}>{totalAttempts}</h3>
+            <span className="text-muted" style={{ fontSize: '12px' }}>Всього спроб</span>
+          </div>
+          <div className="card text-center" style={{ padding: '20px', background: '#fff' }}>
+            <span style={{ fontSize: '30px' }}>🏆</span>
+            <h3 style={{ fontSize: '24px', color: 'var(--dark-blue)', margin: '8px 0 2px', fontFamily: 'Comfortaa, cursive' }}>{bestScore}</h3>
+            <span className="text-muted" style={{ fontSize: '12px' }}>Найкращий бал</span>
+          </div>
+          <div className="card text-center" style={{ padding: '20px', background: '#fff' }}>
+            <span style={{ fontSize: '30px' }}>📈</span>
+            <h3 style={{ fontSize: '24px', color: 'var(--dark-blue)', margin: '8px 0 2px', fontFamily: 'Comfortaa, cursive' }}>{avgScore}</h3>
+            <span className="text-muted" style={{ fontSize: '12px' }}>Середній бал</span>
+          </div>
+          <div className="card text-center" style={{ padding: '20px', background: '#fff' }}>
+            <span style={{ fontSize: '30px' }}>⏱️</span>
+            <h3 style={{ fontSize: '24px', color: 'var(--dark-blue)', margin: '8px 0 2px', fontFamily: 'Comfortaa, cursive' }}>{formatTime(avgTime)}</h3>
+            <span className="text-muted" style={{ fontSize: '12px' }}>Сер. час спроби</span>
+          </div>
+        </div>
+
+        {/* Dynamic Labor Functions and Cohort Comparison */}
+        <div className="grid-2" style={{ gap: '20px', marginBottom: '30px' }}>
+          {/* Category Performance */}
+          <div className="card">
+            <h4 className="mb-4" style={{ fontFamily: 'Comfortaa, cursive' }}>📈 Успішність за трудовими функціями</h4>
+            {selectedAttempt ? (
+              sortedAttemptStats(catStats, sortedCatKeys)
+            ) : (
+              <p className="text-muted text-center py-4">Немає даних для аналізу. Кандидат ще не проходив тестування.</p>
+            )}
+          </div>
+
+          {/* Cohort & Attempts Timeline */}
+          <div className="card">
+            <h4 className="mb-4" style={{ fontFamily: 'Comfortaa, cursive' }}>📊 Порівняння з іншими кандидатами</h4>
+            {selectedAttempt ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '8px' }}>
+                    <strong>Результат обраної спроби:</strong>
+                    <span style={{ color: selectedAttemptPercent >= 75 ? '#2ecc71' : '#e74c3c', fontWeight: 'bold' }}>{selectedAttemptPercent}%</span>
+                  </div>
+                  <div style={{ background: '#eee', height: '12px', borderRadius: '6px', overflow: 'hidden' }}>
+                    <div style={{ background: selectedAttemptPercent >= 75 ? '#2ecc71' : '#e74c3c', width: `${selectedAttemptPercent}%`, height: '100%' }}></div>
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '8px' }}>
+                    <strong>Середній результат по центру (когорта):</strong>
+                    <span style={{ color: '#3498db', fontWeight: 'bold' }}>{cohortAvgPercent}%</span>
+                  </div>
+                  <div style={{ background: '#eee', height: '12px', borderRadius: '6px', overflow: 'hidden' }}>
+                    <div style={{ background: '#3498db', width: `${cohortAvgPercent}%`, height: '100%' }}></div>
+                  </div>
+                </div>
+
+                <div style={{ background: '#f8fafd', borderRadius: '8px', padding: '15px', border: '1px solid #e1e8ed', marginTop: '10px' }}>
+                  <strong>Порівняльний аналіз:</strong>
+                  <p style={{ fontSize: '13px', margin: '5px 0 0', lineHeight: '1.4' }}>
+                    {selectedAttemptPercent > cohortAvgPercent ? (
+                      `Кандидат демонструє рівень знань вище середнього показника по установі на ${selectedAttemptPercent - cohortAvgPercent}%. Це свідчить про високу теоретичну підготовку.`
+                    ) : selectedAttemptPercent < cohortAvgPercent ? (
+                      `Результат кандидата нижче середнього по установі на ${cohortAvgPercent - selectedAttemptPercent}%. Рекомендується звернути увагу на слабкі зони та вивчити нормативну базу.`
+                    ) : (
+                      "Результат кандидата точно відповідає середньому показнику по установі."
+                    )}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-muted text-center py-4">Немає спроб для порівняння.</p>
+            )}
+
+            {/* Progression timeline */}
+            {totalAttempts > 1 && (
+              <div style={{ marginTop: '25px', borderTop: '1px solid #eee', paddingTop: '20px' }}>
+                <h5 className="mb-3" style={{ fontSize: '14px', fontWeight: 'bold' }}>🕒 Хронологія спроб кандидата</h5>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {attempts.slice().reverse().map((s) => {
+                    const pct = Math.round((s.score / s.total) * 100);
+                    return (
+                      <div 
+                        key={s.id} 
+                        style={{ 
+                          display: 'flex', 
+                          justifyContent: 'space-between', 
+                          alignItems: 'center', 
+                          padding: '10px 15px', 
+                          background: s.id === selectedAttemptId ? '#e3f2fd' : '#f8f9fa', 
+                          border: `1px solid ${s.id === selectedAttemptId ? '#1976d2' : '#e2e8f0'}`, 
+                          borderRadius: '6px',
+                          cursor: 'pointer' 
+                        }}
+                        onClick={() => setSelectedAttemptId(s.id)}
+                      >
+                        <div>
+                          <span style={{ fontSize: '12px', color: '#666' }}>{new Date(s.created_at || '').toLocaleDateString('uk-UA')}</span>
+                          <span style={{ marginLeft: '10px', fontSize: '13px', fontWeight: 'bold' }}>
+                            {s.mode === 'exam' ? '🎯 Іспит' : '📝 Тренування'}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <strong style={{ fontSize: '13px' }}>{s.score}/{s.total} ({pct}%)</strong>
+                          <span className="badge" style={{ background: s.passed ? '#2ecc71' : '#e74c3c', color: 'white', padding: '2px 6px', borderRadius: '4px', fontSize: '11px' }}>
+                            {s.passed ? 'Складено' : 'Не складено'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Detailed Breakdown for selected attempt */}
+        {selectedAttempt && (
+          <div className="card">
+            <div className="d-flex justify-content-between align-items-center flex-wrap mb-4" style={{ borderBottom: '1px solid #eee', paddingBottom: '15px', gap: '10px' }}>
+              <div>
+                <h4 style={{ margin: 0, fontFamily: 'Comfortaa, cursive' }}>📋 Повний звіт проходження (Спроба від {new Date(selectedAttempt.created_at || '').toLocaleDateString('uk-UA')})</h4>
+                <p className="text-muted" style={{ margin: '5px 0 0', fontSize: '13px' }}>
+                  Режим: <strong>{selectedAttempt.mode === 'exam' ? 'Іспит' : 'Тренування'}</strong> | Оцінка:{' '}
+                  <strong>{selectedAttempt.score} з {selectedAttempt.total}</strong> ({selectedAttemptPercent}%)
+                </p>
+              </div>
+
+              <button 
+                className="btn btn-primary"
+                style={{ background: '#34495e', borderColor: '#34495e' }}
+                onClick={() => printDiagnosticReport(viewingUser, selectedAttempt)}
+              >
+                🖨️ Друкувати звіт діагностики
+              </button>
+            </div>
+
+            {/* Psychological portrait */}
+            {selectedAttempt.details && selectedAttempt.details.behaviorProfile ? (
+              <div className="mb-5" style={{ background: '#f9fbfd', borderLeft: '5px solid var(--blue)', padding: '20px', borderRadius: '8px', border: '1px solid #e1e8ed', borderLeftWidth: '5px' }}>
+                <h4 style={{ fontSize: '16px', color: 'var(--dark-blue)', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'Comfortaa, cursive' }}>
+                  🧠 Психометричний портрет та поведінковий профіль
+                </h4>
+                
+                <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: '13px' }}>
+                    <span className="text-muted">Манера відповідей:</span>{' '}
+                    <span className="badge" style={{ background: '#e3f2fd', color: '#1976d2', padding: '3px 8px', borderRadius: '4px', fontWeight: 'bold', fontSize: '12px' }}>
+                      {selectedAttempt.details.behaviorProfile.style}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '13px' }}>
+                    <span className="text-muted">Впевненість:</span>{' '}
+                    <span className="badge" style={{ background: '#e8f5e9', color: '#2e7d32', padding: '3px 8px', borderRadius: '4px', fontWeight: 'bold', fontSize: '12px' }}>
+                      {selectedAttempt.details.behaviorProfile.confidence}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '13px' }}>
+                    <span className="text-muted">Темп роботи:</span>{' '}
+                    <span className="badge" style={{ background: '#fff3e0', color: '#e65100', padding: '3px 8px', borderRadius: '4px', fontWeight: 'bold', fontSize: '12px' }}>
+                      {selectedAttempt.details.behaviorProfile.speedCategory}
+                    </span>
+                  </div>
+                </div>
+
+                <p style={{ fontSize: '14px', lineHeight: '1.5', marginBottom: '20px', color: '#444' }}>
+                  {selectedAttempt.details.behaviorProfile.description}
+                </p>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '20px' }}>
+                  <div>
+                    <h5 style={{ fontSize: '13px', color: '#2e7d32', marginBottom: '8px', fontWeight: 'bold' }}>✓ Сильні сторони манери:</h5>
+                    <ul style={{ paddingLeft: '15px', margin: 0, listStyleType: 'disc', fontSize: '13px', color: '#555' }}>
+                      {selectedAttempt.details.behaviorProfile.strengths?.map((str: string, i: number) => (
+                        <li key={i} style={{ marginBottom: '4px' }}>{str}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <h5 style={{ fontSize: '13px', color: '#c62828', marginBottom: '8px', fontWeight: 'bold' }}>✗ Зони ризику / Слабкості:</h5>
+                    <ul style={{ paddingLeft: '15px', margin: 0, listStyleType: 'disc', fontSize: '13px', color: '#555' }}>
+                      {selectedAttempt.details.behaviorProfile.weaknesses?.map((weak: string, i: number) => (
+                        <li key={i} style={{ marginBottom: '4px' }}>{weak}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+
+                <div style={{ background: '#fff', borderRadius: '6px', padding: '12px', border: '1px solid #e1e8ed', borderLeft: '4px solid #70a1d7', marginBottom: '15px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--rich-blue)', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>
+                    🔮 Прогноз професійної успішності:
+                  </span>
+                  <p style={{ fontSize: '13px', color: 'var(--text-dark)', margin: 0, fontWeight: '500' }}>
+                    {selectedAttempt.details.behaviorProfile.forecast}
+                  </p>
+                </div>
+
+                <div style={{ background: '#fff', borderRadius: '6px', padding: '12px', border: '1px solid #e1e8ed', borderLeft: '4px solid #2ecc71' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#27ae60', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>
+                    💡 Рекомендації для кандидата:
+                  </span>
+                  <p style={{ fontSize: '13px', color: 'var(--text-dark)', margin: 0 }}>
+                    {selectedAttempt.details.behaviorProfile.recommendations}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="alert alert-info mb-5">
+                Дані психометричного аналізу відсутні для цієї спроби (тест пройдено на старій версії системи).
+              </div>
+            )}
+
+            {/* Questions breakdown table */}
+            <h4 style={{ fontSize: '16px', color: 'var(--dark-blue)', marginBottom: '15px', borderBottom: '1px solid #eee', paddingBottom: '8px' }}>
+              📋 Детальний розбір відповідей по кожному питанню
+            </h4>
+            
+            {selectedAttempt.details && selectedAttempt.details.questions ? (
+              <div style={{ overflowX: 'auto', maxHeight: '450px', border: '1px solid #eee', borderRadius: '8px' }}>
+                <table className="data-table" style={{ fontSize: '13px' }}>
+                  <thead style={{ position: 'sticky', top: 0, zIndex: 1, background: '#f9f9f9', borderBottom: '2px solid #ddd' }}>
+                    <tr>
+                      <th style={{ width: '40px', textAlign: 'center' }}>№</th>
+                      <th style={{ width: '120px' }}>Функція</th>
+                      <th>Текст запитання та відповіді</th>
+                      <th style={{ width: '80px', textAlign: 'center' }}>Час</th>
+                      <th style={{ width: '80px', textAlign: 'center' }}>Змін</th>
+                      <th style={{ width: '100px', textAlign: 'center' }}>Результат</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedAttempt.details.questions.map((q: any, index: number) => {
+                      const isCorrect = q.selected === q.correct;
+                      return (
+                        <tr key={index} style={{ background: isCorrect ? '#fcfdfe' : '#fff9f9' }}>
+                          <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{index + 1}</td>
+                          <td>
+                            <span style={{ fontSize: '11px', background: '#eee', padding: '2px 5px', borderRadius: '3px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+                              {q.catId || q.catName?.split('.')[0] || 'Тест'}
+                            </span>
+                          </td>
+                          <td>
+                            <div style={{ fontWeight: 'bold', marginBottom: '6px', color: 'var(--text-dark)', fontSize: '13px' }}>{q.question}</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', paddingLeft: '10px', fontSize: '12px' }}>
+                              {q.options?.map((opt: string, optIdx: number) => {
+                                let optColor = 'var(--text-body)';
+                                let optWeight = 'normal';
+                                let icon = '○';
+                                
+                                if (optIdx === q.correct) {
+                                  optColor = '#27ae60';
+                                  optWeight = 'bold';
+                                  icon = '✓';
+                                }
+                                
+                                if (optIdx === q.selected) {
+                                  optWeight = 'bold';
+                                  if (optIdx === q.correct) {
+                                    optColor = '#27ae60';
+                                    icon = '🟢';
+                                  } else {
+                                    optColor = '#e74c3c';
+                                    icon = '🔴';
+                                  }
+                                }
+                                
+                                return (
+                                  <div key={optIdx} style={{ color: optColor, fontWeight: optWeight }}>
+                                    {icon} {opt}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </td>
+                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>{formatTime(q.timeSpent)}</td>
+                          <td style={{ textAlign: 'center', fontWeight: q.changes > 0 ? 'bold' : 'normal', color: q.changes > 0 ? '#e65100' : 'inherit' }}>
+                            {q.changes || 0}
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <span style={{ 
+                              color: isCorrect ? '#2ecc71' : '#e74c3c', 
+                              fontWeight: 'bold',
+                              background: isCorrect ? 'rgba(46, 204, 113, 0.1)' : 'rgba(231, 76, 60, 0.1)',
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                              display: 'inline-block'
+                            }}>
+                              {isCorrect ? 'Правильно' : 'Невірно'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-muted text-center py-4">Звіт проходження питань недоступний для цієї спроби.</p>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const sortedAttemptStats = (catStats: any, sortedCatKeys: string[]) => {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+        {sortedCatKeys.map(k => {
+          const cat = catStats[k];
+          const rate = Math.round((cat.correct / cat.total) * 100);
+          const color = rate >= 75 ? '#2ecc71' : rate >= 60 ? '#f39c12' : '#e74c3c';
+          return (
+            <div key={k}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '5px' }}>
+                <span style={{ fontWeight: 'bold' }}>{k}. {cat.name}</span>
+                <span style={{ color, fontWeight: 'bold', marginLeft: 'auto' }}>{cat.correct} з {cat.total} ({rate}%)</span>
+              </div>
+              <div style={{ background: '#eee', height: '8px', borderRadius: '4px', overflow: 'hidden' }}>
+                <div style={{ background: color, width: `${rate}%`, height: '100%' }}></div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   const filteredUsers = (state.users || []).filter(u => {
@@ -323,7 +903,8 @@ export const AdminDashboard: React.FC = () => {
         </div>
 
         {activeTab === 'users' && (
-          <div>
+          viewingUserAnalyticsId ? renderUserAnalytics() : (
+            <div>
             {isAdmin && (
               <div className="card mb-4" style={{ background: '#f8fafd' }}>
                 <h4>Створення нового користувача</h4>
@@ -411,7 +992,14 @@ export const AdminDashboard: React.FC = () => {
                               fontFamily: 'inherit',
                               fontSize: 'inherit'
                             }}
-                            onClick={() => setSelectedUser(u)}
+                            onClick={() => {
+                              setViewingUserAnalyticsId(u.id);
+                              if (u.testScores && u.testScores.length > 0) {
+                                setSelectedAttemptId(u.testScores[0].id);
+                              } else {
+                                setSelectedAttemptId(null);
+                              }
+                            }}
                             title="Переглянути детальний профіль та статистику"
                           >
                             {u.name}
@@ -471,7 +1059,12 @@ export const AdminDashboard: React.FC = () => {
                               <button 
                                 className="btn btn-outline" 
                                 style={{ padding: '4px 8px', fontSize: '12px', color: '#e74c3c', borderColor: '#e74c3c' }}
-                                onClick={() => handleDeleteUser(u.id, u.name)}
+                                onClick={async () => {
+                                  if (confirm(`Ви дійсно бажаєте видалити користувача ${u.name}?`)) {
+                                    await adminDeleteUser(u.id);
+                                    alert("Користувача видалено.");
+                                  }
+                                }}
                               >
                                 🗑 Видалити
                               </button>
@@ -485,7 +1078,8 @@ export const AdminDashboard: React.FC = () => {
               </div>
             </div>
           </div>
-        )}
+        )
+      )}
 
         {isAdmin && activeTab === 'tests' && (
           <div className="card">

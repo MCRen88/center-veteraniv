@@ -330,10 +330,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }]).select();
 
     if (!error && data) {
+      let nextPermission = state.currentUser.testPermission;
+      
+      if (state.currentUser.role === 'user') {
+        nextPermission = false;
+        const { error: permError } = await supabase.from('profiles').update({ test_permission: false }).eq('id', state.currentUser.id);
+        if (permError) {
+          console.error("Error revoking test permission:", permError.message);
+        }
+      }
+
       setState(prev => ({
         ...prev,
         currentUser: {
           ...prev.currentUser!,
+          testPermission: nextPermission,
           testScores: [data[0], ...prev.currentUser!.testScores]
         }
       }));
