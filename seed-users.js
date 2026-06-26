@@ -2,7 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 dotenv.config();
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || 'http://localhost:54329';
+const kongPort = process.env.KONG_PORT || '54329';
+const supabaseUrl = `http://localhost:${kongPort}`;
 const supabaseServiceKey = process.env.VITE_SUPABASE_SERVICE_KEY || process.env.SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseServiceKey) {
