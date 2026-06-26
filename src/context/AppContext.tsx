@@ -348,7 +348,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           testScores: [data[0], ...prev.currentUser!.testScores]
         }
       }));
-      await fetchData();
+      fetchData();
     } else {
       alert("Помилка збереження результату: " + (error?.message || "Невідома помилка"));
     }

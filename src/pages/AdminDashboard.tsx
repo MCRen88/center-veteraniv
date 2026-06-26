@@ -385,9 +385,34 @@ export const AdminDashboard: React.FC = () => {
     const bestScore = totalAttempts > 0 ? Math.max(...attempts.map(s => s.score)) : 0;
     const avgScore = totalAttempts > 0 ? Math.round(attempts.reduce((acc, s) => acc + s.score, 0) / totalAttempts) : 0;
     
-    const attemptsWithTime = attempts.filter(s => s.details && s.details.totalTime);
+    const attemptsWithTime = attempts.filter(s => {
+      if (!s.details) return false;
+      let detailsObj = s.details;
+      if (typeof detailsObj === 'string') {
+        try {
+          detailsObj = JSON.parse(detailsObj);
+        } catch {
+          return false;
+        }
+      }
+      return detailsObj && (detailsObj.totalTime || detailsObj.totalTime === 0);
+    });
+
+    const totalTimeSum = attemptsWithTime.reduce((acc, s) => {
+      let detailsObj = s.details;
+      if (typeof detailsObj === 'string') {
+        try {
+          detailsObj = JSON.parse(detailsObj);
+        } catch {
+          return acc;
+        }
+      }
+      const t = Number(detailsObj?.totalTime);
+      return acc + (isNaN(t) ? 0 : t);
+    }, 0);
+
     const avgTime = attemptsWithTime.length > 0
-      ? Math.round(attemptsWithTime.reduce((acc, s) => acc + s.details.totalTime, 0) / attemptsWithTime.length)
+      ? Math.round(totalTimeSum / attemptsWithTime.length)
       : 0;
 
     // Compute cohort statistics
@@ -543,14 +568,21 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 <div style={{ background: '#f8fafd', borderRadius: '8px', padding: '15px', border: '1px solid #e1e8ed', marginTop: '10px' }}>
-                  <strong>Порівняльний аналіз:</strong>
-                  <p style={{ fontSize: '13px', margin: '5px 0 0', lineHeight: '1.4' }}>
+                  <p style={{ fontSize: '13px', margin: 0, lineHeight: '1.4' }}>
                     {selectedAttemptPercent > cohortAvgPercent ? (
-                      `Кандидат демонструє рівень знань вище середнього показника по установі на ${selectedAttemptPercent - cohortAvgPercent}%. Це свідчить про високу теоретичну підготовку.`
+                      selectedAttemptPercent >= 75 ? (
+                        `Кандидат демонструє рівень знань вище середнього показника по установі на ${selectedAttemptPercent - cohortAvgPercent}%, що підтверджує його достатню теоретичну підготовку.`
+                      ) : (
+                        `Хоча результат кандидата на ${selectedAttemptPercent - cohortAvgPercent}% вищий за середній по установі, він є недостатнім для складання іспиту (менше 75%). Кандидату потрібна додаткова підготовка.`
+                      )
                     ) : selectedAttemptPercent < cohortAvgPercent ? (
                       `Результат кандидата нижче середнього по установі на ${cohortAvgPercent - selectedAttemptPercent}%. Рекомендується звернути увагу на слабкі зони та вивчити нормативну базу.`
                     ) : (
-                      "Результат кандидата точно відповідає середньому показнику по установі."
+                      selectedAttemptPercent >= 75 ? (
+                        "Результат кандидата відповідає середньому показнику по установі та є достатнім для успішного складання."
+                      ) : (
+                        "Результат кандидата відповідає середньому показнику по установі, але є недостатнім для складання іспиту (менше 75%)."
+                      )
                     )}
                   </p>
                 </div>

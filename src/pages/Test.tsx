@@ -3,7 +3,7 @@ import { useAppContext } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
 import { casesDb } from '../data/casesDb';
 
-type TestMode = 'training' | 'exam' | null;
+type TestMode = 'exam' | null;
 
 export const Test: React.FC = () => {
   const { state, saveTestScore } = useAppContext();
@@ -13,13 +13,13 @@ export const Test: React.FC = () => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [testQuestions, setTestQuestions] = useState(state.questions);
   const [answers, setAnswers] = useState<number[]>([]);
-  const [showExplanation, setShowExplanation] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
   const [score, setScore] = useState(0);
 
   const [timeLeft, setTimeLeft] = useState(3600); // 60 minutes in seconds
   const [warnings, setWarnings] = useState(0);
   const [showWarningModal, setShowWarningModal] = useState(false);
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [warningReason, setWarningReason] = useState('');
   const [wasTerminated, setWasTerminated] = useState(false);
 
@@ -62,7 +62,6 @@ export const Test: React.FC = () => {
             setTestQuestions(parsed.testQuestions);
           }
           setAnswers(parsed.answers ?? []);
-          setShowExplanation(parsed.showExplanation ?? false);
           setIsFinished(parsed.isFinished ?? false);
           setScore(parsed.score ?? 0);
           
@@ -102,7 +101,6 @@ export const Test: React.FC = () => {
         currentQuestionIndex,
         testQuestions,
         answers,
-        showExplanation,
         isFinished,
         score,
         timeLeft,
@@ -129,7 +127,6 @@ export const Test: React.FC = () => {
     currentQuestionIndex,
     testQuestions,
     answers,
-    showExplanation,
     isFinished,
     score,
     timeLeft,
@@ -206,6 +203,7 @@ export const Test: React.FC = () => {
     setMode(selectedMode);
     setWarnings(0);
     setShowWarningModal(false);
+    setShowCompletionModal(false);
     setWasTerminated(false);
     setTimeLeft(3600);
     
@@ -220,25 +218,17 @@ export const Test: React.FC = () => {
     setCasesScore(0);
     setCaseShowFeedback(false);
     
-    if (selectedMode === 'exam') {
-      const shuffled = [...state.questions].sort(() => 0.5 - Math.random());
-      setTestQuestions(shuffled);
-      setExamEndTime(Date.now() + 3600 * 1000);
-    } else {
-      setTestQuestions(state.questions);
-      setExamEndTime(null);
-    }
+    const shuffled = [...state.questions].sort(() => 0.5 - Math.random());
+    setTestQuestions(shuffled);
+    setExamEndTime(Date.now() + 3600 * 1000);
     
     setAnswers(new Array(state.questions.length).fill(-1));
     setCurrentQuestionIndex(0);
-    setShowExplanation(false);
     setIsFinished(false);
     setScore(0);
   };
 
   const handleAnswer = (optionIndex: number) => {
-    if (showExplanation && mode === 'training') return;
-
     const previousAnswer = answers[currentQuestionIndex];
     const isChange = previousAnswer !== -1 && previousAnswer !== optionIndex;
     
@@ -253,22 +243,24 @@ export const Test: React.FC = () => {
     newAnswers[currentQuestionIndex] = optionIndex;
     setAnswers(newAnswers);
 
-    if (mode === 'training') {
-      setShowExplanation(true);
+    // Перевіряємо, чи це була остання невідповідна відповідь
+    const wasAllAnswered = answers.every(a => a !== -1);
+    const isAllAnswered = newAnswers.every(a => a !== -1);
+    
+    if (!wasAllAnswered && isAllAnswered) {
+      setShowCompletionModal(true);
     }
   };
 
   const nextQuestion = () => {
     if (currentQuestionIndex < testQuestions.length - 1) {
       goToQuestion(currentQuestionIndex + 1);
-      setShowExplanation(mode === 'training' && answers[currentQuestionIndex + 1] !== -1);
     }
   };
 
   const prevQuestion = () => {
     if (currentQuestionIndex > 0) {
       goToQuestion(currentQuestionIndex - 1);
-      setShowExplanation(mode === 'training' && answers[currentQuestionIndex - 1] !== -1);
     }
   };
 
@@ -356,7 +348,7 @@ export const Test: React.FC = () => {
       forecast = `Рекомендується додаткова підготовка. Наразі рівень знань недостатній для успішної сертифікації. Потрібно звернути увагу на зону "${weakest}", а також переглянути підхід до темпу відповідей (зменшити поспіх або сумніви).`;
     }
 
-    let recommendations = 'Продовжуйте практикуватися в тренувальному режимі.';
+    let recommendations = 'Повторіть матеріал та спробуйте ще раз.';
     if (wasTerminatedOnViolation) {
       recommendations = 'Дотримуйтеся правил академічної доброчесності та не залишайте вікно тестування під час наступної спроби.';
     } else if (style === 'Імпульсивний') {
@@ -400,6 +392,7 @@ export const Test: React.FC = () => {
     if (isSavingRef.current) return;
     isSavingRef.current = true;
     setIsSubmitting(true);
+    setShowCompletionModal(false);
 
     let finalScore = 0;
     testQuestions.forEach((q, index) => {
@@ -419,6 +412,9 @@ export const Test: React.FC = () => {
       });
     } catch (err) {
       console.error("Помилка збереження результату:", err);
+    } finally {
+      setIsSubmitting(false);
+      isSavingRef.current = false;
     }
 
     setScore(finalScore);
@@ -429,6 +425,7 @@ export const Test: React.FC = () => {
     if (isSavingRef.current) return;
     isSavingRef.current = true;
     setIsSubmitting(true);
+    setShowCompletionModal(false);
 
     setWasTerminated(true);
     let finalScore = 0;
@@ -448,6 +445,9 @@ export const Test: React.FC = () => {
       });
     } catch (err) {
       console.error("Помилка збереження результату при анулюванні:", err);
+    } finally {
+      setIsSubmitting(false);
+      isSavingRef.current = false;
     }
 
     setScore(finalScore);
@@ -888,6 +888,39 @@ export const Test: React.FC = () => {
             </div>
           </div>
         )}
+
+        {showCompletionModal && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.6)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 9999,
+            padding: '20px',
+            backdropFilter: 'blur(4px)'
+          }}>
+            <div className="card" style={{ maxWidth: '500px', width: '100%', textAlign: 'center', padding: '30px', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }}>
+              <div style={{ fontSize: '60px', marginBottom: '20px' }}>🎉</div>
+              <h3 style={{ color: 'var(--dark-blue)', marginBottom: '15px', fontFamily: 'Comfortaa, sans-serif' }}>Вітаємо!</h3>
+              <p style={{ fontSize: '16px', lineHeight: 1.5, marginBottom: '25px', color: 'var(--text-dark)' }}>
+                Ви відповіли на всі запитання тесту. Бажаєте завершити тестування чи переглянути свої відповіді?
+              </p>
+              <div className="d-flex flex-column gap-2">
+                <button className="btn btn-primary" style={{ width: '100%' }} onClick={finishTest} disabled={isSubmitting}>
+                  {isSubmitting ? 'Збереження...' : 'Завершити тест'}
+                </button>
+                <button className="btn btn-outline" style={{ width: '100%' }} onClick={() => setShowCompletionModal(false)}>
+                  Переглянути відповіді
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         
         <div className="container mt-4 mb-5 test-layout">
           <div>
@@ -904,11 +937,6 @@ export const Test: React.FC = () => {
                   let className = "option-card";
                   if (answers[currentQuestionIndex] === idx) className += " selected";
                   
-                  if (showExplanation && mode === 'training') {
-                    if (idx === question.correct) className += " correct";
-                    else if (answers[currentQuestionIndex] === idx) className += " wrong";
-                  }
-                  
                   return (
                     <div key={idx} className={className} onClick={() => handleAnswer(idx)}>
                       {opt}
@@ -916,13 +944,6 @@ export const Test: React.FC = () => {
                   );
                 })}
               </div>
-
-              {showExplanation && mode === 'training' && (
-                <div className="alert alert-info mt-4">
-                  <strong>Пояснення:</strong><br/>
-                  {question.explanation}
-                </div>
-              )}
             </div>
 
             <div className="d-flex justify-content-between">
@@ -993,29 +1014,29 @@ export const Test: React.FC = () => {
       <style>{`
         .mode-card { padding: 40px 30px; text-align: center; cursor: pointer; height: 100%; }
         .mode-icon { font-size: 50px; margin-bottom: 20px; }
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; max-width: 900px; margin: 0 auto; }
-        @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
       `}</style>
 
-      <section className="container mt-5 mb-5">
-        <h2 className="text-center mb-3">Онлайн-тестування</h2>
-        <p className="text-center mb-5" style={{ maxWidth: '800px', margin: '0 auto 50px' }}>
-          Тестування є обов'язковим етапом для підтвердження кваліфікації. Усі питання розроблені на основі чинного професійного стандарту.
-        </p>
+      <section className="container mt-5 mb-5" style={{ maxWidth: '600px', margin: '0 auto' }}>
+        <div className="card text-center" style={{ padding: '40px 30px' }}>
+          <div style={{ fontSize: '60px', marginBottom: '20px' }}>🎯</div>
+          <h2 style={{ fontFamily: 'Comfortaa, sans-serif', marginBottom: '20px' }}>Кваліфікаційне тестування</h2>
+          <p className="text-muted mb-4" style={{ fontSize: '15px', lineHeight: 1.6 }}>
+            Тестування є обов'язковим етапом для підтвердження кваліфікації. Усі питання розроблені на основі чинного професійного стандарту.
+          </p>
+          
+          <div className="alert alert-info text-start mb-4" style={{ fontSize: '14px', lineHeight: 1.6 }}>
+            <strong>Правила проходження іспиту:</strong>
+            <ul className="mt-2 mb-0" style={{ paddingLeft: '20px' }}>
+              <li>Кількість запитань: <strong>{state.questions.length}</strong></li>
+              <li>Час на проходження: <strong>60 хвилин</strong></li>
+              <li>Прохідний бал: <strong>75%</strong> правильних відповідей</li>
+              <li><strong className="text-danger">Увага:</strong> вихід з вкладки браузера або втрата фокусу вікна під час тестування заборонені й призведуть до анулювання результату після 2 попереджень!</li>
+            </ul>
+          </div>
 
-        <div className="grid-2">
-          <div className="card mode-card" onClick={() => startTest('training')}>
-            <div className="mode-icon">📝</div>
-            <h3>Тренувальний режим</h3>
-            <p className="mb-4 text-muted">Усі запитання. Після кожної відповіді ви одразу бачите пояснення.</p>
-            <div className="btn btn-outline">Почати тренування</div>
-          </div>
-          <div className="card mode-card" onClick={() => startTest('exam')}>
-            <div className="mode-icon">🎯</div>
-            <h3>Екзаменаційний режим</h3>
-            <p className="mb-4 text-muted">60 запитань з таймером. Імітація реального іспиту без підказок (таймер - 60 хв).</p>
-            <div className="btn btn-primary">Здати іспит</div>
-          </div>
+          <button className="btn btn-primary" style={{ width: '100%', padding: '12px' }} onClick={() => startTest('exam')}>
+            Розпочати іспит
+          </button>
         </div>
       </section>
     </>
