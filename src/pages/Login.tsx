@@ -11,9 +11,9 @@ export const Login: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const success = await login(formData.email, formData.password);
+    const success = await login(formData.email.trim(), formData.password);
     if (success) {
-      const matchedUser = state.users.find(u => u.email === formData.email);
+      const matchedUser = state.users.find(u => u.email === formData.email.trim());
       if (matchedUser?.role === 'admin' || matchedUser?.role === 'teacher') {
         navigate('/admin');
       } else {
