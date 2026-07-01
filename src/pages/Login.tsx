@@ -12,7 +12,7 @@ export const Login: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const data = new FormData(e.currentTarget);
-    const email = (data.get('email') as string || '').trim();
+    const email = (data.get('email') as string || '').trim().toLowerCase();
     const password = data.get('password') as string || '';
 
     const success = await login(email, password);
