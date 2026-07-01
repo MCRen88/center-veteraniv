@@ -9,11 +9,15 @@ export const Login: React.FC = () => {
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const success = await login(formData.email.trim(), formData.password);
+    const data = new FormData(e.currentTarget);
+    const email = (data.get('email') as string || '').trim();
+    const password = data.get('password') as string || '';
+
+    const success = await login(email, password);
     if (success) {
-      const matchedUser = state.users.find(u => u.email === formData.email.trim());
+      const matchedUser = state.users.find(u => u.email === email);
       if (matchedUser?.role === 'admin' || matchedUser?.role === 'teacher') {
         navigate('/admin');
       } else {
@@ -34,6 +38,7 @@ export const Login: React.FC = () => {
             <label className="form-label">Email (Логін)</label>
             <input 
               type="email" 
+              name="email"
               className="form-control" 
               value={formData.email}
               onChange={e => setFormData({ ...formData, email: e.target.value })}
@@ -44,6 +49,7 @@ export const Login: React.FC = () => {
             <label className="form-label">Пароль</label>
             <input 
               type="password" 
+              name="password"
               className="form-control" 
               value={formData.password}
               onChange={e => setFormData({ ...formData, password: e.target.value })}
