@@ -16,6 +16,12 @@ export const Login: React.FC = () => {
     const password = data.get('password') as string || '';
 
     const success = await login(email, password);
+    console.log("Submit Debug:", {
+      email,
+      emailLength: email.length,
+      password: password,
+      passwordLength: password.length
+    });
     if (success) {
       const matchedUser = state.users.find(u => u.email === email);
       if (matchedUser?.role === 'admin' || matchedUser?.role === 'teacher') {
