@@ -14,7 +14,7 @@ services:
       - ./supabase/migrations:/docker-entrypoint-initdb.d
 
   studio:
-    image: public.ecr.aws/supabase/studio:2026.03.23-sha-b7847b7
+    image: supabase/studio:2026.03.23-sha-b7847b7
     container_name: supabase-studio-lms
     restart: always
     ports:
@@ -72,7 +72,7 @@ services:
       PGRST_DB_USE_LEGACY_GUCS: "false"
 
   meta:
-    image: public.ecr.aws/supabase/postgres-meta:v0.96.1
+    image: supabase/postgres-meta:v0.96.1
     container_name: supabase-meta-lms
     restart: always
     environment:
