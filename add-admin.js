@@ -16,7 +16,7 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
 });
 
 const newAdmin = {
-  email: 'zdorovets.oleksii@zoippo.net.ua',
+  email: 'zdoorvets.oleksii@zoippo.net.ua',
   password: 'Nbytghjqlti@',
   name: 'Олексій Здоровець',
   role: 'admin',
