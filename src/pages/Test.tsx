@@ -1083,7 +1083,7 @@ export const Test: React.FC = () => {
             <ul className="mt-2 mb-0" style={{ paddingLeft: '20px' }}>
               <li>Кількість запитань: <strong>{state.questions.length}</strong></li>
               <li>Час на проходження: <strong>60 хвилин</strong></li>
-              <li>Прохідний бал: <strong>75%</strong> правильних відповідей</li>
+              <li>Прохідний бал: <strong>75%</strong> правильних відповідей. Кожне питання містить одну правильну відповідь</li>
               <li><strong className="text-danger">Увага:</strong> вихід з вкладки браузера або втрата фокусу вікна під час тестування заборонені й призведуть до анулювання результату після 2 попереджень!</li>
             </ul>
           </div>
