@@ -6,6 +6,71 @@ import { speakText, stopSpeaking } from '../utils/tts';
 
 type TestMode = 'exam' | 'practice' | null;
 
+const Confetti: React.FC = () => {
+  const pieces = Array.from({ length: 80 });
+  const colors = ['#f1c40f', '#e74c3c', '#3498db', '#2ecc71', '#9b59b6', '#e67e22', '#1abc9c', '#e84393'];
+  
+  return (
+    <>
+      <style>{`
+        @keyframes confetti-fall {
+          0% {
+            transform: translateY(-10vh) translateX(0) rotate(0deg);
+            opacity: 1;
+          }
+          50% {
+            transform: translateY(50vh) translateX(60px) rotate(180deg);
+            opacity: 0.9;
+          }
+          100% {
+            transform: translateY(110vh) translateX(-30px) rotate(360deg);
+            opacity: 0;
+          }
+        }
+        .confetti-wrapper {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          pointer-events: none;
+          z-index: 9999;
+          overflow: hidden;
+        }
+      `}</style>
+      <div className="confetti-wrapper">
+        {pieces.map((_, i) => {
+          const left = Math.random() * 100;
+          const delay = Math.random() * 6;
+          const duration = Math.random() * 4 + 3; // 3 to 7s
+          const color = colors[Math.floor(Math.random() * colors.length)];
+          const size = Math.random() * 10 + 6; // 6px to 16px
+          const shape = Math.random() > 0.5 ? '50%' : '0%';
+          
+          return (
+            <div
+              key={i}
+              className="confetti-piece"
+              style={{
+                position: 'absolute',
+                left: `${left}%`,
+                top: `-20px`,
+                width: `${size}px`,
+                height: `${size}px`,
+                backgroundColor: color,
+                borderRadius: shape,
+                transform: `rotate(${Math.random() * 360}deg)`,
+                animation: `confetti-fall ${duration}s linear infinite`,
+                animationDelay: `${delay}s`,
+              }}
+            />
+          );
+        })}
+      </div>
+    </>
+  );
+};
+
 export const Test: React.FC = () => {
   const { state, saveTestScore } = useAppContext();
   const casesList = state.cases && state.cases.length > 0 ? state.cases : casesDb;
@@ -679,8 +744,27 @@ export const Test: React.FC = () => {
 
         return (
           <div className="container mt-5 mb-5">
+            {overallPassed && <Confetti />}
+            <style>{`
+              @keyframes trophy-pop {
+                0% { transform: scale(0.3) rotate(-15deg); opacity: 0; }
+                50% { transform: scale(1.15) rotate(10deg); }
+                70% { transform: scale(0.9) rotate(-5deg); }
+                100% { transform: scale(1) rotate(0); opacity: 1; }
+              }
+              .trophy-animated {
+                display: inline-block;
+                animation: trophy-pop 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+              }
+            `}</style>
             <div className="card text-center" style={{ maxWidth: '800px', margin: '0 auto', padding: '40px' }}>
-              <div style={{ fontSize: '70px', marginBottom: '20px' }}>{overallPassed ? '🏆' : '⚠️'}</div>
+              <div style={{ fontSize: '70px', marginBottom: '20px' }}>
+                {overallPassed ? (
+                  <span className="trophy-animated">🏆</span>
+                ) : (
+                  <span>⚠️</span>
+                )}
+              </div>
               <h2 style={{ fontFamily: 'Comfortaa, sans-serif' }}>Завершено оцінювання кейсів</h2>
               <p style={{ fontSize: '20px', margin: '20px 0 25px' }}>
                 Ви дали правильні відповіді на <strong>{casesScore} з {casesList.length}</strong> практичних кейсів ({casesPercentage}%).
