@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
 import { casesDb } from '../data/casesDb';
+import { speakText, stopSpeaking } from '../utils/tts';
 
 type TestMode = 'exam' | null;
 
@@ -40,6 +41,13 @@ export const Test: React.FC = () => {
   const isRestored = useRef(false);
 
   const isImpersonating = !!state.originalAdminUser;
+
+  useEffect(() => {
+    stopSpeaking();
+    return () => {
+      stopSpeaking();
+    };
+  }, [currentQuestionIndex, currentCaseIndex, showCases, mode, isFinished]);
 
   const exitTest = () => {
     if (state.currentUser) {
@@ -723,11 +731,34 @@ export const Test: React.FC = () => {
               </h2>
 
               <div className="situation-box">
-                <strong>Опис ситуації:</strong><br />
-                {currentCase.situation}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '15px' }}>
+                  <div style={{ flex: 1 }}>
+                    <strong>Опис ситуації:</strong><br />
+                    {currentCase.situation}
+                  </div>
+                  <button
+                    className="btn btn-outline"
+                    onClick={() => {
+                      const optionsText = currentCase.options.map((opt: string, idx: number) => `Варіант ${String.fromCharCode(65 + idx)}: ${opt}`).join('. ');
+                      speakText(`Опис ситуації: ${currentCase.situation}. Запитання: ${currentCase.question}. ${optionsText}`);
+                    }}
+                    style={{
+                      padding: '4px 10px',
+                      fontSize: '12px',
+                      borderRadius: '15px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      flexShrink: 0
+                    }}
+                    title="Озвучити ситуацію та запитання з варіантами"
+                  >
+                    🔊 Озвучити
+                  </button>
+                </div>
               </div>
 
-              <h3 style={{ fontSize: '18px', lineHeight: 1.4, marginBottom: '20px', fontWeight: 600 }}>
+              <h3 style={{ fontSize: '18px', lineHeight: 1.4, marginBottom: '20px', fontWeight: 600, fontFamily: 'Roboto, sans-serif' }}>
                 {currentCase.question}
               </h3>
 
@@ -930,7 +961,30 @@ export const Test: React.FC = () => {
             </div>
             
             <div className="card mb-4">
-              <h3 style={{ fontSize: '20px', lineHeight: 1.4, marginBottom: '20px' }}>{question.question}</h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '15px', marginBottom: '20px' }}>
+                <h3 style={{ fontSize: '20px', lineHeight: 1.4, margin: 0, fontFamily: 'Roboto, sans-serif', flex: 1 }}>
+                  {question.question}
+                </h3>
+                <button
+                  className="btn btn-outline"
+                  onClick={() => {
+                    const optionsText = question.options.map((opt: string, idx: number) => `Варіант ${idx + 1}: ${opt}`).join('. ');
+                    speakText(`${question.question}. ${optionsText}`);
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    fontSize: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    borderRadius: '20px',
+                    flexShrink: 0
+                  }}
+                  title="Озвучити запитання та варіанти відповідей"
+                >
+                  🔊 Озвучити
+                </button>
+              </div>
               
               <div className="options">
                 {question.options.map((opt: string, idx: number) => {
