@@ -198,6 +198,7 @@ ul {
 .mt-5 { margin-top: 3rem; }
 .d-flex { display: flex; }
 .justify-content-center { justify-content: center; }
+.justify-content-between { justify-content: space-between; }
 .align-items-center { align-items: center; }
 .gap-3 { gap: 1rem; }
 .w-100 { width: 100%; }

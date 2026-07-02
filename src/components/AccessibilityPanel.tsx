@@ -5,23 +5,12 @@ type ContrastMode = 'normal' | 'high-contrast';
 
 export const AccessibilityPanel: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [fontSize, setFontSize] = useState<FontSize>('normal');
-  const [contrast, setContrast] = useState<ContrastMode>('normal');
-
-  // Load accessibility settings from localStorage on mount
-  useEffect(() => {
-    const savedFontSize = localStorage.getItem('accessibility-font-size') as FontSize;
-    const savedContrast = localStorage.getItem('accessibility-contrast') as ContrastMode;
-
-    if (savedFontSize) {
-      setFontSize(savedFontSize);
-      applyFontSize(savedFontSize);
-    }
-    if (savedContrast) {
-      setContrast(savedContrast);
-      applyContrast(savedContrast);
-    }
-  }, []);
+  const [fontSize, setFontSize] = useState<FontSize>(() => {
+    return (localStorage.getItem('accessibility-font-size') as FontSize) || 'normal';
+  });
+  const [contrast, setContrast] = useState<ContrastMode>(() => {
+    return (localStorage.getItem('accessibility-contrast') as ContrastMode) || 'normal';
+  });
 
   const applyFontSize = (size: FontSize) => {
     document.body.classList.remove('accessibility-font-large', 'accessibility-font-xlarge');
@@ -40,15 +29,22 @@ export const AccessibilityPanel: React.FC = () => {
     }
   };
 
+  // Sync state with body classes
+  useEffect(() => {
+    applyFontSize(fontSize);
+  }, [fontSize]);
+
+  useEffect(() => {
+    applyContrast(contrast);
+  }, [contrast]);
+
   const handleFontSizeChange = (size: FontSize) => {
     setFontSize(size);
-    applyFontSize(size);
     localStorage.setItem('accessibility-font-size', size);
   };
 
   const handleContrastChange = (mode: ContrastMode) => {
     setContrast(mode);
-    applyContrast(mode);
     localStorage.setItem('accessibility-contrast', mode);
   };
 
@@ -201,7 +197,7 @@ export const AccessibilityPanel: React.FC = () => {
           aria-label="Панель інклюзивності"
           title="Спеціальні можливості для людей з порушеннями зору"
         >
-          ♿
+          👁️
         </button>
 
         {isOpen && (

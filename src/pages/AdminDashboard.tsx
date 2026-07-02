@@ -636,188 +636,34 @@ export const AdminDashboard: React.FC = () => {
 
         {/* Detailed Breakdown for selected attempt */}
         {selectedAttempt && (
-          <div className="card">
-            <div className="d-flex justify-content-between align-items-center flex-wrap mb-4" style={{ borderBottom: '1px solid #eee', paddingBottom: '15px', gap: '10px' }}>
+          <div className="card" style={{ borderLeft: '5px solid var(--blue)', padding: '25px', background: '#f8fafd' }}>
+            <div className="d-flex justify-content-between align-items-center flex-wrap" style={{ gap: '15px' }}>
               <div>
-                <h4 style={{ margin: 0, fontFamily: 'Comfortaa, cursive' }}>📋 Повний звіт проходження (Спроба від {new Date(selectedAttempt.created_at || '').toLocaleDateString('uk-UA')})</h4>
-                <p className="text-muted" style={{ margin: '5px 0 0', fontSize: '13px' }}>
+                <h4 style={{ margin: 0, fontFamily: 'Comfortaa, cursive', color: 'var(--dark-blue)' }}>
+                  📋 Аналіз спроби від {new Date(selectedAttempt.created_at || '').toLocaleDateString('uk-UA')}
+                </h4>
+                <p className="text-muted" style={{ margin: '5px 0 0', fontSize: '14px' }}>
                   Режим: <strong>{selectedAttempt.mode === 'exam' ? 'Іспит' : 'Тренування'}</strong> | Оцінка:{' '}
                   <strong>{selectedAttempt.score} з {selectedAttempt.total}</strong> ({selectedAttemptPercent}%)
                 </p>
               </div>
-
-              <button 
-                className="btn btn-primary"
-                style={{ background: '#34495e', borderColor: '#34495e' }}
-                onClick={() => printDiagnosticReport(viewingUser, selectedAttempt)}
-              >
-                🖨️ Друкувати звіт діагностики
-              </button>
+              <div className="d-flex" style={{ gap: '10px' }}>
+                <button 
+                  className="btn btn-primary"
+                  style={{ padding: '10px 20px', fontWeight: 'bold' }}
+                  onClick={() => navigate(`/test-analysis/${selectedAttempt.id}`)}
+                >
+                  🔍 Відкрити аналіз спроби
+                </button>
+                <button 
+                  className="btn btn-outline"
+                  style={{ padding: '10px 15px' }}
+                  onClick={() => printDiagnosticReport(viewingUser, selectedAttempt)}
+                >
+                  🖨️ Друкувати звіт
+                </button>
+              </div>
             </div>
-
-            {/* Psychological portrait */}
-            {selectedAttempt.details && selectedAttempt.details.behaviorProfile ? (
-              <div className="mb-5" style={{ background: '#f9fbfd', borderLeft: '5px solid var(--blue)', padding: '20px', borderRadius: '8px', border: '1px solid #e1e8ed', borderLeftWidth: '5px' }}>
-                <h4 style={{ fontSize: '16px', color: 'var(--dark-blue)', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'Comfortaa, cursive' }}>
-                  🧠 Психометричний портрет та поведінковий профіль
-                </h4>
-                
-                <div style={{ display: 'flex', gap: '15px', marginBottom: '15px', flexWrap: 'wrap' }}>
-                  <div style={{ fontSize: '13px' }}>
-                    <span className="text-muted">Манера відповідей:</span>{' '}
-                    <span className="badge" style={{ background: '#e3f2fd', color: '#1976d2', padding: '3px 8px', borderRadius: '4px', fontWeight: 'bold', fontSize: '12px' }}>
-                      {selectedAttempt.details.behaviorProfile.style}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: '13px' }}>
-                    <span className="text-muted">Впевненість:</span>{' '}
-                    <span className="badge" style={{ background: '#e8f5e9', color: '#2e7d32', padding: '3px 8px', borderRadius: '4px', fontWeight: 'bold', fontSize: '12px' }}>
-                      {selectedAttempt.details.behaviorProfile.confidence}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: '13px' }}>
-                    <span className="text-muted">Темп роботи:</span>{' '}
-                    <span className="badge" style={{ background: '#fff3e0', color: '#e65100', padding: '3px 8px', borderRadius: '4px', fontWeight: 'bold', fontSize: '12px' }}>
-                      {selectedAttempt.details.behaviorProfile.speedCategory}
-                    </span>
-                  </div>
-                </div>
-
-                <p style={{ fontSize: '14px', lineHeight: '1.5', marginBottom: '20px', color: '#444' }}>
-                  {selectedAttempt.details.behaviorProfile.description}
-                </p>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '20px' }}>
-                  <div>
-                    <h5 style={{ fontSize: '13px', color: '#2e7d32', marginBottom: '8px', fontWeight: 'bold' }}>✓ Сильні сторони манери:</h5>
-                    <ul style={{ paddingLeft: '15px', margin: 0, listStyleType: 'disc', fontSize: '13px', color: '#555' }}>
-                      {selectedAttempt.details.behaviorProfile.strengths?.map((str: string, i: number) => (
-                        <li key={i} style={{ marginBottom: '4px' }}>{str}</li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div>
-                    <h5 style={{ fontSize: '13px', color: '#c62828', marginBottom: '8px', fontWeight: 'bold' }}>✗ Зони ризику / Слабкості:</h5>
-                    <ul style={{ paddingLeft: '15px', margin: 0, listStyleType: 'disc', fontSize: '13px', color: '#555' }}>
-                      {selectedAttempt.details.behaviorProfile.weaknesses?.map((weak: string, i: number) => (
-                        <li key={i} style={{ marginBottom: '4px' }}>{weak}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-
-                <div style={{ background: '#fff', borderRadius: '6px', padding: '12px', border: '1px solid #e1e8ed', borderLeft: '4px solid #70a1d7', marginBottom: '15px' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--rich-blue)', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>
-                    🔮 Прогноз професійної успішності:
-                  </span>
-                  <p style={{ fontSize: '13px', color: 'var(--text-dark)', margin: 0, fontWeight: '500' }}>
-                    {selectedAttempt.details.behaviorProfile.forecast}
-                  </p>
-                </div>
-
-                <div style={{ background: '#fff', borderRadius: '6px', padding: '12px', border: '1px solid #e1e8ed', borderLeft: '4px solid #2ecc71' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#27ae60', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>
-                    💡 Рекомендації для кандидата:
-                  </span>
-                  <p style={{ fontSize: '13px', color: 'var(--text-dark)', margin: 0 }}>
-                    {selectedAttempt.details.behaviorProfile.recommendations}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="alert alert-info mb-5">
-                Дані психометричного аналізу відсутні для цієї спроби (тест пройдено на старій версії системи).
-              </div>
-            )}
-
-            {/* Questions breakdown table */}
-            <h4 style={{ fontSize: '16px', color: 'var(--dark-blue)', marginBottom: '15px', borderBottom: '1px solid #eee', paddingBottom: '8px' }}>
-              📋 Детальний розбір відповідей по кожному питанню
-            </h4>
-            
-            {selectedAttempt.details && selectedAttempt.details.questions ? (
-              <div style={{ overflowX: 'auto', maxHeight: '450px', border: '1px solid #eee', borderRadius: '8px' }}>
-                <table className="data-table" style={{ fontSize: '13px' }}>
-                  <thead style={{ position: 'sticky', top: 0, zIndex: 1, background: '#f9f9f9', borderBottom: '2px solid #ddd' }}>
-                    <tr>
-                      <th style={{ width: '40px', textAlign: 'center' }}>№</th>
-                      <th style={{ width: '120px' }}>Функція</th>
-                      <th>Текст запитання та відповіді</th>
-                      <th style={{ width: '80px', textAlign: 'center' }}>Час</th>
-                      <th style={{ width: '80px', textAlign: 'center' }}>Змін</th>
-                      <th style={{ width: '100px', textAlign: 'center' }}>Результат</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedAttempt.details.questions.map((q: any, index: number) => {
-                      const isCorrect = q.selected === q.correct;
-                      return (
-                        <tr key={index} style={{ background: isCorrect ? '#fcfdfe' : '#fff9f9' }}>
-                          <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{index + 1}</td>
-                          <td>
-                            <span style={{ fontSize: '11px', background: '#eee', padding: '2px 5px', borderRadius: '3px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
-                              {q.catId || q.catName?.split('.')[0] || 'Тест'}
-                            </span>
-                          </td>
-                          <td>
-                            <div style={{ fontWeight: 'bold', marginBottom: '6px', color: 'var(--text-dark)', fontSize: '13px' }}>{q.question}</div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', paddingLeft: '10px', fontSize: '12px' }}>
-                              {q.options?.map((opt: string, optIdx: number) => {
-                                let optColor = 'var(--text-body)';
-                                let optWeight = 'normal';
-                                let icon = '○';
-                                
-                                if (optIdx === q.correct) {
-                                  optColor = '#27ae60';
-                                  optWeight = 'bold';
-                                  icon = '✓';
-                                }
-                                
-                                if (optIdx === q.selected) {
-                                  optWeight = 'bold';
-                                  if (optIdx === q.correct) {
-                                    optColor = '#27ae60';
-                                    icon = '🟢';
-                                  } else {
-                                    optColor = '#e74c3c';
-                                    icon = '🔴';
-                                  }
-                                }
-                                
-                                return (
-                                  <div key={optIdx} style={{ color: optColor, fontWeight: optWeight }}>
-                                    {icon} {opt}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </td>
-                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>{formatTime(q.timeSpent)}</td>
-                          <td style={{ textAlign: 'center', fontWeight: q.changes > 0 ? 'bold' : 'normal', color: q.changes > 0 ? '#e65100' : 'inherit' }}>
-                            {q.changes || 0}
-                          </td>
-                          <td style={{ textAlign: 'center' }}>
-                            <span style={{ 
-                              color: isCorrect ? '#2ecc71' : '#e74c3c', 
-                              fontWeight: 'bold',
-                              background: isCorrect ? 'rgba(46, 204, 113, 0.1)' : 'rgba(231, 76, 60, 0.1)',
-                              padding: '2px 8px',
-                              borderRadius: '4px',
-                              fontSize: '11px',
-                              display: 'inline-block'
-                            }}>
-                              {isCorrect ? 'Правильно' : 'Невірно'}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <p className="text-muted text-center py-4">Звіт проходження питань недоступний для цієї спроби.</p>
-            )}
           </div>
         )}
       </div>

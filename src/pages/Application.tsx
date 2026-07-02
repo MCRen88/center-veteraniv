@@ -181,6 +181,7 @@ export const Application: React.FC = () => {
         .wizard-buttons {
             display: flex;
             justify-content: space-between;
+            gap: 15px;
             margin-top: 30px;
             padding-top: 20px;
             border-top: 1px solid #eee;

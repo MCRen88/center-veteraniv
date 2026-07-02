@@ -1000,7 +1000,7 @@ export const Test: React.FC = () => {
               </div>
             </div>
 
-            <div className="d-flex justify-content-between">
+            <div className="d-flex justify-content-between" style={{ gap: '15px' }}>
               <button className="btn btn-outline" onClick={prevQuestion} disabled={currentQuestionIndex === 0}>Назад</button>
               
               {currentQuestionIndex < testQuestions.length - 1 ? (

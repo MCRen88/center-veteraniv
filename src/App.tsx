@@ -10,6 +10,7 @@ import { Registry } from './pages/Registry';
 import { Login } from './pages/Login';
 import { UserDashboard } from './pages/UserDashboard';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { TestAnalysis } from './pages/TestAnalysis';
 
 export const App: React.FC = () => {
   return (
@@ -25,6 +26,7 @@ export const App: React.FC = () => {
             <Route path="login" element={<Login />} />
             <Route path="dashboard" element={<UserDashboard />} />
             <Route path="admin" element={<AdminDashboard />} />
+            <Route path="test-analysis/:scoreId" element={<TestAnalysis />} />
           </Route>
         </Routes>
       </BrowserRouter>

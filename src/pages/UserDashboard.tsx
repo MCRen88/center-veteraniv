@@ -2,10 +2,52 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 
+interface QuestionDetail {
+  id?: number;
+  question: string;
+  catId?: string;
+  catName?: string;
+  options: string[];
+  correct: number;
+  selected: number;
+  timeSpent: number;
+  changes: number;
+  explanation?: string;
+}
+
+interface BehaviorProfile {
+  style: string;
+  confidence: string;
+  speedCategory: string;
+  description: string;
+  strengths?: string[];
+  weaknesses?: string[];
+  forecast: string;
+  recommendations: string;
+}
+
+interface TestScoreDetails {
+  questions?: QuestionDetail[];
+  totalTime: number;
+  tabSwitches: number;
+  behaviorProfile?: BehaviorProfile;
+}
+
+interface TestScoreWithDetails {
+  id: string;
+  user_id: string;
+  score: number;
+  total: number;
+  passed: boolean;
+  mode: string;
+  created_at: string;
+  details: TestScoreDetails | null;
+}
+
 export const UserDashboard: React.FC = () => {
   const { state } = useAppContext();
   const navigate = useNavigate();
-  const [selectedScore, setSelectedScore] = useState<any | null>(null);
+  const [selectedScore, setSelectedScore] = useState<TestScoreWithDetails | null>(null);
 
   const user = state.currentUser;
 
@@ -211,7 +253,7 @@ export const UserDashboard: React.FC = () => {
                   <div style={{ background: '#f8fafd', border: '1px solid #e1e8ed', borderRadius: '8px', padding: '15px', textAlign: 'center' }}>
                     <span style={{ fontSize: '24px' }}>🔄</span>
                     <h4 style={{ margin: '8px 0 2px', fontSize: '20px', color: 'var(--dark-blue)', fontFamily: 'Comfortaa, cursive' }}>
-                      {selectedScore.details.questions ? selectedScore.details.questions.reduce((acc: number, q: any) => acc + (q.changes || 0), 0) : 0}
+                      {selectedScore.details.questions ? selectedScore.details.questions.reduce((acc: number, q: QuestionDetail) => acc + (q.changes || 0), 0) : 0}
                     </h4>
                     <span className="text-muted" style={{ fontSize: '11px' }}>Змін відповідей</span>
                   </div>
@@ -316,7 +358,7 @@ export const UserDashboard: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedScore.details.questions?.map((q: any, index: number) => {
+                      {selectedScore.details.questions?.map((q: QuestionDetail, index: number) => {
                         const isCorrect = q.selected === q.correct;
                         return (
                           <tr key={index} style={{ background: isCorrect ? '#fcfdfe' : '#fff9f9' }}>

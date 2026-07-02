@@ -36,19 +36,20 @@ export const Navbar: React.FC = () => {
 
         .nav-links {
             display: flex;
-            gap: 30px;
+            gap: 20px;
             align-items: center;
         }
-
+        
         .nav-link {
             text-decoration: none;
             color: var(--text-dark);
             font-family: 'Comfortaa', cursive;
             font-weight: 600;
-            font-size: 16px;
+            font-size: 15px;
             padding: 10px 5px;
             position: relative;
             transition: var(--transition);
+            white-space: nowrap;
         }
 
         .nav-link::after {
@@ -92,8 +93,9 @@ export const Navbar: React.FC = () => {
             color: var(--dark-blue);
             font-family: 'Comfortaa', cursive;
             font-weight: 600;
-            max-width: 180px;
+            max-width: 240px;
             border: 1px solid rgba(81, 144, 207, 0.15);
+            flex-shrink: 0;
         }
 
         .user-badge-icon {
@@ -117,12 +119,22 @@ export const Navbar: React.FC = () => {
             font-family: 'Comfortaa', cursive;
             font-weight: 600;
             transition: var(--transition);
+            white-space: nowrap;
         }
 
         .btn-logout:hover {
             border-color: #e74c3c;
             color: #e74c3c;
             background: rgba(231, 76, 60, 0.05);
+        }
+
+        @media (max-width: 1200px) and (min-width: 1025px) {
+            .nav-links {
+                gap: 12px;
+            }
+            .nav-link {
+                font-size: 14px;
+            }
         }
 
         @media (max-width: 1024px) {
