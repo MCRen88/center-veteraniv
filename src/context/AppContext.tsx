@@ -2,8 +2,10 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { supabaseAdmin } from '../lib/supabaseAdmin';
 import type { Database } from '../lib/database.types';
+import { casesDb, type CaseQuestion as Case } from '../data/casesDb';
 
 export type Role = 'user' | 'teacher' | 'admin';
+export type { Case };
 
 export type RegistryItem = Database['public']['Tables']['registry']['Row'];
 export type Question = Database['public']['Tables']['questions']['Row'];
@@ -22,6 +24,7 @@ export interface User {
 interface AppState {
   registry: RegistryItem[];
   questions: Question[];
+  cases: Case[];
   users: User[];
   applications: Application[];
   currentUser: User | null;
@@ -50,12 +53,17 @@ interface AppContextType {
   addQuestion: (q: Omit<Question, 'id'>) => Promise<void>;
   updateQuestion: (id: number, q: Omit<Question, 'id'>) => Promise<void>;
   deleteQuestion: (id: number) => Promise<void>;
+  // Admin Case Mgmt
+  addCase: (c: Omit<Case, 'id'>) => Promise<void>;
+  updateCase: (id: number, c: Omit<Case, 'id'>) => Promise<void>;
+  deleteCase: (id: number) => Promise<void>;
   fetchData: () => Promise<void>;
 }
 
 const defaultState: AppState = {
   registry: [],
   questions: [],
+  cases: [],
   users: [],
   applications: [],
   currentUser: null,
@@ -103,6 +111,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       correct: q.correct,
       explanation: q.explanation
     })) || [];
+
+    let casesList: Case[] = [];
+    try {
+      const { data: dbCases, error: cError } = await supabase.from('cases').select('*').order('id', { ascending: true });
+      if (cError) {
+        console.error('AppContext error fetching cases:', cError.message);
+        casesList = [...casesDb];
+      } else if (dbCases && dbCases.length > 0) {
+        casesList = dbCases.map((c: any) => ({
+          id: c.id,
+          title: c.title,
+          situation: c.situation,
+          question: c.question,
+          options: c.options,
+          correctAnswer: c.correct_answer !== undefined ? c.correct_answer : c.correctAnswer,
+          explanation: c.explanation
+        }));
+      } else {
+        casesList = [...casesDb];
+      }
+    } catch (err) {
+      console.error('Error fetching cases from DB, falling back to static casesDb:', err);
+      casesList = [...casesDb];
+    }
+    console.log('AppContext: casesList loaded with', casesList.length, 'items');
     
     let usersList: User[] = [];
     let applicationsList: Application[] = [];
@@ -158,6 +191,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setState(prev => ({
       ...prev,
       questions: questionsList,
+      cases: casesList,
       registry: registry || [],
       users: usersList,
       applications: applicationsList,
@@ -443,6 +477,73 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const addCase = async (c: Omit<Case, 'id'>) => {
+    const dbCase = {
+      title: c.title,
+      situation: c.situation,
+      question: c.question,
+      options: c.options,
+      correct_answer: c.correctAnswer,
+      explanation: c.explanation
+    };
+    const { data, error } = await supabase.from('cases').insert([dbCase]).select();
+    if (!error && data) {
+      const mapped = {
+        id: data[0].id,
+        title: data[0].title,
+        situation: data[0].situation,
+        question: data[0].question,
+        options: data[0].options,
+        correctAnswer: data[0].correct_answer,
+        explanation: data[0].explanation
+      };
+      setState(prev => ({ ...prev, cases: [...prev.cases, mapped] }));
+    } else {
+      alert("Помилка додавання кейсу: " + (error?.message || ""));
+    }
+  };
+
+  const updateCase = async (id: number, c: Omit<Case, 'id'>) => {
+    const dbCase = {
+      title: c.title,
+      situation: c.situation,
+      question: c.question,
+      options: c.options,
+      correct_answer: c.correctAnswer,
+      explanation: c.explanation
+    };
+    const { data, error } = await supabase.from('cases').update(dbCase).eq('id', id).select();
+    if (!error && data) {
+      const mapped = {
+        id: data[0].id,
+        title: data[0].title,
+        situation: data[0].situation,
+        question: data[0].question,
+        options: data[0].options,
+        correctAnswer: data[0].correct_answer,
+        explanation: data[0].explanation
+      };
+      setState(prev => ({
+        ...prev,
+        cases: prev.cases.map(old => old.id === id ? mapped : old)
+      }));
+    } else {
+      alert("Помилка оновлення кейсу: " + (error?.message || ""));
+    }
+  };
+
+  const deleteCase = async (id: number) => {
+    const { error } = await supabase.from('cases').delete().eq('id', id);
+    if (!error) {
+      setState(prev => ({
+        ...prev,
+        cases: prev.cases.filter(c => c.id !== id)
+      }));
+    } else {
+      alert("Помилка видалення кейсу: " + (error?.message || ""));
+    }
+  };
+
   const impersonateUser = (userId: string) => {
     const targetUser = state.users.find(u => u.id === userId);
     if (!targetUser) {
@@ -483,6 +584,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addQuestion,
       updateQuestion,
       deleteQuestion,
+      addCase,
+      updateCase,
+      deleteCase,
       fetchData
     }}>
       {children}

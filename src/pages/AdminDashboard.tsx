@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAppContext, type Role, type Question } from '../context/AppContext';
+import { useAppContext, type Role, type Question, type Case } from '../context/AppContext';
 
 export const AdminDashboard: React.FC = () => {
   const { 
@@ -13,10 +13,97 @@ export const AdminDashboard: React.FC = () => {
     deleteQuestion,
     addQuestion,
     updateQuestion,
+    addCase,
+    updateCase,
+    deleteCase,
     updateApplicationStatus
   } = useAppContext();
   const navigate = useNavigate();
+  console.log('AdminDashboard: state.cases length =', state.cases ? state.cases.length : 'undefined');
   const [activeTab, setActiveTab] = useState<'users' | 'applications' | 'tests' | 'analytics'>('users');
+  const [testsSubTab, setTestsSubTab] = useState<'questions' | 'cases'>('questions');
+  
+  // Case Modal State
+  const [isCaseModalOpen, setIsCaseModalOpen] = useState(false);
+  const [editingCase, setEditingCase] = useState<Case | null>(null);
+  const [caseForm, setCaseForm] = useState({
+    title: '',
+    situation: '',
+    question: '',
+    options: ['', '', '', ''],
+    correctAnswer: 0,
+    explanation: ''
+  });
+
+  const startAddCase = () => {
+    setEditingCase(null);
+    setCaseForm({
+      title: '',
+      situation: '',
+      question: '',
+      options: ['', '', '', ''],
+      correctAnswer: 0,
+      explanation: ''
+    });
+    setIsCaseModalOpen(true);
+  };
+
+  const startEditCase = (c: Case) => {
+    setEditingCase(c);
+    setCaseForm({
+      title: c.title,
+      situation: c.situation,
+      question: c.question,
+      options: [...c.options],
+      correctAnswer: c.correctAnswer,
+      explanation: c.explanation || ''
+    });
+    setIsCaseModalOpen(true);
+  };
+
+  const handleSaveCase = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!caseForm.title.trim()) {
+      alert("Будь ласка, введіть заголовок кейсу");
+      return;
+    }
+    if (!caseForm.situation.trim()) {
+      alert("Будь ласка, введіть опис ситуації");
+      return;
+    }
+    if (!caseForm.question.trim()) {
+      alert("Будь ласка, введіть запитання");
+      return;
+    }
+    if (caseForm.options.some(opt => !opt.trim())) {
+      alert("Будь ласка, заповніть усі варіанти відповідей");
+      return;
+    }
+
+    if (editingCase) {
+      await updateCase(editingCase.id, {
+        title: caseForm.title,
+        situation: caseForm.situation,
+        question: caseForm.question,
+        options: caseForm.options,
+        correctAnswer: caseForm.correctAnswer,
+        explanation: caseForm.explanation
+      });
+      alert("Кейс оновлено успішно!");
+    } else {
+      await addCase({
+        title: caseForm.title,
+        situation: caseForm.situation,
+        question: caseForm.question,
+        options: caseForm.options,
+        correctAnswer: caseForm.correctAnswer,
+        explanation: caseForm.explanation
+      });
+      alert("Кейс додано успішно!");
+    }
+    setIsCaseModalOpen(false);
+    setEditingCase(null);
+  };
   
   // Selected user for details modal
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
@@ -961,36 +1048,94 @@ export const AdminDashboard: React.FC = () => {
 
         {isAdmin && activeTab === 'tests' && (
           <div className="card">
-            <div className="d-flex justify-content-between align-items-center mb-4" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h4 className="mb-0">Банк тестових завдань ({(state.questions || []).length})</h4>
-              <button className="btn btn-primary" onClick={startAddQuestion}>+ Додати запитання</button>
+            {/* Sub-tabs for Questions and Cases */}
+            <div className="d-flex mb-4" style={{ gap: '15px', borderBottom: '2px solid #eee', paddingBottom: '10px' }}>
+              <div 
+                className={`admin-tab mb-0 ${testsSubTab === 'questions' ? 'active' : ''}`} 
+                style={{ padding: '8px 16px', fontSize: '15px' }}
+                onClick={() => setTestsSubTab('questions')}
+              >
+                📝 Тестові питання ({(state.questions || []).length})
+              </div>
+              <div 
+                className={`admin-tab mb-0 ${testsSubTab === 'cases' ? 'active' : ''}`} 
+                style={{ padding: '8px 16px', fontSize: '15px' }}
+                onClick={() => setTestsSubTab('cases')}
+              >
+                💼 Практичні кейси ({(state.cases || []).length})
+              </div>
             </div>
-            
-            <div style={{ overflowX: 'auto' }}>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>№</th>
-                    <th>Категорія</th>
-                    <th>Текст запитання</th>
-                    <th>Дії</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(state.questions || []).map((q, idx) => (
-                    <tr key={idx}>
-                      <td>{idx + 1}</td>
-                      <td><span style={{ fontSize: '12px', background: '#eee', padding: '2px 6px', borderRadius: '4px' }}>{q.catId || q.catName.split('.')[0]}</span></td>
-                      <td style={{ fontSize: '14px' }}>{q.question.substring(0, 80)}{q.question.length > 80 ? '...' : ''}</td>
-                      <td style={{ whiteSpace: 'nowrap' }}>
-                        <button className="btn btn-outline" style={{ padding: '2px 8px', fontSize: '12px', marginRight: '5px' }} onClick={() => startEditQuestion(q)}>✎ Редагувати</button>
-                        <button className="btn btn-outline" style={{ padding: '2px 8px', fontSize: '12px', color: '#e74c3c', borderColor: '#e74c3c' }} onClick={() => { if(confirm('Видалити запитання?')) deleteQuestion(q.id) }}>🗑</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+
+            {testsSubTab === 'questions' ? (
+              <>
+                <div className="d-flex justify-content-between align-items-center mb-4" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h4 className="mb-0">Банк тестових завдань ({(state.questions || []).length})</h4>
+                  <button className="btn btn-primary" onClick={startAddQuestion}>+ Додати запитання</button>
+                </div>
+                
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>№</th>
+                        <th>Категорія</th>
+                        <th>Текст запитання</th>
+                        <th>Дії</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(state.questions || []).map((q, idx) => (
+                        <tr key={idx}>
+                          <td>{idx + 1}</td>
+                          <td><span style={{ fontSize: '12px', background: '#eee', padding: '2px 6px', borderRadius: '4px' }}>{q.catId || q.catName.split('.')[0]}</span></td>
+                          <td style={{ fontSize: '14px' }}>{q.question.substring(0, 80)}{q.question.length > 80 ? '...' : ''}</td>
+                          <td style={{ whiteSpace: 'nowrap' }}>
+                            <button className="btn btn-outline" style={{ padding: '2px 8px', fontSize: '12px', marginRight: '5px' }} onClick={() => startEditQuestion(q)}>✎ Редагувати</button>
+                            <button className="btn btn-outline" style={{ padding: '2px 8px', fontSize: '12px', color: '#e74c3c', borderColor: '#e74c3c' }} onClick={() => { if(confirm('Видалити запитання?')) deleteQuestion(q.id) }}>🗑</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="d-flex justify-content-between align-items-center mb-4" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h4 className="mb-0">Список практичних кейсів ({(state.cases || []).length})</h4>
+                  <button className="btn btn-primary" onClick={startAddCase}>+ Додати кейс</button>
+                </div>
+                
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: '50px' }}>№</th>
+                        <th style={{ width: '200px' }}>Заголовок кейсу</th>
+                        <th>Ситуація та запитання</th>
+                        <th style={{ width: '150px' }}>Дії</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(state.cases || []).map((c, idx) => (
+                        <tr key={idx}>
+                          <td>{idx + 1}</td>
+                          <td><span style={{ fontSize: '13px', fontWeight: 'bold' }}>{c.title}</span></td>
+                          <td style={{ fontSize: '14px' }}>
+                            <div style={{ marginBottom: '5px' }}><strong>Ситуація:</strong> {c.situation.substring(0, 150)}{c.situation.length > 150 ? '...' : ''}</div>
+                            <div><strong>Питання:</strong> <span className="text-muted">{c.question}</span></div>
+                          </td>
+                          <td style={{ whiteSpace: 'nowrap' }}>
+                            <button className="btn btn-outline" style={{ padding: '4px 8px', fontSize: '12px', marginRight: '5px' }} onClick={() => startEditCase(c)}>✎ Редагувати</button>
+                            <button className="btn btn-outline" style={{ padding: '4px 8px', fontSize: '12px', color: '#e74c3c', borderColor: '#e74c3c' }} onClick={() => { if(confirm('Видалити цей кейс?')) deleteCase(c.id) }}>🗑</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -1466,6 +1611,109 @@ export const AdminDashboard: React.FC = () => {
                 </>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add / Edit Case Modal */}
+      {isCaseModalOpen && (
+        <div className="modal-overlay" style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div className="card" style={{ maxWidth: '650px', width: '100%', margin: '20px', background: '#fff', borderRadius: '12px', padding: '30px', maxHeight: '95vh', overflowY: 'auto' }}>
+            <h3 className="mb-4" style={{ fontSize: '20px' }}>{editingCase ? 'Редагувати практичний кейс' : 'Додати новий практичний кейс'}</h3>
+            <form onSubmit={handleSaveCase}>
+              <div className="form-group">
+                <label className="form-label">Заголовок кейсу</label>
+                <input 
+                  type="text"
+                  className="form-control"
+                  value={caseForm.title}
+                  onChange={e => setCaseForm({...caseForm, title: e.target.value})}
+                  placeholder="Напр. Кейс 11. Назва кейсу..."
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Опис ситуації</label>
+                <textarea 
+                  className="form-control" 
+                  style={{ height: '120px', resize: 'vertical' }}
+                  value={caseForm.situation} 
+                  onChange={e => setCaseForm({...caseForm, situation: e.target.value})} 
+                  placeholder="Опишіть ситуацію детально..."
+                  required 
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Запитання до кейсу</label>
+                <textarea 
+                  className="form-control" 
+                  style={{ height: '60px', resize: 'vertical' }}
+                  value={caseForm.question} 
+                  onChange={e => setCaseForm({...caseForm, question: e.target.value})} 
+                  placeholder="Введіть запитання..."
+                  required 
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" style={{ fontWeight: 'bold' }}>Варіанти відповідей (виберіть правильний радіо-кнопкою)</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {caseForm.options.map((opt, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <input 
+                        type="radio" 
+                        name="correctCaseAnswer" 
+                        checked={caseForm.correctAnswer === i} 
+                        onChange={() => setCaseForm({...caseForm, correctAnswer: i})} 
+                        style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                      />
+                      <input 
+                        type="text" 
+                        className="form-control" 
+                        value={opt} 
+                        onChange={e => {
+                          const updatedOptions = [...caseForm.options];
+                          updatedOptions[i] = e.target.value;
+                          setCaseForm({...caseForm, options: updatedOptions});
+                        }} 
+                        placeholder={`Варіант ${i + 1}...`}
+                        required 
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Обґрунтування (пояснення правильної відповіді)</label>
+                <textarea 
+                  className="form-control" 
+                  style={{ height: '100px', resize: 'vertical' }}
+                  value={caseForm.explanation} 
+                  onChange={e => setCaseForm({...caseForm, explanation: e.target.value})} 
+                  placeholder="Введіть обґрунтування..."
+                  required
+                />
+              </div>
+
+              <div className="d-flex justify-content-end" style={{ gap: '10px', marginTop: '25px' }}>
+                <button type="button" className="btn btn-outline" onClick={() => setIsCaseModalOpen(false)}>Скасувати</button>
+                <button type="submit" className="btn btn-primary">{editingCase ? 'Зберегти зміни' : 'Створити кейс'}</button>
+              </div>
+            </form>
           </div>
         </div>
       )}

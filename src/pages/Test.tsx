@@ -4,10 +4,11 @@ import { useNavigate } from 'react-router-dom';
 import { casesDb } from '../data/casesDb';
 import { speakText, stopSpeaking } from '../utils/tts';
 
-type TestMode = 'exam' | null;
+type TestMode = 'exam' | 'practice' | null;
 
 export const Test: React.FC = () => {
   const { state, saveTestScore } = useAppContext();
+  const casesList = state.cases && state.cases.length > 0 ? state.cases : casesDb;
   const navigate = useNavigate();
 
   const [mode, setMode] = useState<TestMode>(null);
@@ -17,7 +18,7 @@ export const Test: React.FC = () => {
   const [isFinished, setIsFinished] = useState(false);
   const [score, setScore] = useState(0);
 
-  const [timeLeft, setTimeLeft] = useState(3600); // 60 minutes in seconds
+  const [timeLeft, setTimeLeft] = useState(7200); // 2 hours in seconds
   const [warnings, setWarnings] = useState(0);
   const [showWarningModal, setShowWarningModal] = useState(false);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
@@ -64,7 +65,11 @@ export const Test: React.FC = () => {
       try {
         const parsed = JSON.parse(saved);
         if (parsed.mode) {
-          setMode(parsed.mode);
+          let restoredMode = parsed.mode;
+          if (restoredMode === 'practice' && state.currentUser?.role !== 'admin' && !isImpersonating) {
+            restoredMode = 'exam';
+          }
+          setMode(restoredMode);
           setCurrentQuestionIndex(parsed.currentQuestionIndex ?? 0);
           if (parsed.testQuestions && parsed.testQuestions.length > 0) {
             setTestQuestions(parsed.testQuestions);
@@ -73,7 +78,7 @@ export const Test: React.FC = () => {
           setIsFinished(parsed.isFinished ?? false);
           setScore(parsed.score ?? 0);
           
-          let calculatedTimeLeft = parsed.timeLeft ?? 3600;
+          let calculatedTimeLeft = parsed.timeLeft ?? (parsed.showCases ? 3600 : 7200);
           if (parsed.mode === 'exam' && parsed.examEndTime) {
             const remaining = Math.round((parsed.examEndTime - Date.now()) / 1000);
             calculatedTimeLeft = remaining > 0 ? remaining : 0;
@@ -154,13 +159,32 @@ export const Test: React.FC = () => {
 
 
 
+  const finishCases = () => {
+    let correctCount = 0;
+    casesList.forEach((c, idx) => {
+      if (caseAnswers[idx] === c.correctAnswer) {
+        correctCount++;
+      }
+    });
+    setCasesScore(correctCount);
+    setCasesFinished(true);
+  };
+
   const startCases = () => {
+    if (mode === 'exam') {
+      const confirmStart = confirm('Увага: на проходження практичного блоку кейсів надається 60 хвилин. Бажаєте розпочати?');
+      if (!confirmStart) return;
+    }
     setShowCases(true);
     setCurrentCaseIndex(0);
-    setCaseAnswers(new Array(casesDb.length).fill(-1));
+    setCaseAnswers(new Array(casesList.length).fill(-1));
     setCasesFinished(false);
     setCasesScore(0);
     setCaseShowFeedback(false);
+    if (mode === 'exam') {
+      setTimeLeft(3600); // 60 minutes for cases
+      setExamEndTime(Date.now() + 3600 * 1000);
+    }
   };
 
   const handleCaseAnswer = (optionIndex: number) => {
@@ -168,22 +192,33 @@ export const Test: React.FC = () => {
     const newCaseAnswers = [...caseAnswers];
     newCaseAnswers[currentCaseIndex] = optionIndex;
     setCaseAnswers(newCaseAnswers);
-    setCaseShowFeedback(true);
   };
 
   const nextCase = () => {
     setCaseShowFeedback(false);
-    if (currentCaseIndex < casesDb.length - 1) {
+    if (currentCaseIndex < casesList.length - 1) {
       setCurrentCaseIndex(currentCaseIndex + 1);
     } else {
       let correctCount = 0;
-      casesDb.forEach((c, idx) => {
+      casesList.forEach((c, idx) => {
         if (caseAnswers[idx] === c.correctAnswer) {
           correctCount++;
         }
       });
       setCasesScore(correctCount);
       setCasesFinished(true);
+    }
+  };
+
+  const handleNextClick = () => {
+    if (mode === 'exam') {
+      nextCase();
+    } else {
+      if (!caseShowFeedback) {
+        setCaseShowFeedback(true);
+      } else {
+        nextCase();
+      }
     }
   };
 
@@ -213,7 +248,7 @@ export const Test: React.FC = () => {
     setShowWarningModal(false);
     setShowCompletionModal(false);
     setWasTerminated(false);
-    setTimeLeft(3600);
+    setTimeLeft(7200); // 2 hours for tests
     
     setQuestionStartTime(Date.now());
     setTimePerQuestion({});
@@ -228,7 +263,7 @@ export const Test: React.FC = () => {
     
     const shuffled = [...state.questions].sort(() => 0.5 - Math.random());
     setTestQuestions(shuffled);
-    setExamEndTime(Date.now() + 3600 * 1000);
+    setExamEndTime(Date.now() + 7200 * 1000);
     
     setAnswers(new Array(state.questions.length).fill(-1));
     setCurrentQuestionIndex(0);
@@ -463,20 +498,26 @@ export const Test: React.FC = () => {
   };
 
   const finishTestRef = useRef(finishTest);
+  const finishCasesRef = useRef(finishCases);
   const terminateTestRef = useRef(terminateTest);
   const lastViolationTimeRef = useRef<number>(0);
   
   useEffect(() => {
     finishTestRef.current = finishTest;
+    finishCasesRef.current = finishCases;
     terminateTestRef.current = terminateTest;
   });
 
   // Auto-submit test if time left becomes 0 in exam mode
   useEffect(() => {
-    if (mode === 'exam' && timeLeft === 0 && !isFinished && !isSubmitting) {
-      finishTest();
+    if (mode === 'exam' && timeLeft === 0 && !isSubmitting) {
+      if (showCases && !casesFinished) {
+        finishCases();
+      } else if (!showCases && !isFinished) {
+        finishTest();
+      }
     }
-  }, [mode, timeLeft, isFinished, isSubmitting, finishTest]);
+  }, [mode, timeLeft, isFinished, showCases, casesFinished, isSubmitting]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -485,13 +526,20 @@ export const Test: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!mode || mode !== 'exam' || isFinished) return;
+    if (!mode || mode !== 'exam') return;
+
+    const shouldRun = showCases ? !casesFinished : !isFinished;
+    if (!shouldRun) return;
 
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          finishTestRef.current();
+          if (showCases) {
+            finishCasesRef.current();
+          } else {
+            finishTestRef.current();
+          }
           return 0;
         }
         return prev - 1;
@@ -499,13 +547,16 @@ export const Test: React.FC = () => {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [mode, isFinished]);
+  }, [mode, isFinished, showCases, casesFinished]);
 
   useEffect(() => {
-    if (!mode || mode !== 'exam' || isFinished) return;
+    if (!mode || mode !== 'exam') return;
+
+    const shouldTrack = showCases ? !casesFinished : !isFinished;
+    if (!shouldTrack) return;
 
     const handleViolation = (reason: string) => {
-      if (isSavingRef.current || isFinished) return; // Ignore warnings after submission started
+      if (isSavingRef.current) return; // Ignore warnings after submission started
       const now = Date.now();
       if (now - lastViolationTimeRef.current < 1000) {
         // Cooldown to prevent double-triggering when tab change fires both visibilitychange and blur
@@ -516,7 +567,12 @@ export const Test: React.FC = () => {
       setWarnings((prev) => {
         const nextWarnings = prev + 1;
         if (nextWarnings >= 2) {
-          terminateTestRef.current();
+          if (showCases) {
+            finishCasesRef.current();
+            setWasTerminated(true);
+          } else {
+            terminateTestRef.current();
+          }
           return nextWarnings;
         } else {
           setWarningReason(reason);
@@ -543,7 +599,7 @@ export const Test: React.FC = () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleBlur);
     };
-  }, [mode, isFinished]);
+  }, [mode, isFinished, showCases, casesFinished]);
 
 
 
@@ -617,24 +673,53 @@ export const Test: React.FC = () => {
   if (isFinished) {
     if (showCases) {
       if (casesFinished) {
+        const casesPercentage = Math.round((casesScore / casesList.length) * 100);
+        const casesPassed = casesPercentage >= 80;
+        const overallPassed = casesPassed && !wasTerminated;
+
         return (
           <div className="container mt-5 mb-5">
             <div className="card text-center" style={{ maxWidth: '800px', margin: '0 auto', padding: '40px' }}>
-              <div style={{ fontSize: '70px', marginBottom: '20px' }}>🏆</div>
+              <div style={{ fontSize: '70px', marginBottom: '20px' }}>{overallPassed ? '🏆' : '⚠️'}</div>
               <h2 style={{ fontFamily: 'Comfortaa, sans-serif' }}>Завершено оцінювання кейсів</h2>
-              <p style={{ fontSize: '20px', margin: '20px 0 30px' }}>
-                Ви успішно розв'язали <strong>{casesScore} з {casesDb.length}</strong> професійних кейсів.
+              <p style={{ fontSize: '20px', margin: '20px 0 25px' }}>
+                Ви дали правильні відповіді на <strong>{casesScore} з {casesList.length}</strong> практичних кейсів ({casesPercentage}%).
               </p>
               
-              <div className="alert alert-info mb-4" style={{ textAlign: 'left', lineHeight: 1.6 }}>
-                <strong>Аналіз результату:</strong><br />
-                {casesScore >= 8 ? (
-                  "Відмінний результат! Ви продемонстрували глибоке розуміння професійного стандарту фахівця із супроводу ветеранів, етичних норм, законодавства та принципів кейс-менеджменту. Ви готові до вирішення складних реальних ситуацій."
-                ) : casesScore >= 5 ? (
-                  "Хороший результат. Ви орієнтуєтеся в основних ситуаціях, проте деякі рішення потребують більш детального вивчення законодавчої бази (зокрема, щодо захисту персональних даних та протидії домашньому насильству)."
+              <div className={`alert ${casesPassed ? 'alert-success' : 'alert-danger'} mb-4`} style={{ textAlign: 'left', lineHeight: 1.6 }}>
+                <strong>Оцінка практичної частини:</strong><br />
+                {casesPassed ? (
+                  `🎉 Прохідний поріг практичних кейсів успішно подолано (${casesPercentage}% при нормі 80% або більше).`
                 ) : (
-                  "Рекомендується додатково опрацювати нормативно-правові акти та професійний стандарт. Деякі з ваших рішень можуть створювати юридичні або етичні ризики для клієнтів та організації."
+                  `❌ Прохідний поріг практичних кейсів не подолано (${casesPercentage}% при нормі 80% або більше).`
                 )}
+                <div style={{ marginTop: '10px', fontSize: '14px', color: 'var(--text-muted)' }}>
+                  <strong>Детальний аналіз: </strong>
+                  {casesScore >= 8 ? (
+                    "Відмінний результат! Ви продемонстрували глибоке розуміння професійного стандарту фахівця із супроводу ветеранів, етичних норм, законодавства та принципів кейс-менеджменту. Ви готові до вирішення складних реальних ситуацій."
+                  ) : casesScore >= 5 ? (
+                    "Хороший результат. Ви орієнтуєтеся в основних ситуаціях, проте деякі рішення потребують більш детального вивчення законодавчої бази (зокрема, щодо захисту персональних даних та протидії домашньому насильству)."
+                  ) : (
+                    "Рекомендується додатково опрацювати нормативно-правові акти та професійний стандарт. Деякі з ваших рішень можуть створювати юридичні або етичні ризики для клієнтів та організації."
+                  )}
+                </div>
+              </div>
+
+              <div className="card mb-4" style={{ 
+                background: overallPassed ? 'rgba(46, 204, 113, 0.05)' : 'rgba(231, 76, 60, 0.05)', 
+                border: overallPassed ? '2px solid #2ecc71' : '2px solid #e74c3c',
+                padding: '25px',
+                borderRadius: '10px',
+                textAlign: 'left'
+              }}>
+                <h3 style={{ fontFamily: 'Comfortaa, sans-serif', color: overallPassed ? '#27ae60' : '#c0392b', marginBottom: '15px', textAlign: 'center' }}>
+                  {overallPassed ? "🏆 Загальний результат: Кваліфікаційний іспит складено" : "⚠️ Загальний результат: Кваліфікаційний іспит не складено"}
+                </h3>
+                <p style={{ fontSize: '15px', margin: 0, lineHeight: 1.6, color: 'var(--text-dark)' }}>
+                  {overallPassed 
+                    ? "Вітаємо! Ви успішно подолали обидва кваліфікаційні пороги (теорія: 75%+, практика: 80%+). Ви повністю підтвердили відповідність кваліфікаційним вимогам професійного стандарту фахівця із супроводу ветеранів війни та демобілізованих осіб. Ваш офіційний сертифікат згенеровано." 
+                    : "Для успішного складання кваліфікаційного іспиту необхідно подолати обидва пороги (75% для теоретичного тесту та 80% для блоку кейсів). Оскільки практичний поріг не подолано, кваліфікаційний іспит не складено. Рекомендуємо оновити знання та спробувати ще раз після узгодження з адміністратором."}
+                </p>
               </div>
 
               <div className="mt-4 d-flex justify-content-center gap-3">
@@ -644,6 +729,11 @@ export const Test: React.FC = () => {
                 <button className="btn btn-primary" onClick={() => setShowCases(false)}>
                   Назад до результатів тесту
                 </button>
+                {overallPassed && (
+                  <button className="btn btn-primary" style={{ background: '#2ecc71' }} onClick={downloadCert}>
+                    Завантажити сертифікат
+                  </button>
+                )}
                  {(currentUser.role !== 'user' || currentUser.testPermission || isImpersonating) && (
                   <button className="btn btn-primary" style={{ background: '#3498db' }} onClick={startCases}>
                     Спробувати кейси ще раз
@@ -655,7 +745,7 @@ export const Test: React.FC = () => {
         );
       }
 
-      const currentCase = casesDb[currentCaseIndex];
+      const currentCase = casesList[currentCaseIndex];
       const hasSelectedOption = caseAnswers[currentCaseIndex] !== -1;
 
       return (
@@ -719,7 +809,24 @@ export const Test: React.FC = () => {
 
           <div className="container mt-4 mb-5 case-container">
             <div className="d-flex justify-content-between align-items-center mb-4">
-              <span className="badge-step">Кейс {currentCaseIndex + 1} з {casesDb.length}</span>
+              <span className="badge-step">Кейс {currentCaseIndex + 1} з {casesList.length}</span>
+              {mode === 'exam' && (
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '8px', 
+                  background: timeLeft < 300 ? '#fce8e6' : '#edf2f7', 
+                  padding: '6px 12px', 
+                  borderRadius: '6px',
+                  border: timeLeft < 300 ? '1px solid #f5c2c7' : '1px solid #cbd5e1',
+                  color: timeLeft < 300 ? '#d93025' : 'var(--dark-blue)',
+                  fontWeight: 'bold',
+                  fontFamily: 'monospace',
+                  fontSize: '15px'
+                }}>
+                  ⏱️ {formatTime(timeLeft)}
+                </div>
+              )}
               <span className="text-muted" style={{ fontSize: '14px', fontWeight: 500 }}>
                 Практичний блок оцінювання
               </span>
@@ -798,10 +905,16 @@ export const Test: React.FC = () => {
               <div className="d-flex justify-content-end mt-4">
                 <button
                   className="btn btn-primary"
-                  onClick={nextCase}
+                  onClick={handleNextClick}
                   disabled={!hasSelectedOption}
                 >
-                  {currentCaseIndex === casesDb.length - 1 ? "Завершити блок кейсів" : "Наступний кейс"}
+                  {mode === 'exam' 
+                    ? (currentCaseIndex === casesList.length - 1 ? "Завершити блок кейсів" : "Наступний кейс")
+                    : (!caseShowFeedback 
+                        ? "Перевірити" 
+                        : (currentCaseIndex === casesList.length - 1 ? "Завершити блок кейсів" : "Наступний кейс")
+                      )
+                  }
                 </button>
               </div>
             </div>
@@ -829,9 +942,13 @@ export const Test: React.FC = () => {
             {wasTerminated ? (
               <strong>Тестування автоматично завершено та анульовано через повторний вихід з вікна тестування (перемикання вкладок/програм).</strong>
             ) : passed ? (
-              "Вітаємо! Ви успішно склали тест і продемонстрували достатній рівень знань професійного стандарту." 
+              <>
+                <strong>🎉 Вітаємо! Прохідний поріг теоретичного тесту пройдено ({percentage}% при нормі 75% або більше).</strong><br />
+                Ви дали правильну відповідь на {score} з {testQuestions.length} запитань і успішно підтвердили теоретичні знання. 
+                Тепер ви можете перейти до вирішення практичних кейсів для завершення кваліфікації.
+              </>
             ) : (
-              "На жаль, ви не набрали прохідний бал (75%). Рекомендуємо повторити матеріал та спробувати ще раз."
+              `На жаль, ви не подолали прохідний поріг теоретичного тесту (ваш результат: ${percentage}% при нормі 75%). Рекомендуємо повторити матеріал та спробувати ще раз.`
             )}
           </div>
           
@@ -845,7 +962,7 @@ export const Test: React.FC = () => {
                 Завантажити сертифікат
               </button>
             )}
-            {!wasTerminated && (
+            {!wasTerminated && passed && (
               <button className="btn btn-primary" style={{ background: '#3498db' }} onClick={startCases}>
                 Перейти до професійних кейсів
               </button>
@@ -989,7 +1106,13 @@ export const Test: React.FC = () => {
               <div className="options">
                 {question.options.map((opt: string, idx: number) => {
                   let className = "option-card";
-                  if (answers[currentQuestionIndex] === idx) className += " selected";
+                  const isSelected = answers[currentQuestionIndex] === idx;
+                  if (isSelected) className += " selected";
+                  
+                  if (mode === 'practice' && answers[currentQuestionIndex] !== -1) {
+                    if (idx === question.correct) className += " correct";
+                    else if (isSelected) className += " wrong";
+                  }
                   
                   return (
                     <div key={idx} className={className} onClick={() => handleAnswer(idx)}>
@@ -1082,15 +1205,21 @@ export const Test: React.FC = () => {
             <strong>Правила проходження іспиту:</strong>
             <ul className="mt-2 mb-0" style={{ paddingLeft: '20px' }}>
               <li>Кількість запитань: <strong>{state.questions.length}</strong></li>
-              <li>Час на проходження: <strong>60 хвилин</strong></li>
+              <li>Час на проходження теоретичного тесту: <strong>2 години</strong> (практичний блок кейсів — <strong>60 хвилин</strong>)</li>
               <li>Прохідний бал: <strong>75%</strong> правильних відповідей. Кожне питання містить одну правильну відповідь</li>
               <li><strong className="text-danger">Увага:</strong> вихід з вкладки браузера або втрата фокусу вікна під час тестування заборонені й призведуть до анулювання результату після 2 попереджень!</li>
             </ul>
           </div>
 
-          <button className="btn btn-primary" style={{ width: '100%', padding: '12px' }} onClick={() => startTest('exam')}>
+          <button className="btn btn-primary" style={{ width: '100%', padding: '12px', marginBottom: (currentUser.role === 'admin' || isImpersonating) ? '12px' : '0' }} onClick={() => startTest('exam')}>
             Розпочати іспит
           </button>
+
+          {(currentUser.role === 'admin' || isImpersonating) && (
+            <button className="btn btn-outline" style={{ width: '100%', padding: '12px', borderColor: 'var(--blue)', color: 'var(--blue)' }} onClick={() => startTest('practice')}>
+              📝 Режим тренування (без обмежень)
+            </button>
+          )}
         </div>
       </section>
     </>
