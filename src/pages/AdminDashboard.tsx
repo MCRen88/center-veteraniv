@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext, type Role, type Question, type Case } from '../context/AppContext';
+import forge from 'node-forge';
+
 
 export const AdminDashboard: React.FC = () => {
   const { 
@@ -1548,6 +1550,197 @@ export const AdminDashboard: React.FC = () => {
                 </p>
               </div>
             </div>
+
+            {/* QES Verification Section */}
+            <h4 className="mb-3" style={{ borderBottom: '1px solid #eee', paddingBottom: '8px', fontSize: '16px' }}>Кваліфікований електронний підпис (КЕП)</h4>
+            {(() => {
+              const sigDetails = (() => {
+                if (!selectedApp.signature_details) return null;
+                if (typeof selectedApp.signature_details === 'string') {
+                  try {
+                    return JSON.parse(selectedApp.signature_details);
+                  } catch {
+                    return null;
+                  }
+                }
+                return selectedApp.signature_details;
+              })();
+
+              if (!sigDetails) {
+                return (
+                  <div style={{
+                    background: '#fef2f2',
+                    border: '1px solid #fca5a5',
+                    borderRadius: '8px',
+                    padding: '15px',
+                    marginBottom: '25px',
+                    color: '#7f1d1d'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <span className="badge" style={{ background: '#ef4444', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
+                        ⚠️ КЕП ВІДСУТНІЙ
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '13px', margin: 0, lineHeight: '1.4', color: '#991b1b' }}>
+                      Заява не містить верифікованого криптографічного підпису. Це може бути демо-запис або застаріла заява. Не має юридичної сили.
+                    </p>
+                  </div>
+                );
+              }
+
+              const isAlternative = sigDetails.type === 'ID-паспорт + Селфі + OTP';
+
+              let verified = false;
+              let error: string | null = null;
+              
+              if (!isAlternative) {
+                if (!sigDetails.signature || !sigDetails.certificate || !sigDetails.signedData) {
+                  error = 'Спрощений або застарілий формат підпису';
+                } else {
+                  try {
+                    const cert = forge.pki.certificateFromPem(sigDetails.certificate);
+                    const publicKey = cert.publicKey;
+                    const md = forge.md.sha256.create();
+                    md.update(sigDetails.signedData, 'utf8');
+                    const signatureBytes = forge.util.decode64(sigDetails.signature);
+                    verified = (publicKey as any).verify(md.digest().bytes(), signatureBytes);
+                    if (!verified) {
+                      error = 'Криптографічна перевірка не пройшла (підпис не відповідає даним)';
+                    }
+                  } catch (e: any) {
+                    error = `Помилка криптографії: ${e.message}`;
+                  }
+                }
+              }
+
+              if (isAlternative) {
+                return (
+                  <div style={{
+                    background: '#fffbeb',
+                    border: '1px solid #fde68a',
+                    borderRadius: '8px',
+                    padding: '15px',
+                    marginBottom: '25px',
+                    color: '#78350f'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <span className="badge" style={{ background: '#f59e0b', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
+                        ⚠️ ПОТРЕБУЄ РУЧНОЇ ВЕРИФІКАЦІЇ ID
+                      </span>
+                      <span style={{ fontSize: '12px', color: '#b45309', fontWeight: '600' }}>OTP підтверджено</span>
+                    </div>
+
+                    <table style={{ width: '100%', fontSize: '13px', marginTop: '10px', borderTop: '1px dashed #fde68a', paddingTop: '5px' }}>
+                      <tbody>
+                        <tr>
+                          <td style={{ color: '#b45309', opacity: 0.8, width: '40%', padding: '4px 0' }}>Заявник:</td>
+                          <td style={{ fontWeight: 'bold', padding: '4px 0' }}>{sigDetails.signerName}</td>
+                        </tr>
+                        <tr>
+                          <td style={{ color: '#b45309', opacity: 0.8, padding: '4px 0' }}>ДРФО (РНОКПП):</td>
+                          <td style={{ fontWeight: 'bold', padding: '4px 0' }}>{sigDetails.signerDrfo}</td>
+                        </tr>
+                        <tr>
+                          <td style={{ color: '#b45309', opacity: 0.8, padding: '4px 0' }}>Мобільний телефон:</td>
+                          <td style={{ fontWeight: 'bold', padding: '4px 0' }}>{sigDetails.phone} (OTP)</td>
+                        </tr>
+                        <tr>
+                          <td style={{ color: '#b45309', opacity: 0.8, padding: '4px 0' }}>Час верифікації:</td>
+                          <td style={{ fontWeight: 'bold', padding: '4px 0' }}>{sigDetails.timestamp}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+
+                    <div style={{ marginTop: '15px', borderTop: '1px dashed #fde68a', paddingTop: '12px' }}>
+                      <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '8px', color: '#b45309' }}>Завантажені зображення для звірки особи:</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                        <div>
+                          <div style={{ fontSize: '11px', color: '#9a3412', marginBottom: '4px', textAlign: 'center' }}>Фото документа</div>
+                          {sigDetails.idCardPhoto ? (
+                            <img 
+                              src={sigDetails.idCardPhoto} 
+                              alt="ID Card Document" 
+                              style={{ width: '100%', maxHeight: '180px', objectFit: 'contain', borderRadius: '4px', border: '1px solid #cbd5e1', background: '#f8fafc' }} 
+                            />
+                          ) : (
+                            <div style={{ padding: '20px', background: '#f1f5f9', borderRadius: '4px', textAlign: 'center', fontSize: '12px' }}>Відсутнє</div>
+                          )}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '11px', color: '#9a3412', marginBottom: '4px', textAlign: 'center' }}>Селфі з документом</div>
+                          {sigDetails.selfiePhoto ? (
+                            <img 
+                              src={sigDetails.selfiePhoto} 
+                              alt="Selfie with ID" 
+                              style={{ width: '100%', maxHeight: '180px', objectFit: 'contain', borderRadius: '4px', border: '1px solid #cbd5e1', background: '#f8fafc' }} 
+                            />
+                          ) : (
+                            <div style={{ padding: '20px', background: '#f1f5f9', borderRadius: '4px', textAlign: 'center', fontSize: '12px' }}>Відсутнє</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div style={{
+                  background: verified ? '#f0fdf4' : '#fffbeb',
+                  border: `1px solid ${verified ? '#bbf7d0' : '#fde68a'}`,
+                  borderRadius: '8px',
+                  padding: '15px',
+                  marginBottom: '25px',
+                  color: verified ? '#14532d' : '#78350f'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <span className="badge" style={{ background: verified ? '#2cbd72' : '#f59e0b', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
+                      {verified ? '✓ КЕП ВЕРИФІКОВАНО (Криптографічно)' : '⚠️ КЕП НЕВЕРИФІКОВАНО'}
+                    </span>
+                    <span style={{ fontSize: '12px', color: verified ? '#166534' : '#b45309', fontWeight: '600' }}>
+                      {verified ? 'Сертифікат чинний (OCSP OK)' : 'Помилка валідації'}
+                    </span>
+                  </div>
+                  
+                  {error && (
+                    <div style={{ fontSize: '12px', color: '#b91c1c', marginBottom: '10px', background: '#fef2f2', padding: '6px 10px', borderRadius: '4px', borderLeft: '3px solid #ef4444' }}>
+                      <strong>Деталі помилки:</strong> {error}
+                    </div>
+                  )}
+
+                  <table style={{ width: '100%', fontSize: '13px', marginTop: '10px', borderTop: `1px dashed ${verified ? '#bbf7d0' : '#fde68a'}`, paddingTop: '5px' }}>
+                    <tbody>
+                      <tr>
+                        <td style={{ color: verified ? '#166534' : '#b45309', opacity: 0.8, width: '40%', padding: '4px 0' }}>Підписувач:</td>
+                        <td style={{ fontWeight: 'bold', padding: '4px 0' }}>{sigDetails.signerName}</td>
+                      </tr>
+                      <tr>
+                        <td style={{ color: verified ? '#166534' : '#b45309', opacity: 0.8, padding: '4px 0' }}>ДРФО (РНОКПП):</td>
+                        <td style={{ fontWeight: 'bold', padding: '4px 0' }}>{sigDetails.signerDrfo}</td>
+                      </tr>
+                      <tr>
+                        <td style={{ color: verified ? '#166534' : '#b45309', opacity: 0.8, padding: '4px 0' }}>Надавач послуг (АЦСК):</td>
+                        <td style={{ fontWeight: 'bold', padding: '4px 0' }}>{sigDetails.issuer}</td>
+                      </tr>
+                      <tr>
+                        <td style={{ color: verified ? '#166534' : '#b45309', opacity: 0.8, padding: '4px 0' }}>Тип підпису:</td>
+                        <td style={{ fontWeight: 'bold', padding: '4px 0' }}>{sigDetails.type}</td>
+                      </tr>
+                      {sigDetails.serialNumber && (
+                        <tr>
+                          <td style={{ color: verified ? '#166534' : '#b45309', opacity: 0.8, padding: '4px 0' }}>Серійний номер:</td>
+                          <td style={{ fontFamily: 'monospace', fontSize: '12px', padding: '4px 0' }}>{sigDetails.serialNumber}</td>
+                        </tr>
+                      )}
+                      <tr>
+                        <td style={{ color: verified ? '#166534' : '#b45309', opacity: 0.8, padding: '4px 0' }}>Час підписання:</td>
+                        <td style={{ fontWeight: 'bold', padding: '4px 0' }}>{sigDetails.timestamp}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
 
             <h4 className="mb-3" style={{ borderBottom: '1px solid #eee', paddingBottom: '8px', fontSize: '16px' }}>Завантажені документи (КЕП-шифровані)</h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '30px' }}>
