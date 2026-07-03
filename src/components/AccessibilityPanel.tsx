@@ -11,6 +11,13 @@ export const AccessibilityPanel: React.FC = () => {
   const [contrast, setContrast] = useState<ContrastMode>(() => {
     return (localStorage.getItem('accessibility-contrast') as ContrastMode) || 'normal';
   });
+  const [autoRead, setAutoRead] = useState<boolean>(() => {
+    return localStorage.getItem('accessibility-tts-auto') === 'true';
+  });
+  const [ttsSpeed, setTtsSpeed] = useState<number>(() => {
+    const savedSpeed = localStorage.getItem('accessibility-tts-speed');
+    return savedSpeed ? parseFloat(savedSpeed) : 1.0;
+  });
 
   const applyFontSize = (size: FontSize) => {
     document.body.classList.remove('accessibility-font-large', 'accessibility-font-xlarge');
@@ -48,9 +55,23 @@ export const AccessibilityPanel: React.FC = () => {
     localStorage.setItem('accessibility-contrast', mode);
   };
 
+  const handleAutoReadChange = (value: boolean) => {
+    setAutoRead(value);
+    localStorage.setItem('accessibility-tts-auto', String(value));
+    window.dispatchEvent(new Event('accessibility-settings-changed'));
+  };
+
+  const handleTTSSpeedChange = (value: number) => {
+    setTtsSpeed(value);
+    localStorage.setItem('accessibility-tts-speed', String(value));
+    window.dispatchEvent(new Event('accessibility-settings-changed'));
+  };
+
   const resetSettings = () => {
     handleFontSizeChange('normal');
     handleContrastChange('normal');
+    handleAutoReadChange(false);
+    handleTTSSpeedChange(1.0);
   };
 
   return (
@@ -249,6 +270,42 @@ export const AccessibilityPanel: React.FC = () => {
                   style={{ background: contrast === 'high-contrast' ? '#ffff00' : '', color: contrast === 'high-contrast' ? '#000000' : '' }}
                 >
                   Контрастна
+                </button>
+              </div>
+            </div>
+
+            {/* TTS Settings */}
+            <div className="a11y-section">
+              <div className="a11y-label" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', userSelect: 'none' }}>
+                <input
+                  type="checkbox"
+                  id="a11y-auto-read"
+                  checked={autoRead}
+                  onChange={(e) => handleAutoReadChange(e.target.checked)}
+                  style={{ width: '16px', height: '16px', cursor: 'pointer', margin: 0 }}
+                />
+                <span>Автоозвучування питань</span>
+              </div>
+              
+              <div className="a11y-label" style={{ marginTop: '5px' }}>Швидкість читання:</div>
+              <div className="a11y-btn-group">
+                <button
+                  className={`a11y-btn ${ttsSpeed === 0.8 ? 'active' : ''}`}
+                  onClick={() => handleTTSSpeedChange(0.8)}
+                >
+                  Повільно
+                </button>
+                <button
+                  className={`a11y-btn ${ttsSpeed === 1.0 ? 'active' : ''}`}
+                  onClick={() => handleTTSSpeedChange(1.0)}
+                >
+                  Звичайна
+                </button>
+                <button
+                  className={`a11y-btn ${ttsSpeed === 1.25 ? 'active' : ''}`}
+                  onClick={() => handleTTSSpeedChange(1.25)}
+                >
+                  Швидка
                 </button>
               </div>
             </div>

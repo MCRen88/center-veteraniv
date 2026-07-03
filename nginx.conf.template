@@ -41,6 +41,14 @@ server {
         proxy_set_header Host $host;
     }
 
+    # Proxy Google Translate TTS to bypass CORS/referer blocks
+    location ^~ /api/tts {
+        proxy_pass https://translate.google.com/translate_tts;
+        proxy_set_header Referer "https://translate.google.com/";
+        proxy_set_header User-Agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+        proxy_ssl_server_name on;
+    }
+
     # Proxy Auth API to local Kong port 54330
     location ^~ /auth/v1/ {
         proxy_pass http://127.0.0.1:54330/auth/v1/;
@@ -129,6 +137,14 @@ server {
 #     location ^~ /rest/v1/ {
 #         proxy_pass http://127.0.0.1:54330/rest/v1/;
 #         proxy_set_header Host $host;
+#     }
+# 
+#     # Proxy Google Translate TTS to bypass CORS/referer blocks
+#     location ^~ /api/tts {
+#         proxy_pass https://translate.google.com/translate_tts;
+#         proxy_set_header Referer "https://translate.google.com/";
+#         proxy_set_header User-Agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+#         proxy_ssl_server_name on;
 #     }
 # 
 #     location ^~ /auth/v1/ {

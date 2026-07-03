@@ -108,12 +108,92 @@ export const Test: React.FC = () => {
 
   const isImpersonating = !!state.originalAdminUser;
 
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [autoReadState, setAutoReadState] = useState(() => {
+    return localStorage.getItem('accessibility-tts-auto') === 'true';
+  });
+
+  // Synchronize TTS settings changes
   useEffect(() => {
-    stopSpeaking();
+    const handleSettingsChange = () => {
+      setAutoReadState(localStorage.getItem('accessibility-tts-auto') === 'true');
+    };
+    window.addEventListener('accessibility-settings-changed', handleSettingsChange);
     return () => {
+      window.removeEventListener('accessibility-settings-changed', handleSettingsChange);
       stopSpeaking();
     };
-  }, [currentQuestionIndex, currentCaseIndex, showCases, mode, isFinished]);
+  }, []);
+
+  // Stop speaking and optionally auto-read when navigating
+  useEffect(() => {
+    stopSpeaking();
+    setIsSpeaking(false);
+
+    if (autoReadState && mode && !isFinished) {
+      let textToSpeak = '';
+      if (showCases) {
+        if (!casesFinished) {
+          const currentCase = casesList[currentCaseIndex];
+          if (currentCase) {
+            const optionsText = currentCase.options.map((opt: string, idx: number) => `Варіант ${String.fromCharCode(65 + idx)}: ${opt}`).join('. ');
+            textToSpeak = `Опис ситуації: ${currentCase.situation}. Запитання: ${currentCase.question}. ${optionsText}`;
+          }
+        }
+      } else {
+        const question = testQuestions[currentQuestionIndex];
+        if (question) {
+          const optionsText = question.options.map((opt: string, idx: number) => `Варіант ${idx + 1}: ${opt}`).join('. ');
+          textToSpeak = `${question.question}. ${optionsText}`;
+        }
+      }
+
+      if (textToSpeak) {
+        const timer = setTimeout(() => {
+          speakText(
+            textToSpeak,
+            () => setIsSpeaking(true),
+            () => setIsSpeaking(false)
+          );
+        }, 300);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [currentQuestionIndex, currentCaseIndex, showCases, casesFinished, isFinished, mode, autoReadState]);
+
+  const speakCurrentQuestion = () => {
+    if (isSpeaking) {
+      stopSpeaking();
+      setIsSpeaking(false);
+    } else {
+      const question = testQuestions[currentQuestionIndex];
+      if (question) {
+        const optionsText = question.options.map((opt: string, idx: number) => `Варіант ${idx + 1}: ${opt}`).join('. ');
+        speakText(
+          `${question.question}. ${optionsText}`,
+          () => setIsSpeaking(true),
+          () => setIsSpeaking(false)
+        );
+      }
+    }
+  };
+
+  const speakCurrentCase = () => {
+    if (isSpeaking) {
+      stopSpeaking();
+      setIsSpeaking(false);
+    } else {
+      const currentCase = casesList[currentCaseIndex];
+      if (currentCase) {
+        const optionsText = currentCase.options.map((opt: string, idx: number) => `Варіант ${String.fromCharCode(65 + idx)}: ${opt}`).join('. ');
+        speakText(
+          `Опис ситуації: ${currentCase.situation}. Запитання: ${currentCase.question}. ${optionsText}`,
+          () => setIsSpeaking(true),
+          () => setIsSpeaking(false)
+        );
+      }
+    }
+  };
 
   const exitTest = () => {
     if (state.currentUser) {
@@ -928,11 +1008,8 @@ export const Test: React.FC = () => {
                     {currentCase.situation}
                   </div>
                   <button
-                    className="btn btn-outline"
-                    onClick={() => {
-                      const optionsText = currentCase.options.map((opt: string, idx: number) => `Варіант ${String.fromCharCode(65 + idx)}: ${opt}`).join('. ');
-                      speakText(`Опис ситуації: ${currentCase.situation}. Запитання: ${currentCase.question}. ${optionsText}`);
-                    }}
+                    className={`btn ${isSpeaking ? 'btn-danger tts-speaking' : 'btn-outline'}`}
+                    onClick={speakCurrentCase}
                     style={{
                       padding: '4px 10px',
                       fontSize: '12px',
@@ -940,11 +1017,16 @@ export const Test: React.FC = () => {
                       display: 'flex',
                       alignItems: 'center',
                       gap: '4px',
-                      flexShrink: 0
+                      flexShrink: 0,
+                      transition: 'all 0.2s ease-in-out'
                     }}
-                    title="Озвучити ситуацію та запитання з варіантами"
+                    title={isSpeaking ? "Зупинити озвучування" : "Озвучити ситуацію та запитання з варіантами"}
                   >
-                    🔊 Озвучити
+                    {isSpeaking ? (
+                      <>⏹️ Зупинити</>
+                    ) : (
+                      <>🔊 Озвучити</>
+                    )}
                   </button>
                 </div>
               </div>
@@ -1167,11 +1249,8 @@ export const Test: React.FC = () => {
                   {question.question}
                 </h3>
                 <button
-                  className="btn btn-outline"
-                  onClick={() => {
-                    const optionsText = question.options.map((opt: string, idx: number) => `Варіант ${idx + 1}: ${opt}`).join('. ');
-                    speakText(`${question.question}. ${optionsText}`);
-                  }}
+                  className={`btn ${isSpeaking ? 'btn-danger tts-speaking' : 'btn-outline'}`}
+                  onClick={speakCurrentQuestion}
                   style={{
                     padding: '6px 12px',
                     fontSize: '14px',
@@ -1179,11 +1258,16 @@ export const Test: React.FC = () => {
                     alignItems: 'center',
                     gap: '6px',
                     borderRadius: '20px',
-                    flexShrink: 0
+                    flexShrink: 0,
+                    transition: 'all 0.2s ease-in-out'
                   }}
-                  title="Озвучити запитання та варіанти відповідей"
+                  title={isSpeaking ? "Зупинити озвучування" : "Озвучити запитання та варіанти відповідей"}
                 >
-                  🔊 Озвучити
+                  {isSpeaking ? (
+                    <>⏹️ Зупинити</>
+                  ) : (
+                    <>🔊 Озвучити</>
+                  )}
                 </button>
               </div>
               
@@ -1289,7 +1373,7 @@ export const Test: React.FC = () => {
             <strong>Правила проходження іспиту:</strong>
             <ul className="mt-2 mb-0" style={{ paddingLeft: '20px' }}>
               <li>Кількість запитань: <strong>{state.questions.length}</strong></li>
-              <li>Час на проходження теоретичного тесту: <strong>2 години</strong> (практичний блок кейсів — <strong>60 хвилин</strong>)</li>
+              <li>Час на проходження теоретичного тесту - <strong>2 години</strong> та блок практичних завдань — <strong>1 година</strong></li>
               <li>Прохідний бал: <strong>75%</strong> правильних відповідей. Кожне питання містить одну правильну відповідь</li>
               <li><strong className="text-danger">Увага:</strong> вихід з вкладки браузера або втрата фокусу вікна під час тестування заборонені й призведуть до анулювання результату після 2 попереджень!</li>
             </ul>

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
+import { speakText, stopSpeaking } from '../utils/tts';
 
 interface QuestionDetail {
   id?: number;
@@ -54,6 +55,45 @@ export const TestAnalysis: React.FC = () => {
   const [userName, setUserName] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [speakingIdx, setSpeakingIdx] = useState<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      stopSpeaking();
+    };
+  }, []);
+
+  const handleSpeakQuestion = (idx: number, q: QuestionDetail) => {
+    if (speakingIdx === idx) {
+      stopSpeaking();
+      setSpeakingIdx(null);
+    } else {
+      // Build text representation
+      const letters = ['А', 'Б', 'В', 'Г', 'Д'];
+      const optionsText = q.options?.map((opt: string, oIdx: number) => `Варіант ${letters[oIdx] || (oIdx + 1)}: ${opt}`).join('. ') || '';
+      
+      const isCorrect = Number(q.selected) === Number(q.correct);
+      const selectedText = q.selected !== -1 && q.options && q.options[q.selected]
+        ? `Ваша відповідь: Варіант ${letters[q.selected] || (q.selected + 1)}, ${q.options[q.selected]}.`
+        : 'Ви не відповіли на це питання.';
+        
+      const correctText = q.options && q.options[q.correct]
+        ? `Правильна відповідь: Варіант ${letters[q.correct] || (q.correct + 1)}, ${q.options[q.correct]}.`
+        : '';
+        
+      const resultStatusText = isCorrect ? 'Це правильна відповідь.' : `Це неправильна відповідь. ${correctText}`;
+      const explanationText = q.explanation ? `Обґрунтування відповіді: ${q.explanation}` : '';
+      
+      const textToSpeak = `Запитання ${idx + 1}: ${q.question}. ${optionsText}. ${selectedText} ${resultStatusText} ${explanationText}`;
+      
+      speakText(
+        textToSpeak,
+        () => setSpeakingIdx(idx),
+        () => setSpeakingIdx(null)
+      );
+    }
+  };
 
   useEffect(() => {
     const fetchScoreDetails = async () => {
@@ -567,7 +607,30 @@ export const TestAnalysis: React.FC = () => {
               return (
                 <div key={idx} className={`question-card ${isCorrect ? 'correct-card' : 'incorrect-card'}`}>
                   <div className="question-header">
-                    <span className="question-num">Запитання {idx + 1}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                      <span className="question-num">Запитання {idx + 1}</span>
+                      <button
+                        className={`btn ${speakingIdx === idx ? 'btn-danger tts-speaking' : 'btn-outline'}`}
+                        onClick={() => handleSpeakQuestion(idx, q)}
+                        style={{
+                          padding: '4px 10px',
+                          fontSize: '11px',
+                          borderRadius: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          lineHeight: 1,
+                          transition: 'all 0.2s ease-in-out'
+                        }}
+                        title={speakingIdx === idx ? "Зупинити озвучування" : "Озвучити запитання, варіанти відповідей та обґрунтування"}
+                      >
+                        {speakingIdx === idx ? (
+                          <>⏹️ Зупинити</>
+                        ) : (
+                          <>🔊 Озвучити</>
+                        )}
+                      </button>
+                    </div>
                     <div className="question-badges">
                       <span className="badge-cat">
                         Функція {q.catId || q.catName?.split('.')[0] || 'Тест'}
