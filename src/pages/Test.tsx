@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAppContext } from '../context/AppContext';
+import type { Question } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
 import { casesDb } from '../data/casesDb';
 import { speakText, stopSpeaking } from '../utils/tts';
+import { variant1Questions, variant2Questions } from '../data/variantsData';
 
 type TestMode = 'exam' | 'practice' | null;
 
@@ -77,6 +79,7 @@ export const Test: React.FC = () => {
   const navigate = useNavigate();
 
   const [mode, setMode] = useState<TestMode>(null);
+  const [selectedVariant, setSelectedVariant] = useState<number | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [testQuestions, setTestQuestions] = useState(state.questions);
   const [answers, setAnswers] = useState<number[]>([]);
@@ -215,6 +218,7 @@ export const Test: React.FC = () => {
             restoredMode = 'exam';
           }
           setMode(restoredMode);
+          setSelectedVariant(parsed.selectedVariant ?? null);
           setCurrentQuestionIndex(parsed.currentQuestionIndex ?? 0);
           if (parsed.testQuestions && parsed.testQuestions.length > 0) {
             setTestQuestions(parsed.testQuestions);
@@ -256,6 +260,7 @@ export const Test: React.FC = () => {
     if (mode) {
       const stateToSave = {
         mode,
+        selectedVariant,
         currentQuestionIndex,
         testQuestions,
         answers,
@@ -282,6 +287,7 @@ export const Test: React.FC = () => {
   }, [
     state.currentUser,
     mode,
+    selectedVariant,
     currentQuestionIndex,
     testQuestions,
     answers,
@@ -388,6 +394,9 @@ export const Test: React.FC = () => {
 
 
   const startTest = (selectedMode: TestMode) => {
+    const variant = Math.random() < 0.5 ? 1 : 2;
+    setSelectedVariant(variant);
+
     setMode(selectedMode);
     setWarnings(0);
     setShowWarningModal(false);
@@ -406,11 +415,54 @@ export const Test: React.FC = () => {
     setCasesScore(0);
     setCaseShowFeedback(false);
     
-    const shuffled = [...state.questions].sort(() => 0.5 - Math.random());
+    // Load variant questions and match them to database questions
+    const variantList = variant === 1 ? variant1Questions : variant2Questions;
+    const normalizeText = (t: string) => t.toLowerCase()
+      .replace(/[^\w\sа-яієлищьюящііґє]/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/[’'`ʼ]/g, '');
+
+    const getSimilarity = (s1: string, s2: string) => {
+      const words1 = s1.split(' ');
+      const words2 = s2.split(' ');
+      let matches = 0;
+      words1.forEach(w => {
+        if (words2.includes(w)) matches++;
+      });
+      return matches / Math.max(words1.length, words2.length);
+    };
+
+    const matchedQs: Question[] = [];
+    variantList.forEach((vQText) => {
+      const normVQ = normalizeText(vQText);
+      const found = state.questions.find(sq => normalizeText(sq.question) === normVQ);
+      if (found) {
+        matchedQs.push(found);
+      } else {
+        let bestRatio = 0;
+        let bestMatch: Question | undefined;
+        state.questions.forEach(sq => {
+          const ratio = getSimilarity(normVQ, normalizeText(sq.question));
+          if (ratio > bestRatio) {
+            bestRatio = ratio;
+            bestMatch = sq;
+          }
+        });
+        if (bestMatch && bestRatio > 0.7) {
+          matchedQs.push(bestMatch);
+        } else {
+          console.warn("Could not match question for variant: ", vQText);
+        }
+      }
+    });
+
+    const finalQuestions = matchedQs.length > 0 ? matchedQs : state.questions;
+    const shuffled = [...finalQuestions].sort(() => 0.5 - Math.random());
     setTestQuestions(shuffled);
     setExamEndTime(Date.now() + 7200 * 1000);
     
-    setAnswers(new Array(state.questions.length).fill(-1));
+    setAnswers(new Array(shuffled.length).fill(-1));
     setCurrentQuestionIndex(0);
     setIsFinished(false);
     setScore(0);
@@ -563,6 +615,7 @@ export const Test: React.FC = () => {
       questions: questionsBreakdown,
       totalTime: totalTimeSpent,
       tabSwitches: warnings,
+      selectedVariant,
       behaviorProfile: {
         style,
         confidence,
@@ -1238,8 +1291,23 @@ export const Test: React.FC = () => {
         
         <div className="container mt-4 mb-5 test-layout">
           <div>
-            <div className="d-flex justify-content-between mb-3">
-              <span style={{ color: 'var(--text-muted)' }}>Запитання {currentQuestionIndex + 1} з {testQuestions.length}</span>
+            <div className="alert alert-info text-center mb-4" style={{ fontWeight: 'bold', fontSize: '16px', borderRadius: '8px', borderLeft: '5px solid var(--blue)' }}>
+              🔔 Вам випадковим чином призначено: ВАРІАНТ {selectedVariant}
+            </div>
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              <div className="d-flex align-items-center" style={{ gap: '10px' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Запитання {currentQuestionIndex + 1} з {testQuestions.length}</span>
+                <span style={{ 
+                  background: 'var(--blue)', 
+                  color: 'white', 
+                  padding: '2px 8px', 
+                  borderRadius: '4px', 
+                  fontSize: '12px',
+                  fontWeight: 'bold' 
+                }}>
+                  Варіант {selectedVariant}
+                </span>
+              </div>
               <span style={{ color: 'var(--blue)', fontWeight: 500 }}>{question.catName}</span>
             </div>
             
@@ -1372,7 +1440,7 @@ export const Test: React.FC = () => {
           <div className="alert alert-info text-start mb-4" style={{ fontSize: '14px', lineHeight: 1.6 }}>
             <strong>Правила проходження іспиту:</strong>
             <ul className="mt-2 mb-0" style={{ paddingLeft: '20px' }}>
-              <li>Кількість запитань: <strong>{state.questions.length}</strong></li>
+              <li>Кількість запитань: <strong>50</strong></li>
               <li>Час на проходження теоретичного тесту - <strong>2 години</strong> та блок практичних завдань — <strong>1 година</strong></li>
               <li>Прохідний бал: <strong>75%</strong> правильних відповідей. Кожне питання містить одну правильну відповідь</li>
               <li><strong className="text-danger">Увага:</strong> вихід з вкладки браузера або втрата фокусу вікна під час тестування заборонені й призведуть до анулювання результату після 2 попереджень!</li>

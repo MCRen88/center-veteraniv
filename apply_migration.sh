@@ -13,7 +13,7 @@ if [ -f .env ]; then
 fi
 
 DB_CONTAINER="supabase-db-lms"
-MIGRATION_FILE="004_update_questions.sql"
+MIGRATION_FILE="008_remove_demo_certificates.sql"
 MIGRATION_PATH="/docker-entrypoint-initdb.d/$MIGRATION_FILE"
 
 echo "==========================================="
