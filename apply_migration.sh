@@ -13,8 +13,6 @@ if [ -f .env ]; then
 fi
 
 DB_CONTAINER="supabase-db-lms"
-MIGRATION_FILE="008_remove_demo_certificates.sql"
-MIGRATION_PATH="/docker-entrypoint-initdb.d/$MIGRATION_FILE"
 
 echo "==========================================="
 echo " ⚙️ Запуск міграції бази даних"
@@ -33,21 +31,39 @@ if [ "$(docker inspect -f '{{.State.Running}}' $DB_CONTAINER 2>/dev/null)" != "t
     exit 1
 fi
 
-echo "⏳ Застосування міграції $MIGRATION_FILE у контейнері $DB_CONTAINER..."
-
-# Run migration file using docker exec
-docker exec -i $DB_CONTAINER psql -U postgres -d postgres -f "$MIGRATION_PATH"
-
-if [ $? -eq 0 ]; then
-    echo "🔑 Оновлення та синхронізація пароля для supabase_admin..."
-    docker exec -i $DB_CONTAINER psql -U postgres -d postgres -c "ALTER USER supabase_admin WITH PASSWORD '$POSTGRES_PASSWORD';"
-    
-    echo "-------------------------------------------"
-    echo "✅ Міграцію успішно застосовано!"
-    echo "🔍 Поточна кількість питань в базі даних:"
-    docker exec -i $DB_CONTAINER psql -U postgres -d postgres -c "SELECT count(*) FROM public.questions;"
-    echo "==========================================="
+# If files are passed as arguments, run them; otherwise run default update migrations
+if [ $# -gt 0 ]; then
+    MIGRATION_FILES=("$@")
 else
-    echo "❌ Помилка: Не вдалося застосувати міграцію."
-    exit 1
+    MIGRATION_FILES=(
+        "004_update_questions.sql"
+        "007_update_cases.sql"
+        "008_remove_demo_certificates.sql"
+    )
 fi
+
+for MIGRATION_FILE in "${MIGRATION_FILES[@]}"; do
+    MIGRATION_PATH="/docker-entrypoint-initdb.d/$MIGRATION_FILE"
+    echo "⏳ Застосування міграції $MIGRATION_FILE у контейнері $DB_CONTAINER..."
+    
+    docker exec -i $DB_CONTAINER psql -U postgres -d postgres -f "$MIGRATION_PATH"
+    
+    if [ $? -eq 0 ]; then
+        echo "✅ Міграцію $MIGRATION_FILE успішно застосовано!"
+    else
+        echo "❌ Помилка: Не вдалося застосувати міграцію $MIGRATION_FILE."
+        exit 1
+    fi
+    echo "-------------------------------------------"
+done
+
+echo "🔑 Оновлення та синхронізація пароля для supabase_admin..."
+docker exec -i $DB_CONTAINER psql -U postgres -d postgres -c "ALTER USER supabase_admin WITH PASSWORD '$POSTGRES_PASSWORD';"
+
+echo "-------------------------------------------"
+echo "✅ Всі міграції успішно застосовано!"
+echo "🔍 Поточна кількість питань в базі даних:"
+docker exec -i $DB_CONTAINER psql -U postgres -d postgres -c "SELECT count(*) FROM public.questions;"
+echo "🔍 Поточна кількість кейсів в базі даних:"
+docker exec -i $DB_CONTAINER psql -U postgres -d postgres -c "SELECT count(*) FROM public.cases;"
+echo "==========================================="
