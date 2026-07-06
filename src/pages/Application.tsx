@@ -1,6 +1,44 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
+import forge from 'node-forge';
+
+const compressImage = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxDim = 400; // Small size for fast database loading
+        let width = img.width;
+        let height = img.height;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.6)); // Compress to JPEG with 60% quality
+        } else {
+          resolve(e.target?.result as string);
+        }
+      };
+      img.onerror = () => reject(new Error('Помилка завантаження зображення'));
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => reject(new Error('Помилка читання файлу'));
+    reader.readAsDataURL(file);
+  });
+};
 
 export const Application: React.FC = () => {
   const { addRegistryItem, submitApplication: submitAppDb } = useAppContext();
@@ -28,15 +66,35 @@ export const Application: React.FC = () => {
   });
 
   // Signature States
-  const [signMethod, setSignMethod] = useState<'diia' | 'kep'>('diia');
-  const [diiaState, setDiiaState] = useState<'idle' | 'scanning' | 'success'>('idle');
+  const [signMethod, setSignMethod] = useState<'kep' | 'alternative'>('kep');
   const [kepState, setKepState] = useState<'idle' | 'reading' | 'success'>('idle');
   const [kepFileType, setKepFileType] = useState('file'); // 'file' or 'token'
   const [kepAcsp, setKepAcsp] = useState('АЦСК АТ КБ «ПРИВАТБАНК»');
   const [kepPassword, setKepPassword] = useState('');
   const [kepFileName, setKepFileName] = useState('');
+  const [kepFileBytes, setKepFileBytes] = useState<ArrayBuffer | null>(null);
   const [kepInfo, setKepInfo] = useState<{ name: string; drfo: string; issuer: string } | null>(null);
+  
+  // Alternative verification states
+  const [altPhone, setAltPhone] = useState('');
+  const [altDrfo, setAltDrfo] = useState('');
+  const [altIdCardFile, setAltIdCardFile] = useState<string | null>(null);
+  const [altSelfieFile, setAltSelfieFile] = useState<string | null>(null);
+  const [altOtpSent, setAltOtpSent] = useState(false);
+  const [altOtpCode, setAltOtpCode] = useState('');
+  const [altOtpInput, setAltOtpInput] = useState('');
+  const [altState, setAltState] = useState<'idle' | 'verifying' | 'success'>('idle');
+
   const [isSigned, setIsSigned] = useState(false);
+  const [signatureDetails, setSignatureDetails] = useState<any>(null);
+
+  React.useEffect(() => {
+    if (step === 4) {
+      if (formData.phone && !altPhone) {
+        setAltPhone(formData.phone);
+      }
+    }
+  }, [step, formData.phone, altPhone]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -71,38 +129,277 @@ export const Application: React.FC = () => {
     setStep(prev => prev - 1);
   };
 
-  // Signing Handlers
-  const handleDiiaSign = () => {
-    if (diiaState === 'success') return;
-    setDiiaState('scanning');
-    setTimeout(() => {
-      setDiiaState('success');
-      setIsSigned(true);
-      setFormData(prev => ({ ...prev, consent: true }));
-    }, 3000);
+  // Alternative Verification Handlers
+  const handleIdCardUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      try {
+        const compressed = await compressImage(file);
+        setAltIdCardFile(compressed);
+      } catch (err: any) {
+        alert(err.message || "Помилка завантаження зображення.");
+      }
+    }
+  };
+
+  const handleSelfieUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      try {
+        const compressed = await compressImage(file);
+        setAltSelfieFile(compressed);
+      } catch (err: any) {
+        alert(err.message || "Помилка завантаження зображення.");
+      }
+    }
+  };
+
+  const handleSendAltOtp = () => {
+    if (!altPhone) {
+      alert("Будь ласка, введіть номер телефону.");
+      return;
+    }
+    if (!altDrfo || altDrfo.length !== 10) {
+      alert("Будь ласка, введіть правильний 10-значний РНОКПП (ДРФО).");
+      return;
+    }
+    if (!altIdCardFile) {
+      alert("Будь ласка, завантажте фото паспорта або ID-картки.");
+      return;
+    }
+    if (!altSelfieFile) {
+      alert("Будь ласка, завантажте селфі з документом.");
+      return;
+    }
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    setAltOtpCode(code);
+    setAltOtpSent(true);
+    setAltState('verifying');
+    
+    alert(`[Демонстраційна СИСТЕМА OTP]\nКод верифікації надіслано на номер ${altPhone}.\n\nКОД ДЛЯ ВВЕДЕННЯ: ${code}`);
+  };
+
+  const handleVerifyAltOtp = () => {
+    if (altOtpInput !== altOtpCode) {
+      alert("Некоректний OTP код. Перевірте та спробуйте ще раз.");
+      return;
+    }
+
+    setAltState('success');
+    setIsSigned(true);
+    setFormData(prev => ({ ...prev, consent: true }));
+    setSignatureDetails({
+      type: 'ID-паспорт + Селфі + OTP',
+      signerName: `${formData.lname} ${formData.fname} ${formData.mname || ''}`.trim(),
+      signerDrfo: altDrfo,
+      issuer: `Верифікація за номером ${altPhone}`,
+      serialNumber: 'ALT-VERIFY-OTP',
+      timestamp: new Date().toLocaleString('uk-UA'),
+      idCardPhoto: altIdCardFile,
+      selfiePhoto: altSelfieFile,
+      phone: altPhone
+    });
   };
 
   const handleKepSign = () => {
     if (kepState === 'success') return;
-    if (kepFileType === 'file' && (!kepFileName || !kepPassword)) {
-      alert("Будь ласка, завантажте файл ключа та введіть пароль захисту.");
-      return;
+    if (kepFileType === 'file') {
+      if (!kepFileName || !kepFileBytes) {
+        alert("Будь ласка, завантажте файл ключа.");
+        return;
+      }
+      if (!kepPassword) {
+        alert("Будь ласка, введіть пароль захисту особистого ключа.");
+        return;
+      }
+      setKepState('reading');
+      setTimeout(() => {
+        try {
+          // Convert ArrayBuffer to binary string
+          const bytes = new Uint8Array(kepFileBytes);
+          let binary = '';
+          for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+          }
+          
+          const p12Asn1 = forge.asn1.fromDer(binary);
+          const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, false, kepPassword);
+          
+          // Get cert bags
+          const certBags = p12.getBags({ bagType: forge.pki.oids.certBag });
+          const certBag = certBags[forge.pki.oids.certBag]?.[0];
+          if (!certBag || !certBag.cert) {
+            throw new Error("Сертифікат не знайдено у файлі ключа.");
+          }
+          const cert = certBag.cert as forge.pki.Certificate;
+          
+          // Get key bags
+          const keyBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag });
+          let keyBag = keyBags[forge.pki.oids.pkcs8ShroudedKeyBag]?.[0];
+          if (!keyBag) {
+            const rawKeyBags = p12.getBags({ bagType: forge.pki.oids.keyBag });
+            keyBag = rawKeyBags[forge.pki.oids.keyBag]?.[0];
+          }
+          if (!keyBag || !keyBag.key) {
+            throw new Error("Приватний ключ не знайдено у файлі ключа.");
+          }
+          const privateKey = keyBag.key;
+          
+          // Extract subject details
+          let cn = '';
+          let drfo = '';
+          let organization = '';
+          
+          for (const attr of cert.subject.attributes) {
+            const val = attr.value;
+            if (typeof val === 'string') {
+              if (attr.name === 'commonName') {
+                cn = val;
+              } else if (attr.name === 'serialNumber') {
+                drfo = val.replace(/[^0-9]/g, '');
+              } else if (attr.name === 'organizationName') {
+                organization = val;
+              }
+            }
+          }
+          
+          if (!cn) {
+            cn = `${formData.lname} ${formData.fname} ${formData.mname || ''}`.trim();
+          }
+          if (!drfo) {
+            drfo = cert.serialNumber || `3${Math.floor(Math.random() * 900000000) + 100000000}`;
+          }
+          
+          const dataToSign = JSON.stringify({
+            app_number: `ЗЯ-${new Date().getFullYear()}`,
+            lname: formData.lname,
+            fname: formData.fname,
+            mname: formData.mname,
+            birthdate: formData.birthdate,
+            phone: formData.phone,
+            email: formData.email,
+            level: formData.level,
+            education: formData.education,
+            experience: formData.experience
+          });
+          
+          const md = forge.md.sha256.create();
+          md.update(dataToSign, 'utf8');
+          const signatureBytes = privateKey.sign(md);
+          const signatureBase64 = forge.util.encode64(signatureBytes);
+          const certPem = forge.pki.certificateToPem(cert);
+          
+          const details = {
+            type: 'Файловий КЕП' as const,
+            signerName: cn,
+            signerDrfo: drfo,
+            issuer: kepAcsp || organization || 'АЦСК',
+            serialNumber: cert.serialNumber || 'N/A',
+            timestamp: new Date().toLocaleString('uk-UA'),
+            signature: signatureBase64,
+            certificate: certPem,
+            signedData: dataToSign
+          };
+          
+          setKepState('success');
+          setIsSigned(true);
+          setFormData(prev => ({ ...prev, consent: true }));
+          setKepInfo({
+            name: cn,
+            drfo: drfo,
+            issuer: kepAcsp || organization || 'АЦСК'
+          });
+          setSignatureDetails(details);
+        } catch (err: any) {
+          console.error(err);
+          alert("Помилка зчитування КЕП: " + (err.message || "Невірний пароль або пошкоджений файл ключа."));
+          setKepState('idle');
+        }
+      }, 2000);
+    } else {
+      if (!kepPassword) {
+        alert("Будь ласка, введіть PIN-код доступу до токена.");
+        return;
+      }
+      setKepState('reading');
+      setTimeout(() => {
+        try {
+          const keys = forge.pki.rsa.generateKeyPair(512);
+          const cert = forge.pki.createCertificate();
+          cert.publicKey = keys.publicKey;
+          cert.serialNumber = '02';
+          cert.validity.notBefore = new Date();
+          cert.validity.notAfter = new Date();
+          cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 1);
+          
+          const attrs = [{
+            name: 'commonName',
+            value: `${formData.lname} ${formData.fname} ${formData.mname || ''}`.trim()
+          }, {
+            name: 'countryName',
+            value: 'UA'
+          }, {
+            name: 'organizationName',
+            value: 'Апаратний токен (Тестовий)'
+          }, {
+            name: 'serialNumber',
+            value: `3${Math.floor(Math.random() * 900000000) + 100000000}`
+          }];
+          
+          cert.setSubject(attrs);
+          cert.setIssuer(attrs);
+          cert.sign(keys.privateKey, forge.md.sha256.create());
+          
+          const dataToSign = JSON.stringify({
+            app_number: `ЗЯ-${new Date().getFullYear()}`,
+            lname: formData.lname,
+            fname: formData.fname,
+            mname: formData.mname,
+            birthdate: formData.birthdate,
+            phone: formData.phone,
+            email: formData.email,
+            level: formData.level,
+            education: formData.education,
+            experience: formData.experience
+          });
+          
+          const md = forge.md.sha256.create();
+          md.update(dataToSign, 'utf8');
+          const signatureBytes = keys.privateKey.sign(md);
+          const signatureBase64 = forge.util.encode64(signatureBytes);
+          const certPem = forge.pki.certificateToPem(cert);
+          
+          const sName = `${formData.lname} ${formData.fname} ${formData.mname || ''}`.trim();
+          const sDrfo = attrs[3].value;
+          const sIssuer = 'Апаратний токен (Вбудований)';
+          
+          setKepState('success');
+          setIsSigned(true);
+          setFormData(prev => ({ ...prev, consent: true }));
+          setKepInfo({
+            name: sName,
+            drfo: sDrfo,
+            issuer: sIssuer
+          });
+          setSignatureDetails({
+            type: 'Апаратний токен',
+            signerName: sName,
+            signerDrfo: sDrfo,
+            issuer: sIssuer,
+            serialNumber: cert.serialNumber,
+            timestamp: new Date().toLocaleString('uk-UA'),
+            signature: signatureBase64,
+            certificate: certPem,
+            signedData: dataToSign
+          });
+        } catch (err: any) {
+          console.error(err);
+          alert("Помилка зчитування токена: " + err.message);
+          setKepState('idle');
+        }
+      }, 2000);
     }
-    if (kepFileType === 'token' && !kepPassword) {
-      alert("Будь ласка, введіть PIN-код доступу до токена.");
-      return;
-    }
-    setKepState('reading');
-    setTimeout(() => {
-      setKepState('success');
-      setIsSigned(true);
-      setFormData(prev => ({ ...prev, consent: true }));
-      setKepInfo({
-        name: `${formData.lname} ${formData.fname} ${formData.mname || ''}`.trim(),
-        drfo: `3${Math.floor(Math.random() * 900000000) + 100000000}`,
-        issuer: kepAcsp
-      });
-    }, 2000);
   };
 
   const submitApplication = async () => {
@@ -138,7 +435,8 @@ export const Application: React.FC = () => {
       email: formData.email,
       level: formData.level,
       education: formData.education,
-      experience: parseInt(formData.experience) || 0
+      experience: parseInt(formData.experience) || 0,
+      signature_details: signatureDetails
     });
 
     if (successDb) {
@@ -561,81 +859,147 @@ export const Application: React.FC = () => {
                     <div className="sign-tabs">
                       <button 
                         type="button"
-                        className={`sign-tab-btn ${signMethod === 'diia' ? 'active' : ''}`}
-                        onClick={() => setSignMethod('diia')}
-                      >
-                        📱 Дія.Підпис
-                      </button>
-                      <button 
-                        type="button"
                         className={`sign-tab-btn ${signMethod === 'kep' ? 'active' : ''}`}
                         onClick={() => setSignMethod('kep')}
                       >
                         🔑 КЕП (Файловий/Токен)
                       </button>
+                      <button 
+                        type="button"
+                        className={`sign-tab-btn ${signMethod === 'alternative' ? 'active' : ''}`}
+                        onClick={() => setSignMethod('alternative')}
+                      >
+                        👤 Альтернативна верифікація (ID + OTP)
+                      </button>
                     </div>
 
-                    {/* DIIA.SIGNATURE METHOD */}
-                    {signMethod === 'diia' && (
-                      <div className="diia-sign-box">
-                        {diiaState === 'idle' && (
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                            <p className="mb-4 text-muted" style={{ fontSize: '14px' }}>
-                              Ви можете швидко та безпечно підписати заяву через мобільний застосунок Дія.
+                    {/* ALTERNATIVE METHOD */}
+                    {signMethod === 'alternative' && (
+                      <div className="diia-sign-box" style={{ padding: '20px', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#fff' }}>
+                        {altState !== 'success' ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                            <p className="text-muted" style={{ fontSize: '13.5px', margin: '0 0 10px', lineHeight: '1.5' }}>
+                              Використовуйте цей спосіб, якщо у вас немає КЕП. Потрібно завантажити фото вашого документа (паспорта/ID-картки), фото-селфі з ним для звірки та підтвердити ваш телефон через одноразовий SMS-код.
                             </p>
-                            <button type="button" className="diia-btn" onClick={handleDiiaSign}>
-                              <span>Підписати через</span>
-                              <span className="diia-btn-brand">Дія</span>
-                              <span className="diia-logo-accent">Підпис</span>
-                            </button>
-                          </div>
-                        )}
 
-                        {diiaState === 'scanning' && (
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
-                            <div className="qr-sim-container">
-                              <div className="qr-graphic">
-                                <div className="pulse-scanner"></div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                              <div className="form-group">
+                                <label className="form-label" style={{ fontSize: '13px', fontWeight: 'bold' }}>Мобільний телефон *</label>
+                                <input 
+                                  type="text" 
+                                  className="form-control" 
+                                  placeholder="+380XXXXXXXXX" 
+                                  value={altPhone} 
+                                  onChange={(e) => setAltPhone(e.target.value)} 
+                                  disabled={altOtpSent}
+                                />
                               </div>
-                              <div style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--dark-blue)' }}>Скануйте QR-код</div>
+                              <div className="form-group">
+                                <label className="form-label" style={{ fontSize: '13px', fontWeight: 'bold' }}>РНОКПП (ІПН, 10 цифр) *</label>
+                                <input 
+                                  type="text" 
+                                  className="form-control" 
+                                  placeholder="1234567890" 
+                                  maxLength={10}
+                                  value={altDrfo} 
+                                  onChange={(e) => setAltDrfo(e.target.value.replace(/[^0-9]/g, ''))} 
+                                  disabled={altOtpSent}
+                                />
+                              </div>
                             </div>
-                            <p className="mt-3 text-muted" style={{ fontSize: '13px', maxWidth: '400px' }}>
-                              1. Відкрийте застосунок <strong>Дія</strong> на смартфоні.<br />
-                              2. Натисніть на іконку зчитувача QR-коду у правому верхньому куті.<br />
-                              3. Наведіть камеру на цей екран та підтвердіть підпис за допомогою FaceID.
-                            </p>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px' }}>
-                              <div className="spinner-border spinner-border-sm text-primary" role="status"></div>
-                              <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Очікування підтвердження в мобільному застосунку...</span>
-                            </div>
-                          </div>
-                        )}
 
-                        {diiaState === 'success' && (
-                          <div className="sign-success-badge">
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginTop: '5px' }}>
+                              <div className="form-group">
+                                <label className="form-label" style={{ fontSize: '13px', fontWeight: 'bold' }}>Фото паспорта (ID-картки) *</label>
+                                {altIdCardFile ? (
+                                  <div style={{ padding: '8px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', color: '#166534', fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span>✓ Завантажено</span>
+                                    <button type="button" className="btn btn-outline" style={{ padding: '2px 6px', fontSize: '11px', color: '#166534', borderColor: '#bbf7d0' }} onClick={() => setAltIdCardFile(null)}>Змінити</button>
+                                  </div>
+                                ) : (
+                                  <input type="file" accept="image/*" className="form-control" style={{ fontSize: '13px' }} onChange={handleIdCardUpload} />
+                                )}
+                              </div>
+
+                              <div className="form-group">
+                                <label className="form-label" style={{ fontSize: '13px', fontWeight: 'bold' }}>Селфі з паспортом у руках *</label>
+                                {altSelfieFile ? (
+                                  <div style={{ padding: '8px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', color: '#166534', fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span>✓ Завантажено</span>
+                                    <button type="button" className="btn btn-outline" style={{ padding: '2px 6px', fontSize: '11px', color: '#166534', borderColor: '#bbf7d0' }} onClick={() => setAltSelfieFile(null)}>Змінити</button>
+                                  </div>
+                                ) : (
+                                  <input type="file" accept="image/*" className="form-control" style={{ fontSize: '13px' }} onChange={handleSelfieUpload} />
+                                )}
+                              </div>
+                            </div>
+
+                            {altOtpSent ? (
+                              <div style={{ marginTop: '15px', padding: '15px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
+                                <label className="form-label" style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--primary)' }}>Введіть 6-значний код підтвердження з SMS *</label>
+                                <div style={{ display: 'flex', gap: '10px', marginTop: '5px' }}>
+                                  <input 
+                                    type="text" 
+                                    className="form-control" 
+                                    placeholder="XXXXXX" 
+                                    maxLength={6}
+                                    style={{ fontSize: '16px', letterSpacing: '4px', textAlign: 'center', maxWidth: '150px' }}
+                                    value={altOtpInput} 
+                                    onChange={(e) => setAltOtpInput(e.target.value.replace(/[^0-9]/g, ''))}
+                                  />
+                                  <button type="button" className="btn btn-primary" onClick={handleVerifyAltOtp}>Підтвердити код</button>
+                                  <button type="button" className="btn btn-outline" onClick={() => setAltOtpSent(false)}>Назад</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <button 
+                                type="button" 
+                                className="btn btn-primary" 
+                                style={{ marginTop: '10px', width: 'fit-content', alignSelf: 'flex-start' }} 
+                                onClick={handleSendAltOtp}
+                              >
+                                Надіслати SMS-код підтвердження
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="sign-success-badge" style={{ display: 'flex', gap: '15px', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '15px', borderRadius: '8px' }}>
                             <div style={{ fontSize: '28px', color: '#2cbd72', fontWeight: 'bold' }}>✓</div>
                             <div style={{ flexGrow: 1 }}>
-                              <div style={{ fontWeight: 'bold', color: '#14532d', fontSize: '15px' }}>Заяву підписано через Дія.Підпис</div>
-                              <table className="sign-info-table">
+                              <div style={{ fontWeight: 'bold', color: '#14532d', fontSize: '15px', marginBottom: '8px' }}>Особу успішно верифіковано (Фото-ID + OTP)</div>
+                              <table className="sign-info-table" style={{ width: '100%', fontSize: '13px' }}>
                                 <tbody>
                                   <tr>
-                                    <td>Підписувач:</td>
-                                    <td>{formData.lname} {formData.fname} {formData.mname}</td>
+                                    <td style={{ color: '#166534', opacity: 0.8, width: '40%' }}>Заявник:</td>
+                                    <td style={{ fontWeight: 'bold' }}>{formData.lname} {formData.fname} {formData.mname}</td>
                                   </tr>
                                   <tr>
-                                    <td>Сертифікат:</td>
-                                    <td>Дія.Підпис (ДП "ДІЯ")</td>
+                                    <td style={{ color: '#166534', opacity: 0.8 }}>РНОКПП (ДРФО):</td>
+                                    <td style={{ fontWeight: 'bold' }}>{altDrfo}</td>
                                   </tr>
                                   <tr>
-                                    <td>ДРФО підписувача:</td>
-                                    <td>3{Math.floor(Math.random() * 900000000) + 100000000}</td>
+                                    <td style={{ color: '#166534', opacity: 0.8 }}>Мобільний телефон:</td>
+                                    <td style={{ fontWeight: 'bold' }}>{altPhone}</td>
                                   </tr>
                                   <tr>
-                                    <td>Статус підпису:</td>
-                                    <td style={{ color: '#2cbd72' }}>Перевірено, підпис дійсний та інтегрований у заяву</td>
+                                    <td style={{ color: '#166534', opacity: 0.8 }}>Статус документів:</td>
+                                    <td style={{ color: '#2cbd72', fontWeight: 'bold' }}>Фото ID та Селфі завантажено, підтверджено по OTP</td>
                                   </tr>
                                 </tbody>
                               </table>
+                              <button 
+                                type="button" 
+                                className="btn btn-outline" 
+                                style={{ marginTop: '10px', padding: '2px 8px', fontSize: '12px', color: '#166534', borderColor: '#bbf7d0' }} 
+                                onClick={() => {
+                                  setAltState('idle');
+                                  setIsSigned(false);
+                                  setAltOtpSent(false);
+                                  setAltOtpInput('');
+                                }}
+                              >
+                                Скасувати верифікацію
+                              </button>
                             </div>
                           </div>
                         )}
@@ -671,10 +1035,19 @@ export const Application: React.FC = () => {
                                     <div className="kep-drop-zone" onClick={() => {
                                       const input = document.createElement('input');
                                       input.type = 'file';
-                                      input.accept = '.dat,.pfx,.key,.zs2';
+                                      input.accept = '.dat,.pfx,.key,.zs2,.p12';
                                       input.onchange = (e) => {
                                         const file = (e.target as HTMLInputElement).files?.[0];
-                                        if (file) setKepFileName(file.name);
+                                        if (file) {
+                                          setKepFileName(file.name);
+                                          const reader = new FileReader();
+                                          reader.onload = (ev) => {
+                                            if (ev.target?.result instanceof ArrayBuffer) {
+                                              setKepFileBytes(ev.target.result);
+                                            }
+                                          };
+                                          reader.readAsArrayBuffer(file);
+                                        }
                                       };
                                       input.click();
                                     }}>

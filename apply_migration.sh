@@ -37,8 +37,11 @@ if [ $# -gt 0 ]; then
 else
     MIGRATION_FILES=(
         "004_update_questions.sql"
+        "005_cases.sql"
+        "006_anonymize_cases.sql"
         "007_update_cases.sql"
         "008_remove_demo_certificates.sql"
+        "009_add_signature_details.sql"
     )
 fi
 
