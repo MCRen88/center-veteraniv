@@ -75,11 +75,14 @@ const Confetti: React.FC = () => {
 
 export const Test: React.FC = () => {
   const { state, saveTestScore } = useAppContext();
-  const casesList = state.cases && state.cases.length > 0 ? state.cases : casesDb;
   const navigate = useNavigate();
 
   const [mode, setMode] = useState<TestMode>(null);
   const [selectedVariant, setSelectedVariant] = useState<number | null>(null);
+
+  const casesList = state.cases && state.cases.length > 0 ? state.cases : casesDb;
+  const activeCases = selectedVariant ? casesList.filter(c => selectedVariant === 2 ? c.id > 10 : c.id <= 10) : casesList;
+
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [testQuestions, setTestQuestions] = useState(state.questions);
   const [answers, setAnswers] = useState<number[]>([]);
@@ -137,7 +140,7 @@ export const Test: React.FC = () => {
       let textToSpeak = '';
       if (showCases) {
         if (!casesFinished) {
-          const currentCase = casesList[currentCaseIndex];
+          const currentCase = activeCases[currentCaseIndex];
           if (currentCase) {
             const optionsText = currentCase.options.map((opt: string, idx: number) => `Варіант ${String.fromCharCode(65 + idx)}: ${opt}`).join('. ');
             textToSpeak = `Опис ситуації: ${currentCase.situation}. Запитання: ${currentCase.question}. ${optionsText}`;
@@ -186,7 +189,7 @@ export const Test: React.FC = () => {
       stopSpeaking();
       setIsSpeaking(false);
     } else {
-      const currentCase = casesList[currentCaseIndex];
+      const currentCase = activeCases[currentCaseIndex];
       if (currentCase) {
         const optionsText = currentCase.options.map((opt: string, idx: number) => `Варіант ${String.fromCharCode(65 + idx)}: ${opt}`).join('. ');
         speakText(
@@ -312,7 +315,7 @@ export const Test: React.FC = () => {
 
   const finishCases = () => {
     let correctCount = 0;
-    casesList.forEach((c, idx) => {
+    activeCases.forEach((c, idx) => {
       if (caseAnswers[idx] === c.correctAnswer) {
         correctCount++;
       }
@@ -328,7 +331,7 @@ export const Test: React.FC = () => {
     }
     setShowCases(true);
     setCurrentCaseIndex(0);
-    setCaseAnswers(new Array(casesList.length).fill(-1));
+    setCaseAnswers(new Array(activeCases.length).fill(-1));
     setCasesFinished(false);
     setCasesScore(0);
     setCaseShowFeedback(false);
@@ -347,11 +350,11 @@ export const Test: React.FC = () => {
 
   const nextCase = () => {
     setCaseShowFeedback(false);
-    if (currentCaseIndex < casesList.length - 1) {
+    if (currentCaseIndex < activeCases.length - 1) {
       setCurrentCaseIndex(currentCaseIndex + 1);
     } else {
       let correctCount = 0;
-      casesList.forEach((c, idx) => {
+      activeCases.forEach((c, idx) => {
         if (caseAnswers[idx] === c.correctAnswer) {
           correctCount++;
         }
@@ -871,7 +874,7 @@ export const Test: React.FC = () => {
   if (isFinished) {
     if (showCases) {
       if (casesFinished) {
-        const casesPercentage = Math.round((casesScore / casesList.length) * 100);
+        const casesPercentage = Math.round((casesScore / activeCases.length) * 100);
         const casesPassed = casesPercentage >= 80;
         const overallPassed = casesPassed && !wasTerminated;
 
@@ -900,7 +903,7 @@ export const Test: React.FC = () => {
               </div>
               <h2 style={{ fontFamily: 'Comfortaa, sans-serif' }}>Завершено оцінювання кейсів</h2>
               <p style={{ fontSize: '20px', margin: '20px 0 25px' }}>
-                Ви дали правильні відповіді на <strong>{casesScore} з {casesList.length}</strong> практичних кейсів ({casesPercentage}%).
+                Ви дали правильні відповіді на <strong>{casesScore} з {activeCases.length}</strong> практичних кейсів ({casesPercentage}%).
               </p>
               
               <div className={`alert ${casesPassed ? 'alert-success' : 'alert-danger'} mb-4`} style={{ textAlign: 'left', lineHeight: 1.6 }}>
@@ -962,7 +965,7 @@ export const Test: React.FC = () => {
         );
       }
 
-      const currentCase = casesList[currentCaseIndex];
+      const currentCase = activeCases[currentCaseIndex];
       const hasSelectedOption = caseAnswers[currentCaseIndex] !== -1;
 
       return (
@@ -1026,7 +1029,7 @@ export const Test: React.FC = () => {
 
           <div className="container mt-4 mb-5 case-container">
             <div className="d-flex justify-content-between align-items-center mb-4">
-              <span className="badge-step">Кейс {currentCaseIndex + 1} з {casesList.length}</span>
+              <span className="badge-step">Кейс {currentCaseIndex + 1} з {activeCases.length}</span>
               {mode === 'exam' && (
                 <div style={{ 
                   display: 'flex', 
@@ -1128,10 +1131,10 @@ export const Test: React.FC = () => {
                   disabled={!hasSelectedOption}
                 >
                   {mode === 'exam' 
-                    ? (currentCaseIndex === casesList.length - 1 ? "Завершити блок кейсів" : "Наступний кейс")
+                    ? (currentCaseIndex === activeCases.length - 1 ? "Завершити блок кейсів" : "Наступний кейс")
                     : (!caseShowFeedback 
                         ? "Перевірити" 
-                        : (currentCaseIndex === casesList.length - 1 ? "Завершити блок кейсів" : "Наступний кейс")
+                        : (currentCaseIndex === activeCases.length - 1 ? "Завершити блок кейсів" : "Наступний кейс")
                       )
                   }
                 </button>
