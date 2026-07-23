@@ -168,11 +168,12 @@ def build_docx():
     # 1. TITLE PAGE (COVER)
     print("Generating Cover Page...")
     add_p(doc, "ЗАТВЕРДЖЕНО", bold=True, size=11, alignment=WD_ALIGN_PARAGRAPH.RIGHT, space_after=2)
-    add_p(doc, "Керівник Центру післядипломної освіти та", size=11, alignment=WD_ALIGN_PARAGRAPH.RIGHT, space_after=2)
-    add_p(doc, "сертифікацій Запорізького", size=11, alignment=WD_ALIGN_PARAGRAPH.RIGHT, space_after=2)
-    add_p(doc, "національного університету", size=11, alignment=WD_ALIGN_PARAGRAPH.RIGHT, space_after=2)
-    add_p(doc, "____________ Сергій ІЛЬЇН", bold=True, size=11, alignment=WD_ALIGN_PARAGRAPH.RIGHT, space_after=2)
-    add_p(doc, '"___" __________ 2026 р.', size=11, alignment=WD_ALIGN_PARAGRAPH.RIGHT, space_after=40)
+    add_p(doc, "Ректор Комунального закладу «Запорізький", size=11, alignment=WD_ALIGN_PARAGRAPH.RIGHT, space_after=2)
+    add_p(doc, "обласний інститут післядипломної", size=11, alignment=WD_ALIGN_PARAGRAPH.RIGHT, space_after=2)
+    add_p(doc, "педагогічної освіти» Запорізької", size=11, alignment=WD_ALIGN_PARAGRAPH.RIGHT, space_after=2)
+    add_p(doc, "обласної ради (КЗ «ЗОІППО» ЗОР)", size=11, alignment=WD_ALIGN_PARAGRAPH.RIGHT, space_after=2)
+    add_p(doc, "____________ Едуард ГУГНІН", bold=True, size=11, alignment=WD_ALIGN_PARAGRAPH.RIGHT, space_after=2)
+    add_p(doc, '«16» липня 2026 р.', size=11, alignment=WD_ALIGN_PARAGRAPH.RIGHT, space_after=40)
 
     # Center-aligned main title block
     add_p(doc, "КОНТРОЛЬНО-ОЦІНЮВАЛЬНІ МАТЕРІАЛИ", bold=True, size=14, alignment=WD_ALIGN_PARAGRAPH.CENTER, space_after=12)
