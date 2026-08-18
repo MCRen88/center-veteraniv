@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import forge from 'node-forge';
 
 export const Application: React.FC = () => {
-  const { addRegistryItem, submitApplication: submitAppDb, state } = useAppContext();
+  const { addRegistryItem, submitApplication: submitAppDb } = useAppContext();
   const navigate = useNavigate();
 
   const [step, setStep] = useState(1);
