@@ -24,19 +24,24 @@ export const Navbar: React.FC = () => {
             justify-content: space-between;
             align-items: center;
             height: 70px;
+            max-width: 1400px;
+            gap: 30px;
         }
 
         .nav-logo {
             font-family: 'Comfortaa', cursive;
             font-weight: 700;
-            font-size: 24px;
+            font-size: 20px;
             color: var(--dark-blue);
             text-decoration: none;
+            white-space: nowrap;
+            flex-shrink: 0;
+            margin-right: 25px;
         }
 
         .nav-links {
             display: flex;
-            gap: 20px;
+            gap: 16px;
             align-items: center;
         }
         
@@ -45,8 +50,8 @@ export const Navbar: React.FC = () => {
             color: var(--text-dark);
             font-family: 'Comfortaa', cursive;
             font-weight: 600;
-            font-size: 15px;
-            padding: 10px 5px;
+            font-size: 14.5px;
+            padding: 8px 4px;
             position: relative;
             transition: var(--transition);
             white-space: nowrap;
@@ -128,16 +133,30 @@ export const Navbar: React.FC = () => {
             background: rgba(231, 76, 60, 0.05);
         }
 
-        @media (max-width: 1200px) and (min-width: 1025px) {
+        @media (max-width: 1280px) and (min-width: 1101px) {
             .nav-links {
-                gap: 12px;
+                gap: 10px;
             }
             .nav-link {
-                font-size: 14px;
+                font-size: 13.5px;
+                padding: 6px 2px;
+            }
+            .nav-logo {
+                font-size: 18px;
+                margin-right: 15px;
+            }
+            .user-badge {
+                padding: 5px 10px;
+                font-size: 13px;
+                max-width: 180px;
+            }
+            .btn-logout {
+                padding: 5px 12px;
+                font-size: 13px;
             }
         }
 
-        @media (max-width: 1024px) {
+        @media (max-width: 1100px) {
             .nav-container {
                 padding: 0 20px;
             }
@@ -166,6 +185,7 @@ export const Navbar: React.FC = () => {
                 text-align: center;
                 padding: 10px;
                 border-bottom: none;
+                font-size: 15px;
             }
             .nav-link::after {
                 display: none;
@@ -178,6 +198,20 @@ export const Navbar: React.FC = () => {
                 width: 100%;
                 max-width: 200px;
                 text-align: center;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .nav-logo {
+                font-size: 17px;
+                margin-right: 10px;
+            }
+        }
+
+        @media (max-width: 360px) {
+            .nav-logo {
+                font-size: 15px;
+                margin-right: 5px;
             }
         }
       `}</style>
@@ -225,9 +259,15 @@ export const Navbar: React.FC = () => {
       )}
       <nav className="navbar">
         <div className="container nav-container">
-          <NavLink to="/" className="nav-logo" onClick={() => setMobileMenuOpen(false)}>
-            ЗОІППО
-          </NavLink>
+          <a 
+            href="https://zoippo.zp.ua/main/" 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="nav-logo" 
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            КЗ "ЗОІППО" ЗОР
+          </a>
           
           <div className="hamburger" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
             ☰
@@ -237,9 +277,7 @@ export const Navbar: React.FC = () => {
             <NavLink to="/" className={({isActive}) => isActive ? "nav-link active" : "nav-link"} onClick={() => setMobileMenuOpen(false)}>Головна</NavLink>
             <NavLink to="/docs" className={({isActive}) => isActive ? "nav-link active" : "nav-link"} onClick={() => setMobileMenuOpen(false)}>Нормативна база</NavLink>
             <NavLink to="/application" className={({isActive}) => isActive ? "nav-link active" : "nav-link"} onClick={() => setMobileMenuOpen(false)}>Подати заяву</NavLink>
-            {state.currentUser?.role === 'admin' && (
-              <NavLink to="/registry" className={({isActive}) => isActive ? "nav-link active" : "nav-link"} onClick={() => setMobileMenuOpen(false)}>Реєстр</NavLink>
-            )}
+            <NavLink to="/registry" className={({isActive}) => isActive ? "nav-link active" : "nav-link"} onClick={() => setMobileMenuOpen(false)}>Реєстр</NavLink>
             
             {state.currentUser ? (
               <>

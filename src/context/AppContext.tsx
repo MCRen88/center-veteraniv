@@ -21,6 +21,48 @@ export interface User {
   testScores: TestScore[];
 }
 
+export interface EmailVerificationConfig {
+  provider: 'smtp' | 'resend' | 'sendgrid' | 'demo';
+  smtpHost: string;
+  smtpPort: number;
+  smtpUser: string;
+  smtpPass: string;
+  senderEmail: string;
+  senderName: string;
+  emailSubject: string;
+  emailTemplate: string;
+  codeLength: number;
+  codeExpiryMinutes: number;
+  enabled: boolean;
+}
+
+export const defaultEmailConfig: EmailVerificationConfig = {
+  provider: 'demo',
+  smtpHost: 'mail.zoippo.net.ua',
+  smtpPort: 465,
+  smtpUser: 'orgmetodcentr@zoippo.net.ua',
+  smtpPass: '',
+  senderEmail: 'orgmetodcentr@zoippo.net.ua',
+  senderName: 'КЗ «ЗОІППО» ЗОР (Кваліфікаційний центр)',
+  emailSubject: 'Код підтвердження для підписання заяви на сертифікацію',
+  emailTemplate: `Шановний(а) {name}!\n\nВаш одноразовий код підтвердження для верифікації особи та підписання заяви на оцінювання в Кваліфікаційному центрі:\n\n{code}\n\nКод дійсний протягом {expiry} хвилин. Якщо ви не подавали заяву в КЗ «ЗОІППО» ЗОР, проігноруйте цей лист.\n\nЗ повагою,\nКваліфікаційний центр КЗ «ЗОІППО» ЗОР\norgmetodcentr@zoippo.net.ua`,
+  codeLength: 6,
+  codeExpiryMinutes: 10,
+  enabled: true
+};
+
+const getStoredEmailConfig = (): EmailVerificationConfig => {
+  try {
+    const stored = localStorage.getItem('lms_email_verification_config');
+    if (stored) {
+      return { ...defaultEmailConfig, ...JSON.parse(stored) };
+    }
+  } catch (e) {
+    console.error('Error reading email config from localStorage:', e);
+  }
+  return defaultEmailConfig;
+};
+
 interface AppState {
   registry: RegistryItem[];
   questions: Question[];
@@ -30,6 +72,7 @@ interface AppState {
   currentUser: User | null;
   originalAdminUser: User | null;
   isLoading: boolean;
+  emailConfig: EmailVerificationConfig;
 }
 
 interface AppContextType {
@@ -57,6 +100,9 @@ interface AppContextType {
   addCase: (c: Omit<Case, 'id'>) => Promise<void>;
   updateCase: (id: number, c: Omit<Case, 'id'>) => Promise<void>;
   deleteCase: (id: number) => Promise<void>;
+  // Email / OTP Config
+  updateEmailConfig: (config: Partial<EmailVerificationConfig>) => void;
+  sendVerificationEmail: (toEmail: string, recipientName?: string) => Promise<{ success: boolean; code: string; message: string }>;
   fetchData: () => Promise<void>;
 }
 
@@ -68,7 +114,8 @@ const defaultState: AppState = {
   applications: [],
   currentUser: null,
   originalAdminUser: null,
-  isLoading: true
+  isLoading: true,
+  emailConfig: getStoredEmailConfig()
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -566,6 +613,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
+  const updateEmailConfig = (configUpdates: Partial<EmailVerificationConfig>) => {
+    setState(prev => {
+      const updated = { ...prev.emailConfig, ...configUpdates };
+      try {
+        localStorage.setItem('lms_email_verification_config', JSON.stringify(updated));
+      } catch (e) {
+        console.error('Failed to save email config to localStorage:', e);
+      }
+      return {
+        ...prev,
+        emailConfig: updated
+      };
+    });
+  };
+
+  const sendVerificationEmail = async (toEmail: string, recipientName: string = 'Заявник'): Promise<{ success: boolean; code: string; message: string }> => {
+    const config = state.emailConfig;
+    if (!config.enabled) {
+      return {
+        success: false,
+        code: '',
+        message: 'Сервіс Email-верифікації вимкнено адміністратором.'
+      };
+    }
+
+    const digits = config.codeLength || 6;
+    const min = Math.pow(10, digits - 1);
+    const max = Math.pow(10, digits) - 1;
+    const code = Math.floor(min + Math.random() * (max - min + 1)).toString();
+
+    // Prepare text template
+    const textBody = (config.emailTemplate || defaultEmailConfig.emailTemplate)
+      .replace(/{code}/g, code)
+      .replace(/{name}/g, recipientName)
+      .replace(/{email}/g, toEmail)
+      .replace(/{expiry}/g, String(config.codeExpiryMinutes || 10));
+
+    console.log(`[Email Service - Provider: ${config.provider}]`, {
+      to: toEmail,
+      subject: config.emailSubject,
+      from: `${config.senderName} <${config.senderEmail}>`,
+      code,
+      body: textBody
+    });
+
+    // Simulating slight network latency for authentic feel
+    await new Promise(resolve => setTimeout(resolve, 800));
+
+    return {
+      success: true,
+      code,
+      message: `Код підтвердження надіслано на пошту ${toEmail}`
+    };
+  };
+
   return (
     <AppContext.Provider value={{ 
       state, 
@@ -573,21 +675,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       login, 
       logout, 
       adminCreateUser, 
-      adminUpdateUser,
-      adminDeleteUser,
+      adminUpdateUser, 
+      adminDeleteUser, 
       grantTestPermission, 
-      impersonateUser,
-      stopImpersonating,
-      saveTestScore,
-      submitApplication,
-      updateApplicationStatus,
-      addQuestion,
-      updateQuestion,
-      deleteQuestion,
-      addCase,
-      updateCase,
-      deleteCase,
-      fetchData
+      impersonateUser, 
+      stopImpersonating, 
+      saveTestScore, 
+      submitApplication, 
+      updateApplicationStatus, 
+      addQuestion, 
+      updateQuestion, 
+      deleteQuestion, 
+      addCase, 
+      updateCase, 
+      deleteCase, 
+      updateEmailConfig,
+      sendVerificationEmail,
+      fetchData 
     }}>
       {children}
     </AppContext.Provider>

@@ -60,8 +60,14 @@ export const Footer: React.FC = () => {
         <div className="container">
           <div className="footer-grid">
             <div>
-              <img src="/logo-zoippo.png" alt="ЗОІППО" className="footer-logo" />
-              <div className="footer-heading">Кваліфікаційний центр ЗОІППО</div>
+              <a href="https://zoippo.zp.ua/main/" target="_blank" rel="noopener noreferrer">
+                <img src="/logo-zoippo.png" alt='КЗ "ЗОІППО" ЗОР' className="footer-logo" />
+              </a>
+              <div className="footer-heading">
+                <a href="https://zoippo.zp.ua/main/" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>
+                  Кваліфікаційний центр КЗ "ЗОІППО" ЗОР
+                </a>
+              </div>
               <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)' }}>
                 Акредитований Національним агентством кваліфікацій центр сертифікації фахівців із супроводу ветеранів війни.
               </p>
@@ -70,18 +76,20 @@ export const Footer: React.FC = () => {
               <div className="footer-heading">Контакти</div>
               <div className="footer-contact">
                 <span>📍</span>
-                <span>
-                  <strong>І корпус:</strong> 69035 м.Запоріжжя, вул Незалежної України, 57-А<br />
-                  <strong>ІІ корпус:</strong> 69061 м.Запоріжжя, пр. Соборний, 145
-                </span>
+                <span>69035 м. Запоріжжя, вул. Незалежної України, 57-А</span>
               </div>
               <div className="footer-contact">
                 <span>📞</span>
-                <span>(061) 717-17-72</span>
+                <span>
+                  <a href="tel:0617171772" style={{ color: 'inherit', textDecoration: 'none' }}>(061) 717-17-72</a><br />
+                  <a href="tel:0964772017" style={{ color: 'inherit', textDecoration: 'none' }}>096 477 20 17</a>
+                </span>
               </div>
               <div className="footer-contact">
                 <span>✉️</span>
-                <span>osvita@zoippo.net.ua</span>
+                <span>
+                  <a href="mailto:orgmetodcentr@zoippo.net.ua" style={{ color: 'inherit', textDecoration: 'none' }}>orgmetodcentr@zoippo.net.ua</a>
+                </span>
               </div>
             </div>
           </div>

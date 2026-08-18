@@ -1,21 +1,9 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 
 export const Registry: React.FC = () => {
   const { state } = useAppContext();
-  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
-
-  if (!state.currentUser || state.currentUser.role !== 'admin') {
-    return (
-      <div className="container mt-5 mb-5 text-center">
-        <h3>Доступ обмежено</h3>
-        <p className="mt-3 mb-4">Реєстр виданих сертифікатів доступний лише для адміністраторів.</p>
-        <button className="btn btn-primary" onClick={() => navigate('/')}>На головну</button>
-      </div>
-    );
-  }
 
   const filteredRegistry = state.registry.filter(item => 
     item.name.toLowerCase().includes(searchTerm.toLowerCase()) || 

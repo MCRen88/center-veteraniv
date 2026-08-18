@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAppContext, type Role, type Question, type Case } from '../context/AppContext';
+import { useAppContext, type Role, type Question, type Case, type EmailVerificationConfig } from '../context/AppContext';
 import forge from 'node-forge';
 
 
@@ -18,13 +18,48 @@ export const AdminDashboard: React.FC = () => {
     addCase,
     updateCase,
     deleteCase,
-    updateApplicationStatus
+    updateApplicationStatus,
+    updateEmailConfig,
+    sendVerificationEmail
   } = useAppContext();
   const navigate = useNavigate();
   console.log('AdminDashboard: state.cases length =', state.cases ? state.cases.length : 'undefined');
-  const [activeTab, setActiveTab] = useState<'users' | 'applications' | 'tests' | 'analytics'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'applications' | 'tests' | 'analytics' | 'email-settings'>('users');
   const [testsSubTab, setTestsSubTab] = useState<'questions' | 'cases'>('questions');
   
+  // Email / OTP Settings State
+  const [emailForm, setEmailForm] = useState<EmailVerificationConfig>(state.emailConfig);
+  const [testEmailTo, setTestEmailTo] = useState('');
+  const [testEmailSending, setTestEmailSending] = useState(false);
+  const [testEmailResult, setTestEmailResult] = useState<{ success: boolean; message: string; code?: string } | null>(null);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState(false);
+
+  React.useEffect(() => {
+    if (state.emailConfig) {
+      setEmailForm(state.emailConfig);
+    }
+  }, [state.emailConfig]);
+
+  const handleSaveEmailConfig = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateEmailConfig(emailForm);
+    setSaveSuccessMsg(true);
+    setTimeout(() => setSaveSuccessMsg(false), 4000);
+  };
+
+  const handleSendTestEmail = async () => {
+    if (!testEmailTo || !testEmailTo.includes('@')) {
+      alert("Будь ласка, введіть коректну адресу електронної пошти для тесту.");
+      return;
+    }
+    setTestEmailSending(true);
+    setTestEmailResult(null);
+    updateEmailConfig(emailForm);
+    const res = await sendVerificationEmail(testEmailTo, 'Тестовий Заявник');
+    setTestEmailSending(false);
+    setTestEmailResult(res);
+  };
+
   // Case Modal State
   const [isCaseModalOpen, setIsCaseModalOpen] = useState(false);
   const [editingCase, setEditingCase] = useState<Case | null>(null);
@@ -867,6 +902,11 @@ export const AdminDashboard: React.FC = () => {
           <div className={`admin-tab ${activeTab === 'analytics' ? 'active' : ''}`} onClick={() => setActiveTab('analytics')}>
             Аналітика та статистика
           </div>
+          {isAdmin && (
+            <div className={`admin-tab ${activeTab === 'email-settings' ? 'active' : ''}`} onClick={() => setActiveTab('email-settings')}>
+              ⚙️ Налаштування Email / OTP
+            </div>
+          )}
         </div>
 
         {activeTab === 'users' && (
@@ -1323,6 +1363,288 @@ export const AdminDashboard: React.FC = () => {
           </div>
         )}
 
+        {/* EMAIL & OTP SETTINGS TAB */}
+        {isAdmin && activeTab === 'email-settings' && (
+          <div>
+            <div className="card mb-4" style={{ background: '#f8fafd' }}>
+              <div className="d-flex justify-content-between align-items-center mb-0">
+                <div>
+                  <h3 className="mb-1" style={{ color: 'var(--dark-blue)' }}>⚙️ Налаштування Email-сервісу та OTP верифікації</h3>
+                  <p className="text-muted mb-0" style={{ fontSize: '13.5px' }}>
+                    Керування параметрами відправки одноразових кодів підтвердження (OTP) на електронну пошту кандидатів при альтернативній верифікації заяви.
+                  </p>
+                </div>
+                {saveSuccessMsg && (
+                  <div className="badge" style={{ background: '#22c55e', color: '#fff', padding: '8px 14px', fontSize: '13px', borderRadius: '6px' }}>
+                    ✓ Налаштування збережено успішно!
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveEmailConfig}>
+              <div className="grid-2" style={{ gap: '25px', alignItems: 'start' }}>
+                {/* Left Column: Server and OTP config */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  
+                  {/* General status card */}
+                  <div className="card" style={{ padding: '20px' }}>
+                    <h4 style={{ fontSize: '16px', color: 'var(--dark-blue)', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      🔌 Стан та режим роботи
+                    </h4>
+                    
+                    <div className="form-group mb-3" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <input 
+                        type="checkbox" 
+                        id="emailVerificationEnabled" 
+                        checked={emailForm.enabled} 
+                        onChange={e => setEmailForm({ ...emailForm, enabled: e.target.checked })} 
+                        style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                      />
+                      <label htmlFor="emailVerificationEnabled" style={{ cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', margin: 0 }}>
+                        Увімкнути альтернативну верифікацію через Email OTP
+                      </label>
+                    </div>
+
+                    <div className="form-group mb-0">
+                      <label className="form-label" style={{ fontWeight: 'bold' }}>Провайдер сервісу відправки *</label>
+                      <select 
+                        className="form-control" 
+                        value={emailForm.provider} 
+                        onChange={e => setEmailForm({ ...emailForm, provider: e.target.value as any })}
+                      >
+                        <option value="demo">🧪 Інтерактивний тестовий режим (Демо-емуляція OTP)</option>
+                        <option value="smtp">📮 Власний корпоративний SMTP сервер (mail.zoippo.net.ua)</option>
+                        <option value="resend">🚀 Resend API (Transactional Email)</option>
+                        <option value="sendgrid">📨 SendGrid API</option>
+                      </select>
+                      <small className="text-muted" style={{ display: 'block', marginTop: '6px', fontSize: '12px' }}>
+                        {emailForm.provider === 'demo' && 'У демо-режимі система безпечно симулює відправку та показує згенерований код на екрані для тестування.'}
+                        {emailForm.provider === 'smtp' && 'Підключення через корпоративний поштовий сервер КЗ «ЗОІППО» ЗОР з підтримкою SSL/TLS.'}
+                        {(emailForm.provider === 'resend' || emailForm.provider === 'sendgrid') && 'Швидка доставка транзакційних повідомлень через хмарний поштовий API.'}
+                      </small>
+                    </div>
+                  </div>
+
+                  {/* Server settings card */}
+                  <div className="card" style={{ padding: '20px' }}>
+                    <h4 style={{ fontSize: '16px', color: 'var(--dark-blue)', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      🌐 Параметри поштового сервера (SMTP / API)
+                    </h4>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '15px' }} className="mb-3">
+                      <div className="form-group mb-0">
+                        <label className="form-label">SMTP Сервер (Host) *</label>
+                        <input 
+                          type="text" 
+                          className="form-control" 
+                          value={emailForm.smtpHost} 
+                          onChange={e => setEmailForm({ ...emailForm, smtpHost: e.target.value })} 
+                          placeholder="mail.zoippo.net.ua"
+                          required
+                        />
+                      </div>
+                      <div className="form-group mb-0">
+                        <label className="form-label">Порт *</label>
+                        <input 
+                          type="number" 
+                          className="form-control" 
+                          value={emailForm.smtpPort} 
+                          onChange={e => setEmailForm({ ...emailForm, smtpPort: parseInt(e.target.value) || 465 })} 
+                          placeholder="465"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="form-group mb-3">
+                      <label className="form-label">Email адреса відправника *</label>
+                      <input 
+                        type="email" 
+                        className="form-control" 
+                        value={emailForm.senderEmail} 
+                        onChange={e => setEmailForm({ ...emailForm, senderEmail: e.target.value })} 
+                        placeholder="orgmetodcentr@zoippo.net.ua"
+                        required
+                      />
+                    </div>
+
+                    <div className="form-group mb-3">
+                      <label className="form-label">Ім'я відправника (Display Name) *</label>
+                      <input 
+                        type="text" 
+                        className="form-control" 
+                        value={emailForm.senderName} 
+                        onChange={e => setEmailForm({ ...emailForm, senderName: e.target.value })} 
+                        placeholder="КЗ «ЗОІППО» ЗОР (Кваліфікаційний центр)"
+                        required
+                      />
+                    </div>
+
+                    <div className="form-group mb-0">
+                      <label className="form-label">Пароль облікового запису / API Ключ</label>
+                      <input 
+                        type="password" 
+                        className="form-control" 
+                        value={emailForm.smtpPass} 
+                        onChange={e => setEmailForm({ ...emailForm, smtpPass: e.target.value })} 
+                        placeholder="••••••••••••••••"
+                      />
+                    </div>
+                  </div>
+
+                  {/* OTP security params card */}
+                  <div className="card" style={{ padding: '20px' }}>
+                    <h4 style={{ fontSize: '16px', color: 'var(--dark-blue)', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      🔒 Параметри одноразового коду (OTP)
+                    </h4>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                      <div className="form-group mb-0">
+                        <label className="form-label">Довжина коду *</label>
+                        <select 
+                          className="form-control" 
+                          value={emailForm.codeLength} 
+                          onChange={e => setEmailForm({ ...emailForm, codeLength: parseInt(e.target.value) || 6 })}
+                        >
+                          <option value="4">4 цифри</option>
+                          <option value="6">6 цифр (Рекомендовано)</option>
+                          <option value="8">8 цифр (Підвищена безпека)</option>
+                        </select>
+                      </div>
+                      <div className="form-group mb-0">
+                        <label className="form-label">Термін дії (хвилин) *</label>
+                        <input 
+                          type="number" 
+                          className="form-control" 
+                          min="1" 
+                          max="60" 
+                          value={emailForm.codeExpiryMinutes} 
+                          onChange={e => setEmailForm({ ...emailForm, codeExpiryMinutes: parseInt(e.target.value) || 10 })} 
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Column: Template, Live Preview, and Test Sending */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  
+                  {/* Template Card */}
+                  <div className="card" style={{ padding: '20px' }}>
+                    <h4 style={{ fontSize: '16px', color: 'var(--dark-blue)', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      📝 Шаблон електронного листа
+                    </h4>
+
+                    <div className="form-group mb-3">
+                      <label className="form-label">Тема листа (Subject) *</label>
+                      <input 
+                        type="text" 
+                        className="form-control" 
+                        value={emailForm.emailSubject} 
+                        onChange={e => setEmailForm({ ...emailForm, emailSubject: e.target.value })} 
+                        required
+                      />
+                    </div>
+
+                    <div className="form-group mb-2">
+                      <label className="form-label">Текст повідомлення *</label>
+                      <textarea 
+                        className="form-control" 
+                        rows={7} 
+                        value={emailForm.emailTemplate} 
+                        onChange={e => setEmailForm({ ...emailForm, emailTemplate: e.target.value })} 
+                        required
+                        style={{ fontSize: '13px', lineHeight: '1.6', fontFamily: 'monospace' }}
+                      />
+                    </div>
+
+                    <div style={{ background: '#f1f5f9', padding: '10px 14px', borderRadius: '6px', fontSize: '12px', color: '#475569' }}>
+                      <strong>Доступні змінні:</strong>
+                      <span style={{ marginLeft: '6px' }}><code>{'{code}'}</code> — код OTP, <code>{'{name}'}</code> — ПІБ кандидата, <code>{'{email}'}</code> — пошта, <code>{'{expiry}'}</code> — хвилини</span>
+                    </div>
+                  </div>
+
+                  {/* Live Preview Card */}
+                  <div className="card" style={{ padding: '20px', border: '1px solid #cbd5e1' }}>
+                    <h4 style={{ fontSize: '15px', color: 'var(--dark-blue)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      👁️ Попередній перегляд листа (Live Preview)
+                    </h4>
+
+                    <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
+                      <div style={{ borderBottom: '1px solid #f1f5f9', paddingBottom: '10px', marginBottom: '12px', fontSize: '12.5px' }}>
+                        <div><strong style={{ color: '#64748b' }}>Від:</strong> {emailForm.senderName} &lt;{emailForm.senderEmail}&gt;</div>
+                        <div style={{ marginTop: '3px' }}><strong style={{ color: '#64748b' }}>Тема:</strong> <strong>{emailForm.emailSubject}</strong></div>
+                      </div>
+
+                      <div style={{ whiteSpace: 'pre-wrap', fontSize: '13px', lineHeight: '1.6', color: '#1e293b' }}>
+                        {emailForm.emailTemplate
+                          .replace(/{code}/g, '123456')
+                          .replace(/{name}/g, 'Шевченко Тарас Григорович')
+                          .replace(/{email}/g, 'shevchenko@example.com')
+                          .replace(/{expiry}/g, String(emailForm.codeExpiryMinutes || 10))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Test Send Card */}
+                  <div className="card" style={{ padding: '20px', background: '#fdfefe', border: '1px solid #bae6fd' }}>
+                    <h4 style={{ fontSize: '15px', color: '#0369a1', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      🧪 Тестування відправки листа
+                    </h4>
+
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <input 
+                        type="email" 
+                        className="form-control" 
+                        placeholder="Введіть email для тестування..." 
+                        value={testEmailTo} 
+                        onChange={e => setTestEmailTo(e.target.value)} 
+                        style={{ fontSize: '13px' }}
+                      />
+                      <button 
+                        type="button" 
+                        className="btn btn-outline" 
+                        style={{ whiteSpace: 'nowrap', borderColor: '#0284c7', color: '#0284c7' }}
+                        onClick={handleSendTestEmail}
+                        disabled={testEmailSending}
+                      >
+                        {testEmailSending ? 'Надсилання...' : 'Надіслати тест'}
+                      </button>
+                    </div>
+
+                    {testEmailResult && (
+                      <div className="alert mt-3 mb-0" style={{ 
+                        background: testEmailResult.success ? '#f0fdf4' : '#fef2f2', 
+                        border: `1px solid ${testEmailResult.success ? '#bbf7d0' : '#fecaca'}`,
+                        color: testEmailResult.success ? '#166534' : '#991b1b',
+                        padding: '12px',
+                        borderRadius: '6px',
+                        fontSize: '13px'
+                      }}>
+                        <strong>{testEmailResult.success ? '✓ Успішно надіслано:' : '✗ Помилка:'}</strong> {testEmailResult.message}
+                        {testEmailResult.code && (
+                          <div style={{ marginTop: '5px' }}>
+                            Згенерований код: <strong style={{ letterSpacing: '2px', background: '#dcfce7', padding: '2px 6px', borderRadius: '4px' }}>{testEmailResult.code}</strong>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Save button card */}
+                  <div className="card" style={{ padding: '15px 20px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '15px' }}>
+                    <button type="submit" className="btn btn-primary" style={{ padding: '10px 24px', fontSize: '15px', fontWeight: 'bold' }}>
+                      💾 Зберегти налаштування Email / OTP
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </form>
+          </div>
+        )}
+
       </div>
 
       {/* Edit User Modal */}
@@ -1588,7 +1910,7 @@ export const AdminDashboard: React.FC = () => {
                 );
               }
 
-              const isAlternative = sigDetails.type === 'ID-паспорт + Селфі + OTP';
+              const isAlternative = sigDetails.type === 'ID-паспорт + Селфі + Email-OTP' || sigDetails.type === 'ID-паспорт + Селфі + OTP';
 
               let verified = false;
               let error: string | null = null;
@@ -1627,7 +1949,9 @@ export const AdminDashboard: React.FC = () => {
                       <span className="badge" style={{ background: '#f59e0b', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}>
                         ⚠️ ПОТРЕБУЄ РУЧНОЇ ВЕРИФІКАЦІЇ ID
                       </span>
-                      <span style={{ fontSize: '12px', color: '#b45309', fontWeight: '600' }}>OTP підтверджено</span>
+                      <span style={{ fontSize: '12px', color: '#b45309', fontWeight: '600' }}>
+                        {sigDetails.type === 'ID-паспорт + Селфі + Email-OTP' ? '📧 Email OTP підтверджено' : '📱 OTP підтверджено'}
+                      </span>
                     </div>
 
                     <table style={{ width: '100%', fontSize: '13px', marginTop: '10px', borderTop: '1px dashed #fde68a', paddingTop: '5px' }}>
@@ -1640,10 +1964,18 @@ export const AdminDashboard: React.FC = () => {
                           <td style={{ color: '#b45309', opacity: 0.8, padding: '4px 0' }}>ДРФО (РНОКПП):</td>
                           <td style={{ fontWeight: 'bold', padding: '4px 0' }}>{sigDetails.signerDrfo}</td>
                         </tr>
-                        <tr>
-                          <td style={{ color: '#b45309', opacity: 0.8, padding: '4px 0' }}>Мобільний телефон:</td>
-                          <td style={{ fontWeight: 'bold', padding: '4px 0' }}>{sigDetails.phone} (OTP)</td>
-                        </tr>
+                        {(sigDetails.email || sigDetails.signerEmail) && (
+                          <tr>
+                            <td style={{ color: '#b45309', opacity: 0.8, padding: '4px 0' }}>Електронна пошта:</td>
+                            <td style={{ fontWeight: 'bold', padding: '4px 0' }}>{sigDetails.email || sigDetails.signerEmail} (Email OTP)</td>
+                          </tr>
+                        )}
+                        {sigDetails.phone && (
+                          <tr>
+                            <td style={{ color: '#b45309', opacity: 0.8, padding: '4px 0' }}>Контактний телефон:</td>
+                            <td style={{ fontWeight: 'bold', padding: '4px 0' }}>{sigDetails.phone}</td>
+                          </tr>
+                        )}
                         <tr>
                           <td style={{ color: '#b45309', opacity: 0.8, padding: '4px 0' }}>Час верифікації:</td>
                           <td style={{ fontWeight: 'bold', padding: '4px 0' }}>{sigDetails.timestamp}</td>

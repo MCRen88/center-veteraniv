@@ -41,7 +41,7 @@ const compressImage = (file: File): Promise<string> => {
 };
 
 export const Application: React.FC = () => {
-  const { addRegistryItem, submitApplication: submitAppDb } = useAppContext();
+  const { addRegistryItem, submitApplication: submitAppDb, sendVerificationEmail, state } = useAppContext();
   const navigate = useNavigate();
 
   const [step, setStep] = useState(1);
@@ -55,6 +55,7 @@ export const Application: React.FC = () => {
     fname: '',
     mname: '',
     birthdate: '',
+    passport: '',
     phone: '',
     email: '',
     level: 'Фахівець із супроводу',
@@ -62,8 +63,34 @@ export const Application: React.FC = () => {
     university: '',
     field: 'А «Освіта»',
     experience: '',
-    consent: false
+    consent: true
   });
+
+  const getTodayUkrainianDate = () => {
+    const d = new Date();
+    const day = String(d.getDate()).padStart(2, '0');
+    const months = [
+      'січня', 'лютого', 'березня', 'квітня', 'травня', 'червня',
+      'липня', 'серпня', 'вересня', 'жовтня', 'листопада', 'грудня'
+    ];
+    const month = months[d.getMonth()];
+    const year = d.getFullYear();
+    return {
+      day,
+      month,
+      year,
+      formatted: `«${day}» ${month} ${year} року`
+    };
+  };
+
+  const formatBirthDate = (dateStr: string) => {
+    if (!dateStr) return '—';
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      return `${parts[2]}.${parts[1]}.${parts[0]}`;
+    }
+    return dateStr;
+  };
 
   // Signature States
   const [signMethod, setSignMethod] = useState<'kep' | 'alternative'>('kep');
@@ -75,8 +102,8 @@ export const Application: React.FC = () => {
   const [kepFileBytes, setKepFileBytes] = useState<ArrayBuffer | null>(null);
   const [kepInfo, setKepInfo] = useState<{ name: string; drfo: string; issuer: string } | null>(null);
   
-  // Alternative verification states
-  const [altPhone, setAltPhone] = useState('');
+  // Alternative verification states (Email OTP + ID)
+  const [altEmail, setAltEmail] = useState('');
   const [altDrfo, setAltDrfo] = useState('');
   const [altIdCardFile, setAltIdCardFile] = useState<string | null>(null);
   const [altSelfieFile, setAltSelfieFile] = useState<string | null>(null);
@@ -84,17 +111,18 @@ export const Application: React.FC = () => {
   const [altOtpCode, setAltOtpCode] = useState('');
   const [altOtpInput, setAltOtpInput] = useState('');
   const [altState, setAltState] = useState<'idle' | 'verifying' | 'success'>('idle');
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
 
   const [isSigned, setIsSigned] = useState(false);
   const [signatureDetails, setSignatureDetails] = useState<any>(null);
 
   React.useEffect(() => {
-    if (step === 4) {
-      if (formData.phone && !altPhone) {
-        setAltPhone(formData.phone);
+    if (step === 5) {
+      if (formData.email && !altEmail) {
+        setAltEmail(formData.email);
       }
     }
-  }, [step, formData.phone, altPhone]);
+  }, [step, formData.email, altEmail]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -106,12 +134,15 @@ export const Application: React.FC = () => {
 
   const validateStep = (s: number) => {
     if (s === 1) {
-      return formData.lname && formData.fname && formData.birthdate && formData.phone && formData.email;
+      return Boolean(formData.lname && formData.fname && formData.birthdate && formData.passport && formData.phone && formData.email);
     }
     if (s === 2) {
-      return formData.level && formData.education && formData.experience !== '';
+      return true; // Consent step
     }
     if (s === 3) {
+      return Boolean(formData.level && formData.education && formData.experience !== '');
+    }
+    if (s === 4) {
       return true; // Skipping file validation for mock
     }
     return true;
@@ -154,9 +185,9 @@ export const Application: React.FC = () => {
     }
   };
 
-  const handleSendAltOtp = () => {
-    if (!altPhone) {
-      alert("Будь ласка, введіть номер телефону.");
+  const handleSendAltOtp = async () => {
+    if (!altEmail || !altEmail.includes('@')) {
+      alert("Будь ласка, введіть коректну адресу електронної пошти.");
       return;
     }
     if (!altDrfo || altDrfo.length !== 10) {
@@ -172,17 +203,26 @@ export const Application: React.FC = () => {
       return;
     }
 
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    setAltOtpCode(code);
+    setIsSendingEmail(true);
+    const fullName = `${formData.lname} ${formData.fname} ${formData.mname || ''}`.trim() || 'Заявник';
+    const res = await sendVerificationEmail(altEmail, fullName);
+    setIsSendingEmail(false);
+
+    if (!res.success) {
+      alert(res.message);
+      return;
+    }
+
+    setAltOtpCode(res.code);
     setAltOtpSent(true);
     setAltState('verifying');
     
-    alert(`[Демонстраційна СИСТЕМА OTP]\nКод верифікації надіслано на номер ${altPhone}.\n\nКОД ДЛЯ ВВЕДЕННЯ: ${code}`);
+    alert(`[Повідомлення системи електронної пошти]\nЛист із одноразовим кодом успішно надіслано на адресу: ${altEmail}\nВідправник: ${state.emailConfig.senderName} (${state.emailConfig.senderEmail})\nТема: ${state.emailConfig.emailSubject}\n\nКОД ДЛЯ ВВЕДЕННЯ: ${res.code}`);
   };
 
   const handleVerifyAltOtp = () => {
-    if (altOtpInput !== altOtpCode) {
-      alert("Некоректний OTP код. Перевірте та спробуйте ще раз.");
+    if (altOtpInput.trim() !== altOtpCode.trim()) {
+      alert("Некоректний код підтвердження з пошти. Перевірте та спробуйте ще раз.");
       return;
     }
 
@@ -190,15 +230,17 @@ export const Application: React.FC = () => {
     setIsSigned(true);
     setFormData(prev => ({ ...prev, consent: true }));
     setSignatureDetails({
-      type: 'ID-паспорт + Селфі + OTP',
+      type: 'ID-паспорт + Селфі + Email-OTP',
       signerName: `${formData.lname} ${formData.fname} ${formData.mname || ''}`.trim(),
       signerDrfo: altDrfo,
-      issuer: `Верифікація за номером ${altPhone}`,
-      serialNumber: 'ALT-VERIFY-OTP',
+      signerEmail: altEmail,
+      issuer: `Верифікація за електронною поштою ${altEmail}`,
+      serialNumber: 'ALT-VERIFY-EMAIL-OTP',
       timestamp: new Date().toLocaleString('uk-UA'),
       idCardPhoto: altIdCardFile,
       selfiePhoto: altSelfieFile,
-      phone: altPhone
+      email: altEmail,
+      phone: formData.phone
     });
   };
 
@@ -277,6 +319,7 @@ export const Application: React.FC = () => {
             fname: formData.fname,
             mname: formData.mname,
             birthdate: formData.birthdate,
+            passport: formData.passport,
             phone: formData.phone,
             email: formData.email,
             level: formData.level,
@@ -357,6 +400,7 @@ export const Application: React.FC = () => {
             fname: formData.fname,
             mname: formData.mname,
             birthdate: formData.birthdate,
+            passport: formData.passport,
             phone: formData.phone,
             email: formData.email,
             level: formData.level,
@@ -483,7 +527,29 @@ export const Application: React.FC = () => {
             display: flex;
             flex-direction: column;
             align-items: center;
-            width: 25%;
+            width: 20%;
+        }
+
+        .consent-document {
+            background: #ffffff;
+            border: 2px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 30px 35px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.04);
+            position: relative;
+            font-family: 'Roboto', sans-serif;
+            color: #1e293b;
+            line-height: 1.8;
+            margin-bottom: 20px;
+        }
+
+        .consent-highlight {
+            font-weight: 700;
+            color: var(--dark-blue);
+            background: #e0f2fe;
+            padding: 2px 6px;
+            border-radius: 4px;
+            border-bottom: 1px solid #7dd3fc;
         }
 
         .step-circle {
@@ -502,7 +568,7 @@ export const Application: React.FC = () => {
         }
 
         .step-title {
-            font-size: 13px;
+            font-size: 12.5px;
             text-align: center;
             color: var(--text-muted);
             transition: var(--transition);
@@ -734,14 +800,18 @@ export const Application: React.FC = () => {
             </div>
             <div className={`step-item ${step === 2 ? 'active' : step > 2 ? 'completed' : ''}`}>
               <div className="step-circle">{step > 2 ? '✓' : '2'}</div>
-              <div className="step-title">Освіта та стаж</div>
+              <div className="step-title">Згода на збір ПД</div>
             </div>
             <div className={`step-item ${step === 3 ? 'active' : step > 3 ? 'completed' : ''}`}>
               <div className="step-circle">{step > 3 ? '✓' : '3'}</div>
-              <div className="step-title">Документи</div>
+              <div className="step-title">Освіта та стаж</div>
             </div>
             <div className={`step-item ${step === 4 ? 'active' : step > 4 ? 'completed' : ''}`}>
-              <div className="step-circle">{success ? '✓' : '4'}</div>
+              <div className="step-circle">{step > 4 ? '✓' : '4'}</div>
+              <div className="step-title">Документи</div>
+            </div>
+            <div className={`step-item ${step === 5 ? 'active' : step > 5 ? 'completed' : ''}`}>
+              <div className="step-circle">{success ? '✓' : '5'}</div>
               <div className="step-title">Підпис</div>
             </div>
           </div>
@@ -768,36 +838,89 @@ export const Application: React.FC = () => {
                     <div className="grid-2" style={{ gap: '20px' }}>
                       <div className="form-group">
                         <label className="form-label">Прізвище *</label>
-                        <input type="text" className="form-control" name="lname" value={formData.lname} onChange={handleChange} required />
+                        <input type="text" className="form-control" name="lname" value={formData.lname} onChange={handleChange} placeholder="Шевченко" required />
                       </div>
                       <div className="form-group">
                         <label className="form-label">Ім'я *</label>
-                        <input type="text" className="form-control" name="fname" value={formData.fname} onChange={handleChange} required />
+                        <input type="text" className="form-control" name="fname" value={formData.fname} onChange={handleChange} placeholder="Тарас" required />
                       </div>
                       <div className="form-group">
                         <label className="form-label">По батькові</label>
-                        <input type="text" className="form-control" name="mname" value={formData.mname} onChange={handleChange} />
+                        <input type="text" className="form-control" name="mname" value={formData.mname} onChange={handleChange} placeholder="Григорович" />
                       </div>
                       <div className="form-group">
                         <label className="form-label">Дата народження *</label>
                         <input type="date" className="form-control" name="birthdate" value={formData.birthdate} onChange={handleChange} required />
                       </div>
                       <div className="form-group">
-                        <label className="form-label">Контактний телефон *</label>
-                        <input type="tel" className="form-control" name="phone" value={formData.phone} onChange={handleChange} required />
+                        <label className="form-label">Паспортні дані (серія, номер або номер ID-картки) *</label>
+                        <input type="text" className="form-control" name="passport" value={formData.passport} onChange={handleChange} placeholder="напр. АА 123456 або 001234567" required />
                       </div>
                       <div className="form-group">
+                        <label className="form-label">Контактний телефон *</label>
+                        <input type="tel" className="form-control" name="phone" value={formData.phone} onChange={handleChange} placeholder="+380XXXXXXXXX" required />
+                      </div>
+                      <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                         <label className="form-label">Електронна пошта *</label>
-                        <input type="email" className="form-control" name="email" value={formData.email} onChange={handleChange} required />
+                        <input type="email" className="form-control" name="email" value={formData.email} onChange={handleChange} placeholder="user@example.com" required />
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* STEP 2 */}
+                {/* STEP 2 - CONSENT FORM */}
                 {step === 2 && (
                   <div>
-                    <h3 className="mb-4">Крок 2. Освіта та стаж</h3>
+                    <h3 className="mb-4">Крок 2. Згода на збір та обробку персональних даних</h3>
+                    
+                    <div className="consent-document">
+                      <div style={{ textAlign: 'center', marginBottom: '25px' }}>
+                        <div style={{ fontFamily: 'Comfortaa, sans-serif', fontWeight: 'bold', fontSize: '18px', color: 'var(--dark-blue)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                          Згода
+                        </div>
+                        <div style={{ fontWeight: '600', fontSize: '15px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                          на збір та обробку персональних даних
+                        </div>
+                      </div>
+
+                      <div style={{ fontSize: '15px', lineHeight: '1.8', textAlign: 'justify', color: '#1e293b' }}>
+                        <p style={{ marginBottom: '15px' }}>
+                          Я, <strong className="consent-highlight">{formData.lname} {formData.fname} {formData.mname}</strong> (П.І.Б.),<br />
+                          народився(-лась) <strong className="consent-highlight">{formatBirthDate(formData.birthdate)}</strong>, паспорт серії/номер <strong className="consent-highlight">{formData.passport || '—'}</strong> шляхом підписання цього тексту, відповідно до Закону України «Про захист персональних даних» від 1 червня 2010 року, № 2297-VI надаю згоду <strong>Комунальному закладу «Запорізький обласний інститут післядипломної педагогічної освіти» Запорізької обласної ради</strong> на обробку моїх особистих персональних даних: адреса, місце навчання/роботи тощо), паспортні дані та/або дані свідоцтва про народження, у т.ч. громадянство, дані про особисті документи у сфері освіти (документи про освіту, вчені звання та наукові ступені тощо), дані зовнішнього незалежного оцінювання; дані про навчальні заклади до яких вступали та у яких навчались, форма навчання; дані про зарахування, переведення, відрахування, особисті відомості (вік, стать, освіта, спеціальність/ напрям, кваліфікація, професія, вчене звання, науковий ступінь, право на пільги встановлені законодавством, відомості про військовий облік), запис зображення (фото) тощо, з метою забезпечення потреби фізичних та юридичних осіб, у т.ч. замовлення, виготовлення, обліку і видачі документів у сфері освіти тощо, відповідно до законодавства.
+                        </p>
+                        <p style={{ marginBottom: '25px' }}>
+                          Ця згода надана на строк поки не мине потреба. Персональні дані, на обробку яких надано цю згоду, можуть бути передані третім особам тільки у випадках, передбачених законодавством України.
+                        </p>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '30px', paddingTop: '15px', borderTop: '1px dashed #cbd5e1', fontWeight: '500', fontSize: '14px' }}>
+                          <div>
+                            <strong>Дата:</strong> {getTodayUkrainianDate().formatted}
+                          </div>
+                          <div style={{ color: 'var(--blue)', fontWeight: 600, fontSize: '13px' }}>
+                            🔒 Підписується електронним ключем на Кроці 5
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="alert alert-warning mt-4 d-flex align-items-start" style={{ gap: '12px', background: '#fffbeb', border: '1px solid #fef3c7', color: '#92400e', borderRadius: '8px', padding: '16px' }}>
+                      <span style={{ fontSize: '24px', lineHeight: 1 }}>⚠️</span>
+                      <div style={{ flex: 1 }}>
+                        <strong style={{ fontSize: '15px' }}>Попередження про перевірку правильності даних:</strong>
+                        <p style={{ margin: '6px 0 0', fontSize: '13.5px', lineHeight: 1.5, color: '#78350f' }}>
+                          Будь ласка, уважно перевірте правильність внесених персональних даних (ПІБ, дата народження, паспортні дані). 
+                          Електронний підпис накладається наприкінці оформлення заяви (Крок 5).
+                          Натискаючи кнопку <strong>«Далі»</strong>, ви підтверджуєте достовірність наданої інформації, надаєте офіційну згоду на збір та обробку персональних даних і переходите до заповнення відомостей про освіту та стаж (Крок 3).
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* STEP 3 */}
+                {step === 3 && (
+                  <div>
+                    <h3 className="mb-4">Крок 3. Освіта та стаж</h3>
                     <div className="form-group">
                       <label className="form-label">Рівень кваліфікації, на який претендуєте *</label>
                       <select className="form-control" name="level" value={formData.level} onChange={handleChange} required>
@@ -821,10 +944,10 @@ export const Application: React.FC = () => {
                   </div>
                 )}
 
-                {/* STEP 3 */}
-                {step === 3 && (
+                {/* STEP 4 */}
+                {step === 4 && (
                   <div>
-                    <h3 className="mb-4">Крок 3. Завантаження документів</h3>
+                    <h3 className="mb-4">Крок 4. Завантаження документів</h3>
                     <div className="alert alert-info">
                       Усі документи повинні бути у форматі PDF, JPG або PNG. Максимальний розмір одного файлу - 5 МБ.
                     </div>
@@ -843,17 +966,19 @@ export const Application: React.FC = () => {
                   </div>
                 )}
 
-                {/* STEP 4 */}
-                {step === 4 && (
+                {/* STEP 5 */}
+                {step === 5 && (
                   <div>
-                    <h3 className="mb-4">Крок 4. Накладання електронного підпису</h3>
+                    <h3 className="mb-4">Крок 5. Накладання електронного підпису</h3>
                     <div className="alert alert-info">
-                      Уважно перевірте внесені дані. Після підписання заяви КЕП або Дія.Підписом зміни внести буде неможливо.
+                      Уважно перевірте внесені дані. Після підписання заяви КЕП або альтернативною верифікацією зміни внести буде неможливо.
                     </div>
                     <div style={{ background: 'var(--bg-light)', padding: '20px', borderRadius: 'var(--radius-sm)', marginBottom: '25px' }}>
                       <p style={{ margin: '0 0 6px' }}><strong>Заявник:</strong> {formData.lname} {formData.fname} {formData.mname}</p>
+                      <p style={{ margin: '0 0 6px' }}><strong>Паспортні дані:</strong> {formData.passport}</p>
                       <p style={{ margin: '0 0 6px' }}><strong>Претендує на:</strong> {formData.level}</p>
-                      <p style={{ margin: '0' }}><strong>Освіта:</strong> {formData.education}</p>
+                      <p style={{ margin: '0 0 6px' }}><strong>Освіта:</strong> {formData.education}</p>
+                      <p style={{ margin: '0' }}><strong>Згода на збір та обробку ПД:</strong> Надано ({getTodayUkrainianDate().formatted})</p>
                     </div>
 
                     <div className="sign-tabs">
@@ -869,7 +994,7 @@ export const Application: React.FC = () => {
                         className={`sign-tab-btn ${signMethod === 'alternative' ? 'active' : ''}`}
                         onClick={() => setSignMethod('alternative')}
                       >
-                        👤 Альтернативна верифікація (ID + OTP)
+                        📧 Альтернативна верифікація (ID + Email OTP)
                       </button>
                     </div>
 
@@ -879,18 +1004,18 @@ export const Application: React.FC = () => {
                         {altState !== 'success' ? (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                             <p className="text-muted" style={{ fontSize: '13.5px', margin: '0 0 10px', lineHeight: '1.5' }}>
-                              Використовуйте цей спосіб, якщо у вас немає КЕП. Потрібно завантажити фото вашого документа (паспорта/ID-картки), фото-селфі з ним для звірки та підтвердити ваш телефон через одноразовий SMS-код.
+                              Використовуйте цей спосіб, якщо у вас немає КЕП. Потрібно завантажити фото вашого документа (паспорта/ID-картки), фото-селфі з ним для звірки та підтвердити вашу особу через одноразовий код на електронну пошту.
                             </p>
 
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                               <div className="form-group">
-                                <label className="form-label" style={{ fontSize: '13px', fontWeight: 'bold' }}>Мобільний телефон *</label>
+                                <label className="form-label" style={{ fontSize: '13px', fontWeight: 'bold' }}>Електронна пошта для отримання коду *</label>
                                 <input 
-                                  type="text" 
+                                  type="email" 
                                   className="form-control" 
-                                  placeholder="+380XXXXXXXXX" 
-                                  value={altPhone} 
-                                  onChange={(e) => setAltPhone(e.target.value)} 
+                                  placeholder="user@example.com" 
+                                  value={altEmail} 
+                                  onChange={(e) => setAltEmail(e.target.value)} 
                                   disabled={altOtpSent}
                                 />
                               </div>
@@ -936,19 +1061,22 @@ export const Application: React.FC = () => {
 
                             {altOtpSent ? (
                               <div style={{ marginTop: '15px', padding: '15px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
-                                <label className="form-label" style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--primary)' }}>Введіть 6-значний код підтвердження з SMS *</label>
+                                <label className="form-label" style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--primary)' }}>Введіть {state.emailConfig.codeLength || 6}-значний код підтвердження з пошти *</label>
                                 <div style={{ display: 'flex', gap: '10px', marginTop: '5px' }}>
                                   <input 
                                     type="text" 
                                     className="form-control" 
                                     placeholder="XXXXXX" 
-                                    maxLength={6}
-                                    style={{ fontSize: '16px', letterSpacing: '4px', textAlign: 'center', maxWidth: '150px' }}
+                                    maxLength={state.emailConfig.codeLength || 6}
+                                    style={{ fontSize: '16px', letterSpacing: '4px', textAlign: 'center', maxWidth: '160px' }}
                                     value={altOtpInput} 
                                     onChange={(e) => setAltOtpInput(e.target.value.replace(/[^0-9]/g, ''))}
                                   />
                                   <button type="button" className="btn btn-primary" onClick={handleVerifyAltOtp}>Підтвердити код</button>
-                                  <button type="button" className="btn btn-outline" onClick={() => setAltOtpSent(false)}>Назад</button>
+                                  <button type="button" className="btn btn-outline" onClick={() => setAltOtpSent(false)}>Змінити пошту</button>
+                                </div>
+                                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '6px' }}>
+                                  Лист надіслано на <strong>{altEmail}</strong>. Якщо лист не надійшов, перевірте папку «Спам».
                                 </div>
                               </div>
                             ) : (
@@ -957,8 +1085,9 @@ export const Application: React.FC = () => {
                                 className="btn btn-primary" 
                                 style={{ marginTop: '10px', width: 'fit-content', alignSelf: 'flex-start' }} 
                                 onClick={handleSendAltOtp}
+                                disabled={isSendingEmail}
                               >
-                                Надіслати SMS-код підтвердження
+                                {isSendingEmail ? 'Надсилання листа...' : '📧 Надіслати код підтвердження на пошту'}
                               </button>
                             )}
                           </div>
@@ -966,7 +1095,7 @@ export const Application: React.FC = () => {
                           <div className="sign-success-badge" style={{ display: 'flex', gap: '15px', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '15px', borderRadius: '8px' }}>
                             <div style={{ fontSize: '28px', color: '#2cbd72', fontWeight: 'bold' }}>✓</div>
                             <div style={{ flexGrow: 1 }}>
-                              <div style={{ fontWeight: 'bold', color: '#14532d', fontSize: '15px', marginBottom: '8px' }}>Особу успішно верифіковано (Фото-ID + OTP)</div>
+                              <div style={{ fontWeight: 'bold', color: '#14532d', fontSize: '15px', marginBottom: '8px' }}>Особу успішно верифіковано (Фото-ID + Email-OTP)</div>
                               <table className="sign-info-table" style={{ width: '100%', fontSize: '13px' }}>
                                 <tbody>
                                   <tr>
@@ -978,12 +1107,12 @@ export const Application: React.FC = () => {
                                     <td style={{ fontWeight: 'bold' }}>{altDrfo}</td>
                                   </tr>
                                   <tr>
-                                    <td style={{ color: '#166534', opacity: 0.8 }}>Мобільний телефон:</td>
-                                    <td style={{ fontWeight: 'bold' }}>{altPhone}</td>
+                                    <td style={{ color: '#166534', opacity: 0.8 }}>Електронна пошта:</td>
+                                    <td style={{ fontWeight: 'bold' }}>{altEmail}</td>
                                   </tr>
                                   <tr>
-                                    <td style={{ color: '#166534', opacity: 0.8 }}>Статус документів:</td>
-                                    <td style={{ color: '#2cbd72', fontWeight: 'bold' }}>Фото ID та Селфі завантажено, підтверджено по OTP</td>
+                                    <td style={{ color: '#166534', opacity: 0.8 }}>Статус верифікації:</td>
+                                    <td style={{ color: '#2cbd72', fontWeight: 'bold' }}>Фото ID та Селфі завантажено, підтверджено кодом на пошту</td>
                                   </tr>
                                 </tbody>
                               </table>
@@ -1139,13 +1268,6 @@ export const Application: React.FC = () => {
                         )}
                       </div>
                     )}
-
-                    <div className="form-group d-flex align-items-center" style={{ gap: '10px', marginTop: '25px' }}>
-                      <input type="checkbox" id="w-consent" name="consent" checked={formData.consent} onChange={handleChange} required />
-                      <label htmlFor="w-consent" style={{ fontSize: '13px', cursor: 'pointer' }}>
-                        Я даю згоду на обробку моїх персональних даних згідно з чинним законодавством України та засвідчую вірність внесених відомостей.
-                      </label>
-                    </div>
                   </div>
                 )}
 
@@ -1158,7 +1280,7 @@ export const Application: React.FC = () => {
                   >
                     Назад
                   </button>
-                  {step < 4 ? (
+                  {step < 5 ? (
                     <button className="btn btn-primary" onClick={nextStep}>Далі</button>
                   ) : (
                     <button className="btn btn-primary" onClick={submitApplication} disabled={isSubmitting || !isSigned}>

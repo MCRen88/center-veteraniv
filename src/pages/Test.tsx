@@ -833,7 +833,7 @@ export const Test: React.FC = () => {
             </div>
             <div style="display: flex; justify-content: space-between; font-weight: bold;">
               <div>Дата: ${date}</div>
-              <div>Кваліфікаційний центр ЗОІППО</div>
+              <div>Кваліфікаційний центр КЗ "ЗОІППО" ЗОР</div>
             </div>
           </div>
           <script>window.print();</script>

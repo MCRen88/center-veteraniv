@@ -202,12 +202,18 @@ export const Home: React.FC = () => {
       {/* HERO SECTION */}
       <section className="hero">
         <div className="container hero-content">
-          <img src="/logo-zoippo.png" alt="ЗОІППО" className="hero-logo" />
-          <div className="hero-institution">Комунальний заклад «Запорізький обласний інститут післядипломної педагогічної освіти» Запорізької обласної ради</div>
+          <a href="https://zoippo.zp.ua/main/" target="_blank" rel="noopener noreferrer">
+            <img src="/logo-zoippo.png" alt='КЗ "ЗОІППО" ЗОР' className="hero-logo" />
+          </a>
+          <div className="hero-institution">
+            <a href="https://zoippo.zp.ua/main/" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>
+              Комунальний заклад «Запорізький обласний інститут післядипломної педагогічної освіти» Запорізької обласної ради
+            </a>
+          </div>
           <h1 className="hero-title">Кваліфікаційний центр сертифікації фахівців із супроводу ветеранів</h1>
           <div className="hero-buttons">
-            <Link to="/test" className="btn btn-secondary">Пройти тестування</Link>
             <Link to="/application" className="btn btn-secondary">Подати заяву</Link>
+            <Link to="/test" className="btn btn-secondary">Тестування</Link>
           </div>
         </div>
       </section>
@@ -261,7 +267,7 @@ export const Home: React.FC = () => {
           </div>
           <div className="timeline-step" data-step="5">
             <h4>Проведення оцінювання (КОМ)</h4>
-            <p>Кандидат складає теоретичне тестування та виконує практичне завдання.</p>
+            <p>Кандидат складає теоретичне тестування та виконує практичні задачі.</p>
           </div>
           <div className="timeline-step" data-step="6">
             <h4>Видача сертифіката</h4>
