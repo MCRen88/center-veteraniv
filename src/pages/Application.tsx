@@ -4,13 +4,21 @@ import { useNavigate } from 'react-router-dom';
 import forge from 'node-forge';
 
 export const Application: React.FC = () => {
-  const { addRegistryItem, submitApplication: submitAppDb } = useAppContext();
+  const { state, addRegistryItem, submitApplication: submitAppDb } = useAppContext();
   const navigate = useNavigate();
 
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [appNumber, setAppNumber] = useState('');
+  const [showFullPreview, setShowFullPreview] = useState(false);
+
+  // Uploaded documents tracking
+  const [uploadedDocs, setUploadedDocs] = useState<{
+    passport?: { name: string; size: string };
+    education?: { name: string; size: string };
+    experience?: { name: string; size: string };
+  }>({});
 
   // Form State
   const [formData, setFormData] = useState({
@@ -53,6 +61,276 @@ export const Application: React.FC = () => {
       return `${parts[2]}.${parts[1]}.${parts[0]}`;
     }
     return dateStr;
+  };
+
+  const handleFileUpload = (docType: 'passport' | 'education' | 'experience', e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+      setUploadedDocs(prev => ({
+        ...prev,
+        [docType]: {
+          name: file.name,
+          size: `${sizeMb} МБ`
+        }
+      }));
+    }
+  };
+
+  const handlePrintApplication = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert("Не вдалося відкрити вікно друку. Будь ласка, дозвольте спливаючі вікна для цього сайту.");
+      return;
+    }
+
+    const fullName = `${formData.lname} ${formData.fname} ${formData.mname}`.trim();
+    const today = getTodayUkrainianDate().formatted;
+    const birthdateFormatted = formatBirthDate(formData.birthdate);
+    const signTime = signatureDetails?.timestamp || new Date().toLocaleString('uk-UA');
+    const signerName = kepInfo?.name || fullName;
+    const signerDrfo = kepInfo?.drfo || '—';
+    const signerIssuer = kepInfo?.issuer || 'Акредитований центр сертифікації ключів';
+
+    const passportName = uploadedDocs.passport?.name ? `${uploadedDocs.passport.name} (${uploadedDocs.passport.size})` : 'Додано в електронній формі';
+    const educationName = uploadedDocs.education?.name ? `${uploadedDocs.education.name} (${uploadedDocs.education.size})` : 'Додано в електронній формі';
+    const experienceName = uploadedDocs.experience?.name ? `${uploadedDocs.experience.name} (${uploadedDocs.experience.size})` : (parseInt(formData.experience) > 0 ? 'Додано в електронній формі' : 'Не надається (стаж 0 років)');
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html lang="uk">
+      <head>
+        <meta charset="UTF-8">
+        <title>Заява про проходження оцінювання — ${fullName}</title>
+        <style>
+          @page {
+            size: A4;
+            margin: 20mm 15mm 20mm 20mm;
+          }
+          body {
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 13pt;
+            line-height: 1.4;
+            color: #000;
+            background: #fff;
+            margin: 0;
+            padding: 20px;
+          }
+          .header-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 25px;
+          }
+          .header-table td {
+            vertical-align: top;
+            padding: 0;
+          }
+          .inst-info {
+            width: 50%;
+            font-size: 10.5pt;
+            line-height: 1.3;
+            padding-right: 15px;
+          }
+          .app-meta {
+            width: 50%;
+            font-size: 11pt;
+            line-height: 1.35;
+            padding-left: 10px;
+          }
+          .doc-title {
+            text-align: center;
+            margin: 25px 0 15px;
+          }
+          .doc-title h1 {
+            font-size: 16pt;
+            font-weight: bold;
+            letter-spacing: 2px;
+            margin: 0 0 5px 0;
+          }
+          .doc-title p {
+            font-size: 11pt;
+            font-style: italic;
+            margin: 0;
+          }
+          .body-text {
+            text-align: justify;
+            text-indent: 35px;
+            margin-bottom: 12px;
+            font-size: 12.5pt;
+            line-height: 1.45;
+          }
+          .details-list {
+            margin: 10px 0 15px 0;
+            padding-left: 25px;
+            font-size: 12pt;
+          }
+          .details-list li {
+            margin-bottom: 4px;
+          }
+          .stamp-container {
+            margin-top: 30px;
+            display: flex;
+            justify-content: flex-end;
+          }
+          .kep-stamp {
+            border: 2px solid #0f3460;
+            border-radius: 6px;
+            padding: 10px 14px;
+            background: #f8faff;
+            width: 380px;
+            font-family: Arial, sans-serif;
+            font-size: 9.5pt;
+            line-height: 1.35;
+            color: #1e293b;
+          }
+          .kep-stamp-header {
+            font-weight: bold;
+            color: #0f3460;
+            border-bottom: 1px solid #cbd5e1;
+            padding-bottom: 4px;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 10pt;
+          }
+          .kep-table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+          .kep-table td {
+            padding: 2px 0;
+          }
+          .kep-label {
+            color: #64748b;
+            width: 38%;
+          }
+          .kep-val {
+            font-weight: 600;
+          }
+          .print-btn-bar {
+            text-align: center;
+            margin-bottom: 25px;
+            padding: 12px;
+            background: #f1f5f9;
+            border-radius: 8px;
+          }
+          .btn-print {
+            background: #2563eb;
+            color: #fff;
+            border: none;
+            padding: 10px 24px;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+          }
+          @media print {
+            .print-btn-bar {
+              display: none;
+            }
+            body {
+              padding: 0;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="print-btn-bar">
+          <button class="btn-print" onclick="window.print()">🖨️ Роздрукувати заяву (або Зберегти як PDF)</button>
+        </div>
+
+        <table class="header-table">
+          <tr>
+            <td class="inst-info">
+              <strong>Комунальний заклад «Запорізький обласний інститут післядипломної педагогічної освіти» Запорізької обласної ради</strong><br/>
+              <span style="font-size: 9.5pt; color: #444;">
+                Кваліфікаційний центр оцінювання і визнання результатів навчання<br/>
+                вул. Незалежної України, 57-А, м. Запоріжжя, 69035<br/>
+                Email: orgmetodcentr@zoippo.net.ua
+              </span>
+            </td>
+            <td class="app-meta">
+              <strong>Кваліфікаційному центру КЗ «ЗОІППО» ЗОР</strong><br/>
+              Голові кваліфікаційної комісії<br/>
+              <strong>від:</strong> ${fullName}<br/>
+              <strong>Дата народження:</strong> ${birthdateFormatted}<br/>
+              <strong>Паспорт / ID:</strong> ${formData.passport}<br/>
+              <strong>Телефон:</strong> ${formData.phone}<br/>
+              <strong>E-mail:</strong> ${formData.email}
+            </td>
+          </tr>
+        </table>
+
+        <div class="doc-title">
+          <h1>З А Я В А</h1>
+          <p>про проходження процедури оцінювання і визнання результатів навчання<br/>(присвоєння / підтвердження професійної кваліфікації)</p>
+          <div style="font-size: 10.5pt; margin-top: 4px; font-weight: bold;">Реєстраційний № ${appNumber} від ${today}</div>
+        </div>
+
+        <div class="body-text">
+          Прошу допустити мене до процедури кваліфікаційного оцінювання і визнання результатів навчання для присвоєння (підтвердження) професійної кваліфікації <strong>«Фахівець із супроводу ветеранів війни та демобілізованих осіб»</strong> (рівень кваліфікації: <strong>${formData.level}</strong>) відповідно до вимог професійного стандарту.
+        </div>
+
+        <div style="margin-top: 10px; font-size: 12pt;">
+          <strong>Відомості про здобувача:</strong>
+          <ul class="details-list">
+            <li>Рівень вищої освіти: <strong>${formData.education}</strong></li>
+            <li>Стаж роботи: <strong>${formData.experience} р.</strong></li>
+            <li>Згода на збір та обробку персональних даних: <strong>Надано згідно з вимогами Закону України «Про захист персональних даних»</strong></li>
+          </ul>
+        </div>
+
+        <div style="margin-top: 10px; font-size: 12pt;">
+          <strong>До заяви додано документи в електронній формі:</strong>
+          <ol class="details-list">
+            <li>Копія паспорта громадянина України / ID-картки: <em>${passportName}</em></li>
+            <li>Копія документа про вищу освіту з додатком: <em>${educationName}</em></li>
+            <li>Документи, що підтверджують досвід та стаж роботи: <em>${experienceName}</em></li>
+            <li>Згода на збір та обробку персональних даних від ${today}</li>
+          </ol>
+        </div>
+
+        <div class="body-text" style="font-size: 11.5pt; margin-top: 15px;">
+          Засвідчую вірність внесених відомостей та відповідність доданих електронних копій оригіналам документів. Мені відомо про відповідальність за надання недостовірних даних.
+        </div>
+
+        <div class="stamp-container">
+          <div class="kep-stamp">
+            <div class="kep-stamp-header">
+              <span>🛡️</span> КВАЛІФІКОВАНИЙ ЕЛЕКТРОННИЙ ПІДПИС
+            </div>
+            <table class="kep-table">
+              <tr>
+                <td class="kep-label">Підписувач:</td>
+                <td class="kep-val">${signerName}</td>
+              </tr>
+              <tr>
+                <td class="kep-label">РНОКПП (ДРФО):</td>
+                <td class="kep-val">${signerDrfo}</td>
+              </tr>
+              <tr>
+                <td class="kep-label">АЦСК (Надавач):</td>
+                <td class="kep-val">${signerIssuer}</td>
+              </tr>
+              <tr>
+                <td class="kep-label">Мітка часу:</td>
+                <td class="kep-val">${signTime}</td>
+              </tr>
+              <tr>
+                <td class="kep-label">Статус:</td>
+                <td class="kep-val" style="color: #16a34a;">Дійсний (перевірено в реєстрі)</td>
+              </tr>
+            </table>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
   };
 
   // Signature States (КЕП)
@@ -268,6 +546,29 @@ export const Application: React.FC = () => {
     setIsSubmitting(false);
   };
 
+  if (state.currentUser) {
+    return (
+      <section className="container mt-5 mb-5">
+        <div className="card text-center" style={{ maxWidth: '700px', margin: '40px auto', padding: '40px 30px' }}>
+          <div style={{ fontSize: '50px', marginBottom: '15px' }}>ℹ️</div>
+          <h3 style={{ color: 'var(--dark-blue)', marginBottom: '15px' }}>Ви вже зареєстровані в системі</h3>
+          <p style={{ fontSize: '15px', color: 'var(--text-dark)', lineHeight: '1.6', marginBottom: '25px' }}>
+            Ви авторизовані як <strong>{state.currentUser.name || state.currentUser.email}</strong> ({state.currentUser.email}).<br />
+            Повторна подача заяви не потрібна. Ви можете переглянути інформацію про проходження оцінювання та тестування у вашому кабінеті.
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', flexWrap: 'wrap' }}>
+            {(state.currentUser.role === 'admin' || state.currentUser.role === 'teacher') ? (
+              <button className="btn btn-primary" onClick={() => navigate('/admin')}>Перейти до Адмін-панелі</button>
+            ) : (
+              <button className="btn btn-primary" onClick={() => navigate('/dashboard')}>Перейти до Кабінету</button>
+            )}
+            <button className="btn btn-outline" onClick={() => navigate('/')}>На головну</button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <>
       <style>{`
@@ -427,82 +728,6 @@ export const Application: React.FC = () => {
         }
 
         .diia-btn:hover:not(:disabled) {
-            background: #222;
-            border-color: #222;
-            transform: translateY(-1px);
-        }
-
-        .diia-btn-brand {
-            font-family: sans-serif;
-            font-size: 17px;
-            letter-spacing: -0.5px;
-        }
-
-        .diia-logo-accent {
-            background: #00ffaa;
-            color: #000;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 800;
-            text-transform: uppercase;
-        }
-
-        .qr-sim-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            margin-top: 15px;
-            padding: 20px;
-            background: white;
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.06);
-            position: relative;
-        }
-
-        .qr-graphic {
-            width: 170px;
-            height: 170px;
-            background: repeating-conic-gradient(from 45deg, #111 0% 25%, #fff 0% 50%) 50% / 17px 17px;
-            border: 8px solid #fff;
-            box-shadow: inset 0 0 0 1px #cbd5e0, 0 0 0 1px #cbd5e0;
-            margin-bottom: 15px;
-            position: relative;
-            border-radius: 6px;
-            overflow: hidden;
-        }
-
-        .qr-graphic::after {
-            content: 'Дія';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: #00ffaa;
-            color: #000;
-            font-weight: 900;
-            padding: 4px 8px;
-            border-radius: 5px;
-            font-size: 13px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        }
-
-        .pulse-scanner {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 4px;
-            background: rgba(0, 255, 170, 0.85);
-            box-shadow: 0 0 10px #00ffaa, 0 0 4px #00ffaa;
-            animation: scan-pulse 2.2s infinite ease-in-out;
-        }
-
-        @keyframes scan-pulse {
-            0% { top: 0px; }
-            50% { top: 166px; }
-            100% { top: 0px; }
         }
 
         .sign-success-badge {
@@ -591,16 +816,162 @@ export const Application: React.FC = () => {
 
           <div className="card">
             {success ? (
-              <div className="text-center py-4">
-                <div style={{ fontSize: '60px', color: '#2ecc71', marginBottom: '20px' }}>✓</div>
-                <h3>Заяву успішно подано та зареєстровано!</h3>
-                <p>Ваша заява підписана за допомогою КЕП/Дія.Підпис та успішно занесена в реєстр.</p>
-                <div style={{ background: 'var(--bg-light)', padding: '20px', borderRadius: 'var(--radius-sm)', margin: '20px auto', maxWidth: '300px' }}>
-                  <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>Номер заяви:</div>
-                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: 'var(--dark-blue)' }}>{appNumber}</div>
+              <div className="py-2">
+                <div className="text-center">
+                  <div style={{ fontSize: '60px', color: '#2ecc71', marginBottom: '15px' }}>✓</div>
+                  <h3 style={{ color: 'var(--dark-blue)', marginBottom: '10px' }}>Заяву успішно подано та зареєстровано!</h3>
+                  <p className="text-muted" style={{ fontSize: '14.5px', maxWidth: '650px', margin: '0 auto 20px', lineHeight: '1.5' }}>
+                    Ваша заява засвідчена кваліфікованим електронним підписом (КЕП), внесена в базу даних кваліфікаційного центру та передана на розгляд кваліфікаційній комісії.
+                  </p>
+
+                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '15px 30px', borderRadius: '8px', margin: '20px auto', display: 'inline-block' }}>
+                    <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Реєстраційний номер заяви:</div>
+                    <div style={{ fontSize: '26px', fontWeight: 'bold', color: 'var(--dark-blue)', letterSpacing: '1px' }}>{appNumber}</div>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '12px', margin: '25px 0' }}>
+                    <button 
+                      type="button" 
+                      className="btn btn-primary" 
+                      style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 22px', fontSize: '14.5px' }}
+                      onClick={handlePrintApplication}
+                    >
+                      <span>🖨️</span> Роздрукувати заяву (PDF / Друк)
+                    </button>
+
+                    <button 
+                      type="button" 
+                      className="btn btn-outline" 
+                      style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', fontSize: '14.5px' }}
+                      onClick={() => setShowFullPreview(!showFullPreview)}
+                    >
+                      <span>{showFullPreview ? '▲ Згорнути заяву' : '👁️ Розгорнути повну заяву з документами'}</span>
+                    </button>
+
+                    <button 
+                      type="button" 
+                      className="btn btn-secondary" 
+                      style={{ padding: '10px 20px', fontSize: '14.5px' }}
+                      onClick={() => navigate('/registry')}
+                    >
+                      Перейти до Реєстру
+                    </button>
+                  </div>
                 </div>
-                <p className="mb-4">Ми надіслали підтвердження, копію заяви та подальші інструкції щодо проведення оцінювання на вашу електронну пошту.</p>
-                <button className="btn btn-primary" onClick={() => navigate('/registry')}>Перейти до Реєстру</button>
+
+                {/* EXPANDED FULL APPLICATION VIEW */}
+                {showFullPreview && (
+                  <div style={{ 
+                    marginTop: '30px', 
+                    padding: '30px', 
+                    background: '#fff', 
+                    border: '2px solid #e2e8f0', 
+                    borderRadius: '12px', 
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
+                    textAlign: 'left'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #0f3460', paddingBottom: '15px', marginBottom: '20px' }}>
+                      <div>
+                        <div style={{ fontWeight: 'bold', color: '#0f3460', fontSize: '15px' }}>
+                          Кваліфікаційний центр КЗ «ЗОІППО» ЗОР
+                        </div>
+                        <div style={{ fontSize: '12.5px', color: '#64748b' }}>
+                          Центр оцінювання і визнання результатів навчання
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <span className="badge" style={{ background: '#22c55e', color: '#fff', fontSize: '12px', padding: '5px 10px', borderRadius: '4px' }}>
+                          ✓ ЗАРЕЄСТРОВАНО
+                        </span>
+                        <div style={{ fontSize: '13px', fontWeight: 'bold', marginTop: '5px', color: '#1e293b' }}>
+                          № {appNumber}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ textAlign: 'center', margin: '20px 0' }}>
+                      <h4 style={{ textTransform: 'uppercase', letterSpacing: '1px', color: '#0f3460', margin: '0 0 4px' }}>
+                        Заява про проходження кваліфікаційного оцінювання
+                      </h4>
+                      <div style={{ fontSize: '13px', color: '#64748b' }}>
+                        для присвоєння (підтвердження) професійної кваліфікації «Фахівець із супроводу ветеранів війни та демобілізованих осіб»
+                      </div>
+                    </div>
+
+                    <div className="grid-2" style={{ gap: '20px', marginBottom: '20px' }}>
+                      <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                        <h5 style={{ margin: '0 0 10px', color: 'var(--primary)', fontSize: '14px', borderBottom: '1px solid #e2e8f0', paddingBottom: '5px' }}>
+                          👤 Персональні дані здобувача
+                        </h5>
+                        <table style={{ width: '100%', fontSize: '13px', lineHeight: '1.8' }}>
+                          <tbody>
+                            <tr><td style={{ color: '#64748b', width: '45%' }}>ПІБ:</td><td><strong>{formData.lname} {formData.fname} {formData.mname}</strong></td></tr>
+                            <tr><td style={{ color: '#64748b' }}>Дата народження:</td><td>{formatBirthDate(formData.birthdate)}</td></tr>
+                            <tr><td style={{ color: '#64748b' }}>Паспорт / ID:</td><td>{formData.passport}</td></tr>
+                            <tr><td style={{ color: '#64748b' }}>Телефон:</td><td>{formData.phone}</td></tr>
+                            <tr><td style={{ color: '#64748b' }}>Email:</td><td>{formData.email}</td></tr>
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                        <h5 style={{ margin: '0 0 10px', color: 'var(--primary)', fontSize: '14px', borderBottom: '1px solid #e2e8f0', paddingBottom: '5px' }}>
+                          🎓 Професійні відомості
+                        </h5>
+                        <table style={{ width: '100%', fontSize: '13px', lineHeight: '1.8' }}>
+                          <tbody>
+                            <tr><td style={{ color: '#64748b', width: '45%' }}>Претендує на:</td><td><strong style={{ color: '#0f3460' }}>{formData.level}</strong></td></tr>
+                            <tr><td style={{ color: '#64748b' }}>Рівень вищої освіти:</td><td>{formData.education}</td></tr>
+                            <tr><td style={{ color: '#64748b' }}>Стаж роботи:</td><td>{formData.experience} років</td></tr>
+                            <tr><td style={{ color: '#64748b' }}>Згода на збір ПД:</td><td><span style={{ color: '#16a34a', fontWeight: 'bold' }}>✓ Надано ({getTodayUkrainianDate().formatted})</span></td></tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
+                      <h5 style={{ margin: '0 0 10px', color: 'var(--primary)', fontSize: '14px', borderBottom: '1px solid #e2e8f0', paddingBottom: '5px' }}>
+                        📎 Додані до заяви документи
+                      </h5>
+                      <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', lineHeight: '1.9' }}>
+                        <li>Копія паспорта / ID-картки: <strong>{uploadedDocs.passport?.name ? `${uploadedDocs.passport.name} (${uploadedDocs.passport.size})` : 'Додано в електронній формі'}</strong></li>
+                        <li>Копія документа про вищу освіту з додатком: <strong>{uploadedDocs.education?.name ? `${uploadedDocs.education.name} (${uploadedDocs.education.size})` : 'Додано в електронній формі'}</strong></li>
+                        <li>Документи про стаж та досвід роботи: <strong>{uploadedDocs.experience?.name ? `${uploadedDocs.experience.name} (${uploadedDocs.experience.size})` : (parseInt(formData.experience) > 0 ? 'Додано в електронній формі' : 'Не надається (стаж 0 років)')}</strong></li>
+                        <li>Електронна згода на збір та обробку персональних даних від <strong>{getTodayUkrainianDate().formatted}</strong></li>
+                      </ul>
+                    </div>
+
+                    {/* Cryptographic Signature Stamp Box */}
+                    <div style={{ border: '2px solid #0f3460', borderRadius: '8px', padding: '16px 20px', background: '#f0f7ff' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #bfdbfe', paddingBottom: '8px', marginBottom: '10px' }}>
+                        <div style={{ fontWeight: 'bold', color: '#0f3460', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span>🛡️</span> КВАЛІФІКОВАНИЙ ЕЛЕКТРОННИЙ ПІДПИС (КЕП) НАКЛАДЕНО
+                        </div>
+                        <span style={{ fontSize: '12px', color: '#16a34a', fontWeight: 'bold' }}>✓ СЕРТИФІКАТ ДІЙСНИЙ</span>
+                      </div>
+                      <table style={{ width: '100%', fontSize: '13px', lineHeight: '1.7' }}>
+                        <tbody>
+                          <tr><td style={{ color: '#64748b', width: '32%' }}>Підписувач:</td><td><strong>{kepInfo?.name || `${formData.lname} ${formData.fname} ${formData.mname}`}</strong></td></tr>
+                          <tr><td style={{ color: '#64748b' }}>РНОКПП (ДРФО):</td><td><strong>{kepInfo?.drfo || '—'}</strong></td></tr>
+                          <tr><td style={{ color: '#64748b' }}>АЦСК Надавач:</td><td>{kepInfo?.issuer || 'Акредитований центр сертифікації ключів'}</td></tr>
+                          <tr><td style={{ color: '#64748b' }}>Час підписання:</td><td>{signatureDetails?.timestamp || new Date().toLocaleString('uk-UA')}</td></tr>
+                          <tr><td style={{ color: '#64748b' }}>Юридичний статус:</td><td>Прирівняно до власноручного підпису згідно Закону України «Про електронні довірчі послуги»</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div style={{ marginTop: '25px', textAlign: 'center' }}>
+                      <button 
+                        type="button" 
+                        className="btn btn-primary" 
+                        style={{ padding: '10px 24px', fontSize: '14.5px' }}
+                        onClick={handlePrintApplication}
+                      >
+                        🖨️ Роздрукувати офіційний примірник заяви
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <>
@@ -724,17 +1095,41 @@ export const Application: React.FC = () => {
                     <div className="alert alert-info">
                       Усі документи повинні бути у форматі PDF, JPG або PNG. Максимальний розмір одного файлу - 5 МБ.
                     </div>
+                    
                     <div className="form-group">
-                      <label className="form-label">Копія паспорта (або ID-картки) *</label>
-                      <input type="file" className="form-control" />
+                      <label className="form-label">Копія паспорта громадянина України (або ID-картки) *</label>
+                      {uploadedDocs.passport ? (
+                        <div style={{ padding: '10px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13.5px' }}>
+                          <span>📄 <strong>{uploadedDocs.passport.name}</strong> ({uploadedDocs.passport.size})</span>
+                          <button type="button" className="btn btn-outline" style={{ padding: '2px 8px', fontSize: '12px' }} onClick={() => setUploadedDocs(prev => ({ ...prev, passport: undefined }))}>Змінити</button>
+                        </div>
+                      ) : (
+                        <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="form-control" onChange={(e) => handleFileUpload('passport', e)} />
+                      )}
                     </div>
+
                     <div className="form-group">
-                      <label className="form-label">Копія документа про освіту *</label>
-                      <input type="file" className="form-control" />
+                      <label className="form-label">Копія документа про вищу освіту (диплом з додатком) *</label>
+                      {uploadedDocs.education ? (
+                        <div style={{ padding: '10px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13.5px' }}>
+                          <span>📄 <strong>{uploadedDocs.education.name}</strong> ({uploadedDocs.education.size})</span>
+                          <button type="button" className="btn btn-outline" style={{ padding: '2px 8px', fontSize: '12px' }} onClick={() => setUploadedDocs(prev => ({ ...prev, education: undefined }))}>Змінити</button>
+                        </div>
+                      ) : (
+                        <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="form-control" onChange={(e) => handleFileUpload('education', e)} />
+                      )}
                     </div>
+
                     <div className="form-group">
-                      <label className="form-label">Документи, що підтверджують стаж роботи</label>
-                      <input type="file" className="form-control" />
+                      <label className="form-label">Документи, що підтверджують стаж та досвід роботи</label>
+                      {uploadedDocs.experience ? (
+                        <div style={{ padding: '10px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13.5px' }}>
+                          <span>📄 <strong>{uploadedDocs.experience.name}</strong> ({uploadedDocs.experience.size})</span>
+                          <button type="button" className="btn btn-outline" style={{ padding: '2px 8px', fontSize: '12px' }} onClick={() => setUploadedDocs(prev => ({ ...prev, experience: undefined }))}>Змінити</button>
+                        </div>
+                      ) : (
+                        <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="form-control" onChange={(e) => handleFileUpload('experience', e)} />
+                      )}
                     </div>
                   </div>
                 )}
@@ -751,7 +1146,8 @@ export const Application: React.FC = () => {
                       <p style={{ margin: '0 0 6px' }}><strong>Паспортні дані:</strong> {formData.passport}</p>
                       <p style={{ margin: '0 0 6px' }}><strong>Претендує на:</strong> {formData.level}</p>
                       <p style={{ margin: '0 0 6px' }}><strong>Освіта:</strong> {formData.education}</p>
-                      <p style={{ margin: '0' }}><strong>Згода на збір та обробку ПД:</strong> Надано ({getTodayUkrainianDate().formatted})</p>
+                      <p style={{ margin: '0 0 6px' }}><strong>Згода на збір та обробку ПД:</strong> Надано ({getTodayUkrainianDate().formatted})</p>
+                      <p style={{ margin: '0' }}><strong>Додані документи:</strong> {uploadedDocs.passport ? 'Паспорт, ' : ''}{uploadedDocs.education ? 'Диплом, ' : ''}{uploadedDocs.experience ? 'Документи про стаж' : 'Електронна заява'}</p>
                     </div>
 
                     <div style={{ padding: '20px', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#fff' }}>

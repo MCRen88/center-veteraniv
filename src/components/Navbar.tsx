@@ -276,7 +276,9 @@ export const Navbar: React.FC = () => {
           <div className={`nav-links ${mobileMenuOpen ? 'active' : ''}`}>
             <NavLink to="/" className={({isActive}) => isActive ? "nav-link active" : "nav-link"} onClick={() => setMobileMenuOpen(false)}>Головна</NavLink>
             <NavLink to="/docs" className={({isActive}) => isActive ? "nav-link active" : "nav-link"} onClick={() => setMobileMenuOpen(false)}>Нормативна база</NavLink>
-            <NavLink to="/application" className={({isActive}) => isActive ? "nav-link active" : "nav-link"} onClick={() => setMobileMenuOpen(false)}>Подати заяву</NavLink>
+            {!state.currentUser && (
+              <NavLink to="/application" className={({isActive}) => isActive ? "nav-link active" : "nav-link"} onClick={() => setMobileMenuOpen(false)}>Подати заяву</NavLink>
+            )}
             <NavLink to="/registry" className={({isActive}) => isActive ? "nav-link active" : "nav-link"} onClick={() => setMobileMenuOpen(false)}>Реєстр</NavLink>
             
             {state.currentUser ? (

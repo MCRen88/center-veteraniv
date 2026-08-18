@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useAppContext } from '../context/AppContext';
 
 export const Home: React.FC = () => {
+  const { state } = useAppContext();
   const [calcLevel, setCalcLevel] = useState('Фахівець із супроводу');
   const [calcField, setCalcField] = useState('А «Освіта»');
   const [calcEdu, setCalcEdu] = useState('Бакалавр');
@@ -212,7 +214,15 @@ export const Home: React.FC = () => {
           </div>
           <h1 className="hero-title">Кваліфікаційний центр сертифікації фахівців із супроводу ветеранів</h1>
           <div className="hero-buttons">
-            <Link to="/application" className="btn btn-secondary">Подати заяву</Link>
+            {state.currentUser ? (
+              (state.currentUser.role === 'admin' || state.currentUser.role === 'teacher') ? (
+                <Link to="/admin" className="btn btn-secondary">Адмін-панель</Link>
+              ) : (
+                <Link to="/dashboard" className="btn btn-secondary">Особистий кабінет</Link>
+              )
+            ) : (
+              <Link to="/application" className="btn btn-secondary">Подати заяву</Link>
+            )}
             <Link to="/test" className="btn btn-secondary">Тестування</Link>
           </div>
         </div>

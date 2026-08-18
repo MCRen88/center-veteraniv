@@ -321,6 +321,266 @@ export const AdminDashboard: React.FC = () => {
     alert("Дані користувача успішно оновлено!");
   };
 
+  const printOfficialApplication = (app: any) => {
+    if (!app) return;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const fullName = `${app.lname} ${app.fname} ${app.mname || ''}`.trim();
+    const appDate = app.created_at ? new Date(app.created_at).toLocaleDateString('uk-UA') : new Date().toLocaleDateString('uk-UA');
+    const birthDate = app.birthdate ? new Date(app.birthdate).toLocaleDateString('uk-UA') : '—';
+    
+    let sig: any = null;
+    if (app.signature_details) {
+      if (typeof app.signature_details === 'string') {
+        try { sig = JSON.parse(app.signature_details); } catch(e) {}
+      } else {
+        sig = app.signature_details;
+      }
+    }
+
+    const signerName = sig?.certificateDetails?.subject?.CN || fullName;
+    const signerDrfo = sig?.certificateDetails?.subject?.serialNumber || '—';
+    const signerIssuer = sig?.certificateDetails?.issuer?.CN || 'Акредитований надавач електронних довірчих послуг';
+    const signTime = sig?.timestamp || appDate;
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html lang="uk">
+      <head>
+        <meta charset="UTF-8">
+        <title>Заява про проходження оцінювання — ${fullName}</title>
+        <style>
+          @page {
+            size: A4;
+            margin: 20mm 15mm 20mm 20mm;
+          }
+          body {
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 13pt;
+            line-height: 1.4;
+            color: #000;
+            background: #fff;
+            margin: 0;
+            padding: 20px;
+          }
+          .header-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 25px;
+          }
+          .header-table td {
+            vertical-align: top;
+            padding: 0;
+          }
+          .inst-info {
+            width: 50%;
+            font-size: 10.5pt;
+            line-height: 1.3;
+            padding-right: 15px;
+          }
+          .app-meta {
+            width: 50%;
+            font-size: 11pt;
+            line-height: 1.35;
+            padding-left: 10px;
+          }
+          .doc-title {
+            text-align: center;
+            margin: 25px 0 15px;
+          }
+          .doc-title h1 {
+            font-size: 16pt;
+            font-weight: bold;
+            letter-spacing: 2px;
+            margin: 0 0 5px 0;
+          }
+          .doc-title p {
+            font-size: 11pt;
+            font-style: italic;
+            margin: 0;
+          }
+          .body-text {
+            text-align: justify;
+            text-indent: 35px;
+            margin-bottom: 12px;
+            font-size: 12.5pt;
+            line-height: 1.45;
+          }
+          .details-list {
+            margin: 10px 0 15px 0;
+            padding-left: 25px;
+            font-size: 12pt;
+          }
+          .details-list li {
+            margin-bottom: 4px;
+          }
+          .stamp-container {
+            margin-top: 30px;
+            display: flex;
+            justify-content: flex-end;
+          }
+          .kep-stamp {
+            border: 2px solid #0f3460;
+            border-radius: 6px;
+            padding: 10px 14px;
+            background: #f8faff;
+            width: 380px;
+            font-family: Arial, sans-serif;
+            font-size: 9.5pt;
+            line-height: 1.35;
+            color: #1e293b;
+          }
+          .kep-stamp-header {
+            font-weight: bold;
+            color: #0f3460;
+            border-bottom: 1px solid #cbd5e1;
+            padding-bottom: 4px;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 10pt;
+          }
+          .kep-table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+          .kep-table td {
+            padding: 2px 0;
+          }
+          .kep-label {
+            color: #64748b;
+            width: 38%;
+          }
+          .kep-val {
+            font-weight: 600;
+          }
+          .print-btn-bar {
+            text-align: center;
+            margin-bottom: 25px;
+            padding: 12px;
+            background: #f1f5f9;
+            border-radius: 8px;
+          }
+          .btn-print {
+            background: #2563eb;
+            color: #fff;
+            border: none;
+            padding: 10px 24px;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+          }
+          @media print {
+            .print-btn-bar {
+              display: none;
+            }
+            body {
+              padding: 0;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="print-btn-bar">
+          <button class="btn-print" onclick="window.print()">🖨️ Роздрукувати заяву (або Зберегти як PDF)</button>
+        </div>
+
+        <table class="header-table">
+          <tr>
+            <td class="inst-info">
+              <strong>Комунальний заклад «Запорізький обласний інститут післядипломної педагогічної освіти» Запорізької обласної ради</strong><br/>
+              <span style="font-size: 9.5pt; color: #444;">
+                Кваліфікаційний центр оцінювання і визнання результатів навчання<br/>
+                вул. Незалежної України, 57-А, м. Запоріжжя, 69035<br/>
+                Email: orgmetodcentr@zoippo.net.ua
+              </span>
+            </td>
+            <td class="app-meta">
+              <strong>Кваліфікаційному центру КЗ «ЗОІППО» ЗОР</strong><br/>
+              Голові кваліфікаційної комісії<br/>
+              <strong>від:</strong> ${fullName}<br/>
+              <strong>Дата народження:</strong> ${birthDate}<br/>
+              <strong>Паспорт / ID:</strong> ${app.passport || 'Вказано при реєстрації'}<br/>
+              <strong>Телефон:</strong> ${app.phone}<br/>
+              <strong>E-mail:</strong> ${app.email}
+            </td>
+          </tr>
+        </table>
+
+        <div class="doc-title">
+          <h1>З А Я В А</h1>
+          <p>про проходження процедури оцінювання і визнання результатів навчання<br/>(присвоєння / підтвердження професійної кваліфікації)</p>
+          <div style="font-size: 10.5pt; margin-top: 4px; font-weight: bold;">Реєстраційний № ${app.app_number} від ${appDate}</div>
+        </div>
+
+        <div class="body-text">
+          Прошу допустити мене до процедури кваліфікаційного оцінювання і визнання результатів навчання для присвоєння (підтвердження) професійної кваліфікації <strong>«Фахівець із супроводу ветеранів війни та демобілізованих осіб»</strong> (рівень кваліфікації: <strong>${app.level}</strong>) відповідно до вимог професійного стандарту.
+        </div>
+
+        <div style="margin-top: 10px; font-size: 12pt;">
+          <strong>Відомості про здобувача:</strong>
+          <ul class="details-list">
+            <li>Рівень вищої освіти: <strong>${app.education}</strong></li>
+            <li>Стаж роботи: <strong>${app.experience} р.</strong></li>
+            <li>Згода на збір та обробку персональних даних: <strong>Надано згідно з вимогами Закону України «Про захист персональних даних»</strong></li>
+          </ul>
+        </div>
+
+        <div style="margin-top: 10px; font-size: 12pt;">
+          <strong>До заяви додано документи в електронній формі:</strong>
+          <ol class="details-list">
+            <li>Копія паспорта громадянина України / ID-картки: <em>Додано в електронній формі</em></li>
+            <li>Копія документа про вищу освіту з додатком: <em>Додано в електронній формі</em></li>
+            <li>Документи, що підтверджують досвід та стаж роботи: <em>${app.experience > 0 ? 'Додано в електронній формі' : 'Не надається (стаж 0 років)'}</em></li>
+            <li>Згода на збір та обробку персональних даних від ${appDate}</li>
+          </ol>
+        </div>
+
+        <div class="body-text" style="font-size: 11.5pt; margin-top: 15px;">
+          Засвідчую вірність внесених відомостей та відповідність доданих електронних копій оригіналам документів. Мені відомо про відповідальність за надання недостовірних даних.
+        </div>
+
+        <div class="stamp-container">
+          <div class="kep-stamp">
+            <div class="kep-stamp-header">
+              <span>🛡️</span> КВАЛІФІКОВАНИЙ ЕЛЕКТРОННИЙ ПІДПИС
+            </div>
+            <table class="kep-table">
+              <tr>
+                <td class="kep-label">Підписувач:</td>
+                <td class="kep-val">${signerName}</td>
+              </tr>
+              <tr>
+                <td class="kep-label">РНОКПП (ДРФО):</td>
+                <td class="kep-val">${signerDrfo}</td>
+              </tr>
+              <tr>
+                <td class="kep-label">АЦСК (Надавач):</td>
+                <td class="kep-val">${signerIssuer}</td>
+              </tr>
+              <tr>
+                <td class="kep-label">Мітка часу:</td>
+                <td class="kep-val">${signTime}</td>
+              </tr>
+              <tr>
+                <td class="kep-label">Статус:</td>
+                <td class="kep-val" style="color: #16a34a;">Дійсний (перевірено в реєстрі)</td>
+              </tr>
+            </table>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
+
   const printDiagnosticReport = (user: any, score: any) => {
     if (!user || !score) return;
     const percentage = Math.round((score.score / score.total) * 100);
@@ -1789,6 +2049,9 @@ export const AdminDashboard: React.FC = () => {
             </div>
 
             <div className="d-flex justify-content-end" style={{ gap: '10px', borderTop: '1px solid #eee', paddingTop: '20px' }}>
+              <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '6px' }} onClick={() => printOfficialApplication(selectedApp)}>
+                <span>🖨️</span> Роздрукувати заяву
+              </button>
               <button className="btn btn-outline" onClick={() => setSelectedApp(null)}>Закрити</button>
               {selectedApp.status === 'pending' && (
                 <>
