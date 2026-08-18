@@ -3,45 +3,8 @@ import { useAppContext } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
 import forge from 'node-forge';
 
-const compressImage = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const maxDim = 400; // Small size for fast database loading
-        let width = img.width;
-        let height = img.height;
-        if (width > maxDim || height > maxDim) {
-          if (width > height) {
-            height = Math.round((height * maxDim) / width);
-            width = maxDim;
-          } else {
-            width = Math.round((width * maxDim) / height);
-            height = maxDim;
-          }
-        }
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', 0.6)); // Compress to JPEG with 60% quality
-        } else {
-          resolve(e.target?.result as string);
-        }
-      };
-      img.onerror = () => reject(new Error('Помилка завантаження зображення'));
-      img.src = e.target?.result as string;
-    };
-    reader.onerror = () => reject(new Error('Помилка читання файлу'));
-    reader.readAsDataURL(file);
-  });
-};
-
 export const Application: React.FC = () => {
-  const { addRegistryItem, submitApplication: submitAppDb, sendVerificationEmail, state } = useAppContext();
+  const { addRegistryItem, submitApplication: submitAppDb, state } = useAppContext();
   const navigate = useNavigate();
 
   const [step, setStep] = useState(1);
@@ -92,37 +55,16 @@ export const Application: React.FC = () => {
     return dateStr;
   };
 
-  // Signature States
-  const [signMethod, setSignMethod] = useState<'kep' | 'alternative'>('kep');
+  // Signature States (КЕП)
   const [kepState, setKepState] = useState<'idle' | 'reading' | 'success'>('idle');
-  const [kepFileType, setKepFileType] = useState('file'); // 'file' or 'token'
   const [kepAcsp, setKepAcsp] = useState('АЦСК АТ КБ «ПРИВАТБАНК»');
   const [kepPassword, setKepPassword] = useState('');
   const [kepFileName, setKepFileName] = useState('');
   const [kepFileBytes, setKepFileBytes] = useState<ArrayBuffer | null>(null);
   const [kepInfo, setKepInfo] = useState<{ name: string; drfo: string; issuer: string } | null>(null);
-  
-  // Alternative verification states (Email OTP + ID)
-  const [altEmail, setAltEmail] = useState('');
-  const [altDrfo, setAltDrfo] = useState('');
-  const [altIdCardFile, setAltIdCardFile] = useState<string | null>(null);
-  const [altSelfieFile, setAltSelfieFile] = useState<string | null>(null);
-  const [altOtpSent, setAltOtpSent] = useState(false);
-  const [altOtpCode, setAltOtpCode] = useState('');
-  const [altOtpInput, setAltOtpInput] = useState('');
-  const [altState, setAltState] = useState<'idle' | 'verifying' | 'success'>('idle');
-  const [isSendingEmail, setIsSendingEmail] = useState(false);
 
   const [isSigned, setIsSigned] = useState(false);
   const [signatureDetails, setSignatureDetails] = useState<any>(null);
-
-  React.useEffect(() => {
-    if (step === 5) {
-      if (formData.email && !altEmail) {
-        setAltEmail(formData.email);
-      }
-    }
-  }, [step, formData.email, altEmail]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -160,295 +102,126 @@ export const Application: React.FC = () => {
     setStep(prev => prev - 1);
   };
 
-  // Alternative Verification Handlers
-  const handleIdCardUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      try {
-        const compressed = await compressImage(file);
-        setAltIdCardFile(compressed);
-      } catch (err: any) {
-        alert(err.message || "Помилка завантаження зображення.");
-      }
-    }
-  };
-
-  const handleSelfieUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      try {
-        const compressed = await compressImage(file);
-        setAltSelfieFile(compressed);
-      } catch (err: any) {
-        alert(err.message || "Помилка завантаження зображення.");
-      }
-    }
-  };
-
-  const handleSendAltOtp = async () => {
-    if (!altEmail || !altEmail.includes('@')) {
-      alert("Будь ласка, введіть коректну адресу електронної пошти.");
-      return;
-    }
-    if (!altDrfo || altDrfo.length !== 10) {
-      alert("Будь ласка, введіть правильний 10-значний РНОКПП (ДРФО).");
-      return;
-    }
-    if (!altIdCardFile) {
-      alert("Будь ласка, завантажте фото паспорта або ID-картки.");
-      return;
-    }
-    if (!altSelfieFile) {
-      alert("Будь ласка, завантажте селфі з документом.");
-      return;
-    }
-
-    setIsSendingEmail(true);
-    const fullName = `${formData.lname} ${formData.fname} ${formData.mname || ''}`.trim() || 'Заявник';
-    const res = await sendVerificationEmail(altEmail, fullName);
-    setIsSendingEmail(false);
-
-    if (!res.success) {
-      alert(res.message);
-      return;
-    }
-
-    setAltOtpCode(res.code);
-    setAltOtpSent(true);
-    setAltState('verifying');
-    
-    alert(`[Повідомлення системи електронної пошти]\nЛист із одноразовим кодом успішно надіслано на адресу: ${altEmail}\nВідправник: ${state.emailConfig.senderName} (${state.emailConfig.senderEmail})\nТема: ${state.emailConfig.emailSubject}\n\nКОД ДЛЯ ВВЕДЕННЯ: ${res.code}`);
-  };
-
-  const handleVerifyAltOtp = () => {
-    if (altOtpInput.trim() !== altOtpCode.trim()) {
-      alert("Некоректний код підтвердження з пошти. Перевірте та спробуйте ще раз.");
-      return;
-    }
-
-    setAltState('success');
-    setIsSigned(true);
-    setFormData(prev => ({ ...prev, consent: true }));
-    setSignatureDetails({
-      type: 'ID-паспорт + Селфі + Email-OTP',
-      signerName: `${formData.lname} ${formData.fname} ${formData.mname || ''}`.trim(),
-      signerDrfo: altDrfo,
-      signerEmail: altEmail,
-      issuer: `Верифікація за електронною поштою ${altEmail}`,
-      serialNumber: 'ALT-VERIFY-EMAIL-OTP',
-      timestamp: new Date().toLocaleString('uk-UA'),
-      idCardPhoto: altIdCardFile,
-      selfiePhoto: altSelfieFile,
-      email: altEmail,
-      phone: formData.phone
-    });
-  };
-
   const handleKepSign = () => {
     if (kepState === 'success') return;
-    if (kepFileType === 'file') {
-      if (!kepFileName || !kepFileBytes) {
-        alert("Будь ласка, завантажте файл ключа.");
-        return;
-      }
-      if (!kepPassword) {
-        alert("Будь ласка, введіть пароль захисту особистого ключа.");
-        return;
-      }
-      setKepState('reading');
-      setTimeout(() => {
-        try {
-          // Convert ArrayBuffer to binary string
-          const bytes = new Uint8Array(kepFileBytes);
-          let binary = '';
-          for (let i = 0; i < bytes.byteLength; i++) {
-            binary += String.fromCharCode(bytes[i]);
-          }
-          
-          const p12Asn1 = forge.asn1.fromDer(binary);
-          const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, false, kepPassword);
-          
-          // Get cert bags
-          const certBags = p12.getBags({ bagType: forge.pki.oids.certBag });
-          const certBag = certBags[forge.pki.oids.certBag]?.[0];
-          if (!certBag || !certBag.cert) {
-            throw new Error("Сертифікат не знайдено у файлі ключа.");
-          }
-          const cert = certBag.cert as forge.pki.Certificate;
-          
-          // Get key bags
-          const keyBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag });
-          let keyBag = keyBags[forge.pki.oids.pkcs8ShroudedKeyBag]?.[0];
-          if (!keyBag) {
-            const rawKeyBags = p12.getBags({ bagType: forge.pki.oids.keyBag });
-            keyBag = rawKeyBags[forge.pki.oids.keyBag]?.[0];
-          }
-          if (!keyBag || !keyBag.key) {
-            throw new Error("Приватний ключ не знайдено у файлі ключа.");
-          }
-          const privateKey = keyBag.key;
-          
-          // Extract subject details
-          let cn = '';
-          let drfo = '';
-          let organization = '';
-          
-          for (const attr of cert.subject.attributes) {
-            const val = attr.value;
-            if (typeof val === 'string') {
-              if (attr.name === 'commonName') {
-                cn = val;
-              } else if (attr.name === 'serialNumber') {
-                drfo = val.replace(/[^0-9]/g, '');
-              } else if (attr.name === 'organizationName') {
-                organization = val;
-              }
+    if (!kepFileName || !kepFileBytes) {
+      alert("Будь ласка, завантажте файл особистого ключа (напр. key-6.dat, .pfx, .pkcs12).");
+      return;
+    }
+    if (!kepPassword) {
+      alert("Будь ласка, введіть пароль захисту особистого ключа.");
+      return;
+    }
+    setKepState('reading');
+    setTimeout(() => {
+      try {
+        // Convert ArrayBuffer to binary string
+        const bytes = new Uint8Array(kepFileBytes);
+        let binary = '';
+        for (let i = 0; i < bytes.byteLength; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        
+        const p12Asn1 = forge.asn1.fromDer(binary);
+        const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, false, kepPassword);
+        
+        // Get cert bags
+        const certBags = p12.getBags({ bagType: forge.pki.oids.certBag });
+        const certBag = certBags[forge.pki.oids.certBag]?.[0];
+        if (!certBag || !certBag.cert) {
+          throw new Error("Сертифікат не знайдено у файлі ключа.");
+        }
+        const cert = certBag.cert as forge.pki.Certificate;
+        
+        // Get key bags
+        const keyBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag });
+        let keyBag = keyBags[forge.pki.oids.pkcs8ShroudedKeyBag]?.[0];
+        if (!keyBag) {
+          const rawKeyBags = p12.getBags({ bagType: forge.pki.oids.keyBag });
+          keyBag = rawKeyBags[forge.pki.oids.keyBag]?.[0];
+        }
+        if (!keyBag || !keyBag.key) {
+          throw new Error("Приватний ключ не знайдено у файлі ключа.");
+        }
+        const privateKey = keyBag.key;
+        
+        // Extract subject details
+        let cn = '';
+        let drfo = '';
+        let organization = '';
+        
+        for (const attr of cert.subject.attributes) {
+          const val = attr.value;
+          if (typeof val === 'string') {
+            if (attr.name === 'commonName') {
+              cn = val;
+            } else if (attr.name === 'serialNumber') {
+              drfo = val.replace(/[^0-9]/g, '');
+            } else if (attr.name === 'organizationName') {
+              organization = val;
             }
           }
-          
-          if (!cn) {
-            cn = `${formData.lname} ${formData.fname} ${formData.mname || ''}`.trim();
-          }
-          if (!drfo) {
-            drfo = cert.serialNumber || `3${Math.floor(Math.random() * 900000000) + 100000000}`;
-          }
-          
-          const dataToSign = JSON.stringify({
-            app_number: `ЗЯ-${new Date().getFullYear()}`,
-            lname: formData.lname,
-            fname: formData.fname,
-            mname: formData.mname,
-            birthdate: formData.birthdate,
-            passport: formData.passport,
-            phone: formData.phone,
-            email: formData.email,
-            level: formData.level,
-            education: formData.education,
-            experience: formData.experience
-          });
-          
-          const md = forge.md.sha256.create();
-          md.update(dataToSign, 'utf8');
-          const signatureBytes = privateKey.sign(md);
-          const signatureBase64 = forge.util.encode64(signatureBytes);
-          const certPem = forge.pki.certificateToPem(cert);
-          
-          const details = {
-            type: 'Файловий КЕП' as const,
-            signerName: cn,
-            signerDrfo: drfo,
-            issuer: kepAcsp || organization || 'АЦСК',
-            serialNumber: cert.serialNumber || 'N/A',
-            timestamp: new Date().toLocaleString('uk-UA'),
-            signature: signatureBase64,
-            certificate: certPem,
-            signedData: dataToSign
-          };
-          
-          setKepState('success');
-          setIsSigned(true);
-          setFormData(prev => ({ ...prev, consent: true }));
-          setKepInfo({
-            name: cn,
-            drfo: drfo,
-            issuer: kepAcsp || organization || 'АЦСК'
-          });
-          setSignatureDetails(details);
-        } catch (err: any) {
-          console.error(err);
-          alert("Помилка зчитування КЕП: " + (err.message || "Невірний пароль або пошкоджений файл ключа."));
-          setKepState('idle');
         }
-      }, 2000);
-    } else {
-      if (!kepPassword) {
-        alert("Будь ласка, введіть PIN-код доступу до токена.");
-        return;
+        
+        if (!cn) {
+          cn = `${formData.lname} ${formData.fname} ${formData.mname || ''}`.trim();
+        }
+        if (!drfo) {
+          drfo = cert.serialNumber || `3${Math.floor(Math.random() * 900000000) + 100000000}`;
+        }
+        
+        const dataToSign = JSON.stringify({
+          app_number: `ЗЯ-${new Date().getFullYear()}`,
+          lname: formData.lname,
+          fname: formData.fname,
+          mname: formData.mname,
+          birthdate: formData.birthdate,
+          passport: formData.passport,
+          phone: formData.phone,
+          email: formData.email,
+          level: formData.level,
+          education: formData.education,
+          experience: formData.experience
+        });
+        
+        const md = forge.md.sha256.create();
+        md.update(dataToSign, 'utf8');
+        const signatureBytes = privateKey.sign(md);
+        const signatureBase64 = forge.util.encode64(signatureBytes);
+        const certPem = forge.pki.certificateToPem(cert);
+        
+        const details = {
+          type: 'Файловий КЕП' as const,
+          signerName: cn,
+          signerDrfo: drfo,
+          issuer: kepAcsp || organization || 'АЦСК',
+          serialNumber: cert.serialNumber || 'N/A',
+          timestamp: new Date().toLocaleString('uk-UA'),
+          signature: signatureBase64,
+          certificate: certPem,
+          signedData: dataToSign
+        };
+        
+        setKepState('success');
+        setIsSigned(true);
+        setFormData(prev => ({ ...prev, consent: true }));
+        setKepInfo({
+          name: cn,
+          drfo: drfo,
+          issuer: kepAcsp || organization || 'АЦСК'
+        });
+        setSignatureDetails(details);
+      } catch (err: any) {
+        console.error(err);
+        alert("Помилка зчитування КЕП: " + (err.message || "Невірний пароль або пошкоджений файл ключа."));
+        setKepState('idle');
       }
-      setKepState('reading');
-      setTimeout(() => {
-        try {
-          const keys = forge.pki.rsa.generateKeyPair(512);
-          const cert = forge.pki.createCertificate();
-          cert.publicKey = keys.publicKey;
-          cert.serialNumber = '02';
-          cert.validity.notBefore = new Date();
-          cert.validity.notAfter = new Date();
-          cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 1);
-          
-          const attrs = [{
-            name: 'commonName',
-            value: `${formData.lname} ${formData.fname} ${formData.mname || ''}`.trim()
-          }, {
-            name: 'countryName',
-            value: 'UA'
-          }, {
-            name: 'organizationName',
-            value: 'Апаратний токен (Тестовий)'
-          }, {
-            name: 'serialNumber',
-            value: `3${Math.floor(Math.random() * 900000000) + 100000000}`
-          }];
-          
-          cert.setSubject(attrs);
-          cert.setIssuer(attrs);
-          cert.sign(keys.privateKey, forge.md.sha256.create());
-          
-          const dataToSign = JSON.stringify({
-            app_number: `ЗЯ-${new Date().getFullYear()}`,
-            lname: formData.lname,
-            fname: formData.fname,
-            mname: formData.mname,
-            birthdate: formData.birthdate,
-            passport: formData.passport,
-            phone: formData.phone,
-            email: formData.email,
-            level: formData.level,
-            education: formData.education,
-            experience: formData.experience
-          });
-          
-          const md = forge.md.sha256.create();
-          md.update(dataToSign, 'utf8');
-          const signatureBytes = keys.privateKey.sign(md);
-          const signatureBase64 = forge.util.encode64(signatureBytes);
-          const certPem = forge.pki.certificateToPem(cert);
-          
-          const sName = `${formData.lname} ${formData.fname} ${formData.mname || ''}`.trim();
-          const sDrfo = attrs[3].value;
-          const sIssuer = 'Апаратний токен (Вбудований)';
-          
-          setKepState('success');
-          setIsSigned(true);
-          setFormData(prev => ({ ...prev, consent: true }));
-          setKepInfo({
-            name: sName,
-            drfo: sDrfo,
-            issuer: sIssuer
-          });
-          setSignatureDetails({
-            type: 'Апаратний токен',
-            signerName: sName,
-            signerDrfo: sDrfo,
-            issuer: sIssuer,
-            serialNumber: cert.serialNumber,
-            timestamp: new Date().toLocaleString('uk-UA'),
-            signature: signatureBase64,
-            certificate: certPem,
-            signedData: dataToSign
-          });
-        } catch (err: any) {
-          console.error(err);
-          alert("Помилка зчитування токена: " + err.message);
-          setKepState('idle');
-        }
-      }, 2000);
-    }
+    }, 1500);
   };
 
   const submitApplication = async () => {
     if (!isSigned) {
-      alert("Будь ласка, підпишіть заяву за допомогою Дія.Підпис або КЕП перед відправкою.");
+      alert("Будь ласка, підпишіть заяву за допомогою КЕП або верифікації перед відправкою.");
       return;
     }
     if (!formData.consent) {
@@ -969,9 +742,9 @@ export const Application: React.FC = () => {
                 {/* STEP 5 */}
                 {step === 5 && (
                   <div>
-                    <h3 className="mb-4">Крок 5. Накладання електронного підпису</h3>
+                    <h3 className="mb-4">Крок 5. Накладання електронного підпису (КЕП)</h3>
                     <div className="alert alert-info">
-                      Уважно перевірте внесені дані. Після підписання заяви КЕП або альтернативною верифікацією зміни внести буде неможливо.
+                      Уважно перевірте внесені дані. Після накладання електронного підпису (КЕП) зміни до заяви внести буде неможливо.
                     </div>
                     <div style={{ background: 'var(--bg-light)', padding: '20px', borderRadius: 'var(--radius-sm)', marginBottom: '25px' }}>
                       <p style={{ margin: '0 0 6px' }}><strong>Заявник:</strong> {formData.lname} {formData.fname} {formData.mname}</p>
@@ -981,293 +754,133 @@ export const Application: React.FC = () => {
                       <p style={{ margin: '0' }}><strong>Згода на збір та обробку ПД:</strong> Надано ({getTodayUkrainianDate().formatted})</p>
                     </div>
 
-                    <div className="sign-tabs">
-                      <button 
-                        type="button"
-                        className={`sign-tab-btn ${signMethod === 'kep' ? 'active' : ''}`}
-                        onClick={() => setSignMethod('kep')}
-                      >
-                        🔑 КЕП (Файловий/Токен)
-                      </button>
-                      <button 
-                        type="button"
-                        className={`sign-tab-btn ${signMethod === 'alternative' ? 'active' : ''}`}
-                        onClick={() => setSignMethod('alternative')}
-                      >
-                        📧 Альтернативна верифікація (ID + Email OTP)
-                      </button>
-                    </div>
-
-                    {/* ALTERNATIVE METHOD */}
-                    {signMethod === 'alternative' && (
-                      <div className="diia-sign-box" style={{ padding: '20px', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#fff' }}>
-                        {altState !== 'success' ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                            <p className="text-muted" style={{ fontSize: '13.5px', margin: '0 0 10px', lineHeight: '1.5' }}>
-                              Використовуйте цей спосіб, якщо у вас немає КЕП. Потрібно завантажити фото вашого документа (паспорта/ID-картки), фото-селфі з ним для звірки та підтвердити вашу особу через одноразовий код на електронну пошту.
-                            </p>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-                              <div className="form-group">
-                                <label className="form-label" style={{ fontSize: '13px', fontWeight: 'bold' }}>Електронна пошта для отримання коду *</label>
-                                <input 
-                                  type="email" 
-                                  className="form-control" 
-                                  placeholder="user@example.com" 
-                                  value={altEmail} 
-                                  onChange={(e) => setAltEmail(e.target.value)} 
-                                  disabled={altOtpSent}
-                                />
-                              </div>
-                              <div className="form-group">
-                                <label className="form-label" style={{ fontSize: '13px', fontWeight: 'bold' }}>РНОКПП (ІПН, 10 цифр) *</label>
-                                <input 
-                                  type="text" 
-                                  className="form-control" 
-                                  placeholder="1234567890" 
-                                  maxLength={10}
-                                  value={altDrfo} 
-                                  onChange={(e) => setAltDrfo(e.target.value.replace(/[^0-9]/g, ''))} 
-                                  disabled={altOtpSent}
-                                />
-                              </div>
-                            </div>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginTop: '5px' }}>
-                              <div className="form-group">
-                                <label className="form-label" style={{ fontSize: '13px', fontWeight: 'bold' }}>Фото паспорта (ID-картки) *</label>
-                                {altIdCardFile ? (
-                                  <div style={{ padding: '8px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', color: '#166534', fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <span>✓ Завантажено</span>
-                                    <button type="button" className="btn btn-outline" style={{ padding: '2px 6px', fontSize: '11px', color: '#166534', borderColor: '#bbf7d0' }} onClick={() => setAltIdCardFile(null)}>Змінити</button>
-                                  </div>
-                                ) : (
-                                  <input type="file" accept="image/*" className="form-control" style={{ fontSize: '13px' }} onChange={handleIdCardUpload} />
-                                )}
-                              </div>
-
-                              <div className="form-group">
-                                <label className="form-label" style={{ fontSize: '13px', fontWeight: 'bold' }}>Селфі з паспортом у руках *</label>
-                                {altSelfieFile ? (
-                                  <div style={{ padding: '8px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', color: '#166534', fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <span>✓ Завантажено</span>
-                                    <button type="button" className="btn btn-outline" style={{ padding: '2px 6px', fontSize: '11px', color: '#166534', borderColor: '#bbf7d0' }} onClick={() => setAltSelfieFile(null)}>Змінити</button>
-                                  </div>
-                                ) : (
-                                  <input type="file" accept="image/*" className="form-control" style={{ fontSize: '13px' }} onChange={handleSelfieUpload} />
-                                )}
-                              </div>
-                            </div>
-
-                            {altOtpSent ? (
-                              <div style={{ marginTop: '15px', padding: '15px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
-                                <label className="form-label" style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--primary)' }}>Введіть {state.emailConfig.codeLength || 6}-значний код підтвердження з пошти *</label>
-                                <div style={{ display: 'flex', gap: '10px', marginTop: '5px' }}>
-                                  <input 
-                                    type="text" 
-                                    className="form-control" 
-                                    placeholder="XXXXXX" 
-                                    maxLength={state.emailConfig.codeLength || 6}
-                                    style={{ fontSize: '16px', letterSpacing: '4px', textAlign: 'center', maxWidth: '160px' }}
-                                    value={altOtpInput} 
-                                    onChange={(e) => setAltOtpInput(e.target.value.replace(/[^0-9]/g, ''))}
-                                  />
-                                  <button type="button" className="btn btn-primary" onClick={handleVerifyAltOtp}>Підтвердити код</button>
-                                  <button type="button" className="btn btn-outline" onClick={() => setAltOtpSent(false)}>Змінити пошту</button>
-                                </div>
-                                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '6px' }}>
-                                  Лист надіслано на <strong>{altEmail}</strong>. Якщо лист не надійшов, перевірте папку «Спам».
-                                </div>
+                    <div style={{ padding: '20px', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#fff' }}>
+                      {kepState !== 'success' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                          <div className="form-group">
+                            <label className="form-label" style={{ fontSize: '13px' }}>Електронний ключ (файл у форматі .dat, .pfx, .key, .zs2, .p12) *</label>
+                            {kepFileName ? (
+                              <div style={{ background: '#f1f5f9', padding: '12px', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '14px' }}>
+                                <span>📄 {kepFileName}</span>
+                                <button type="button" className="btn btn-outline" style={{ padding: '2px 8px', fontSize: '12px' }} onClick={() => setKepFileName('')}>Змінити</button>
                               </div>
                             ) : (
-                              <button 
-                                type="button" 
-                                className="btn btn-primary" 
-                                style={{ marginTop: '10px', width: 'fit-content', alignSelf: 'flex-start' }} 
-                                onClick={handleSendAltOtp}
-                                disabled={isSendingEmail}
-                              >
-                                {isSendingEmail ? 'Надсилання листа...' : '📧 Надіслати код підтвердження на пошту'}
-                              </button>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="sign-success-badge" style={{ display: 'flex', gap: '15px', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '15px', borderRadius: '8px' }}>
-                            <div style={{ fontSize: '28px', color: '#2cbd72', fontWeight: 'bold' }}>✓</div>
-                            <div style={{ flexGrow: 1 }}>
-                              <div style={{ fontWeight: 'bold', color: '#14532d', fontSize: '15px', marginBottom: '8px' }}>Особу успішно верифіковано (Фото-ID + Email-OTP)</div>
-                              <table className="sign-info-table" style={{ width: '100%', fontSize: '13px' }}>
-                                <tbody>
-                                  <tr>
-                                    <td style={{ color: '#166534', opacity: 0.8, width: '40%' }}>Заявник:</td>
-                                    <td style={{ fontWeight: 'bold' }}>{formData.lname} {formData.fname} {formData.mname}</td>
-                                  </tr>
-                                  <tr>
-                                    <td style={{ color: '#166534', opacity: 0.8 }}>РНОКПП (ДРФО):</td>
-                                    <td style={{ fontWeight: 'bold' }}>{altDrfo}</td>
-                                  </tr>
-                                  <tr>
-                                    <td style={{ color: '#166534', opacity: 0.8 }}>Електронна пошта:</td>
-                                    <td style={{ fontWeight: 'bold' }}>{altEmail}</td>
-                                  </tr>
-                                  <tr>
-                                    <td style={{ color: '#166534', opacity: 0.8 }}>Статус верифікації:</td>
-                                    <td style={{ color: '#2cbd72', fontWeight: 'bold' }}>Фото ID та Селфі завантажено, підтверджено кодом на пошту</td>
-                                  </tr>
-                                </tbody>
-                              </table>
-                              <button 
-                                type="button" 
-                                className="btn btn-outline" 
-                                style={{ marginTop: '10px', padding: '2px 8px', fontSize: '12px', color: '#166534', borderColor: '#bbf7d0' }} 
-                                onClick={() => {
-                                  setAltState('idle');
-                                  setIsSigned(false);
-                                  setAltOtpSent(false);
-                                  setAltOtpInput('');
-                                }}
-                              >
-                                Скасувати верифікацію
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* KEP METHOD */}
-                    {signMethod === 'kep' && (
-                      <div>
-                        {kepState !== 'success' && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                            <div style={{ display: 'flex', gap: '15px' }}>
-                              <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '14px', cursor: 'pointer' }}>
-                                <input type="radio" name="kepType" checked={kepFileType === 'file'} onChange={() => setKepFileType('file')} />
-                                Файловий ключ
-                              </label>
-                              <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '14px', cursor: 'pointer' }}>
-                                <input type="radio" name="kepType" checked={kepFileType === 'token'} onChange={() => setKepFileType('token')} />
-                                Апаратний токен
-                              </label>
-                            </div>
-
-                            {kepFileType === 'file' ? (
-                              <>
-                                <div className="form-group">
-                                  <label className="form-label" style={{ fontSize: '13px' }}>Електронний ключ (файл у форматі .dat, .pfx, .key, .zs2) *</label>
-                                  {kepFileName ? (
-                                    <div style={{ background: '#f1f5f9', padding: '12px', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '14px' }}>
-                                      <span>📄 {kepFileName}</span>
-                                      <button type="button" className="btn btn-outline" style={{ padding: '2px 8px', fontSize: '12px' }} onClick={() => setKepFileName('')}>Змінити</button>
-                                    </div>
-                                  ) : (
-                                    <div className="kep-drop-zone" onClick={() => {
-                                      const input = document.createElement('input');
-                                      input.type = 'file';
-                                      input.accept = '.dat,.pfx,.key,.zs2,.p12';
-                                      input.onchange = (e) => {
-                                        const file = (e.target as HTMLInputElement).files?.[0];
-                                        if (file) {
-                                          setKepFileName(file.name);
-                                          const reader = new FileReader();
-                                          reader.onload = (ev) => {
-                                            if (ev.target?.result instanceof ArrayBuffer) {
-                                              setKepFileBytes(ev.target.result);
-                                            }
-                                          };
-                                          reader.readAsArrayBuffer(file);
-                                        }
-                                      };
-                                      input.click();
-                                    }}>
-                                      Перетягніть файл ключа сюди або натисніть для вибору
-                                    </div>
-                                  )}
-                                </div>
-
-                                <div className="form-group">
-                                  <label className="form-label" style={{ fontSize: '13px' }}>Кваліфікований надавач електронних довірчих послуг (АЦСК) *</label>
-                                  <select className="form-control" value={kepAcsp} onChange={(e) => setKepAcsp(e.target.value)}>
-                                    <option>АЦСК АТ КБ «ПРИВАТБАНК»</option>
-                                    <option>АЦСК Державної податкової служби</option>
-                                    <option>АЦСК ТОВ «Депозит Сайн»</option>
-                                    <option>АЦСК Міністерства юстиції України</option>
-                                    <option>АЦСК Дія (ДП "Держінформресурс")</option>
-                                  </select>
-                                </div>
-                              </>
-                            ) : (
-                              <div className="alert alert-warning" style={{ fontSize: '13px' }}>
-                                Перед зчитуванням переконайтеся, що ваш апаратний токен підключено до USB-порту комп'ютера, а також встановлено бібліотеки веб-зчитування.
+                              <div className="kep-drop-zone" onClick={() => {
+                                const input = document.createElement('input');
+                                input.type = 'file';
+                                input.accept = '.dat,.pfx,.key,.zs2,.p12';
+                                input.onchange = (e) => {
+                                  const file = (e.target as HTMLInputElement).files?.[0];
+                                  if (file) {
+                                    setKepFileName(file.name);
+                                    const reader = new FileReader();
+                                    reader.onload = (ev) => {
+                                      if (ev.target?.result instanceof ArrayBuffer) {
+                                        setKepFileBytes(ev.target.result);
+                                      }
+                                    };
+                                    reader.readAsArrayBuffer(file);
+                                  }
+                                };
+                                input.click();
+                              }}>
+                                Перетягніть файл ключа сюди або натисніть для вибору
                               </div>
                             )}
+                          </div>
 
-                            <div className="form-group">
-                              <label className="form-label" style={{ fontSize: '13px' }}>
-                                {kepFileType === 'file' ? 'Пароль захисту ключа *' : 'PIN-код доступу до токена *'}
-                              </label>
-                              <input 
-                                type="password" 
-                                className="form-control" 
-                                placeholder={kepFileType === 'file' ? 'Введіть пароль від файлу ключа' : 'Введіть PIN-код (зазвичай 12345678)'}
-                                value={kepPassword}
-                                onChange={(e) => setKepPassword(e.target.value)}
-                              />
-                            </div>
+                          <div className="form-group">
+                            <label className="form-label" style={{ fontSize: '13px' }}>Кваліфікований надавач електронних довірчих послуг (АЦСК) *</label>
+                            <select className="form-control" value={kepAcsp} onChange={(e) => setKepAcsp(e.target.value)}>
+                              <option>АЦСК АТ КБ «ПРИВАТБАНК»</option>
+                              <option>АЦСК Державної податкової служби</option>
+                              <option>АЦСК ТОВ «Депозит Сайн»</option>
+                              <option>АЦСК Міністерства юстиції України</option>
+                              <option>АЦСК Дія (ДП "Держінформресурс")</option>
+                            </select>
+                          </div>
 
+                          <div className="form-group">
+                            <label className="form-label" style={{ fontSize: '13px' }}>
+                              Пароль захисту особистого ключа *
+                            </label>
+                            <input 
+                              type="password" 
+                              className="form-control" 
+                              placeholder="Введіть пароль від файлу ключа"
+                              value={kepPassword}
+                              onChange={(e) => setKepPassword(e.target.value)}
+                            />
+                          </div>
+
+                          <button 
+                            type="button" 
+                            className="btn btn-primary" 
+                            onClick={handleKepSign} 
+                            disabled={kepState === 'reading'}
+                            style={{ alignSelf: 'flex-start', marginTop: '10px' }}
+                          >
+                            {kepState === 'reading' ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div className="spinner-border spinner-border-sm" role="status"></div>
+                                <span>Зчитування сертифікатів...</span>
+                              </div>
+                            ) : (
+                              'Зчитати та підписати КЕП'
+                            )}
+                          </button>
+                        </div>
+                      )}
+
+                      {kepState === 'success' && kepInfo && (
+                        <div className="sign-success-badge">
+                          <div style={{ fontSize: '28px', color: '#2cbd72' }}>✓</div>
+                          <div style={{ flexGrow: 1 }}>
+                            <div style={{ fontWeight: 'bold', color: '#14532d', fontSize: '15px' }}>Кваліфікований електронний підпис (КЕП) накладено</div>
+                            <table className="sign-info-table">
+                              <tbody>
+                                <tr>
+                                  <td>Підписувач:</td>
+                                  <td>{kepInfo.name}</td>
+                                </tr>
+                                <tr>
+                                  <td>ДРФО (ІПН):</td>
+                                  <td>{kepInfo.drfo}</td>
+                                </tr>
+                                <tr>
+                                  <td>АЦСК надавач:</td>
+                                  <td>{kepInfo.issuer}</td>
+                                </tr>
+                                <tr>
+                                  <td>Статус сертифіката:</td>
+                                  <td style={{ color: '#2cbd72' }}>Дійсний (перевірено в реальному часі)</td>
+                                </tr>
+                                <tr>
+                                  <td>Тип підпису:</td>
+                                  <td>Кваліфікований електронний підпис (КЕП)</td>
+                                </tr>
+                              </tbody>
+                            </table>
                             <button 
                               type="button" 
-                              className="btn btn-primary" 
-                              onClick={handleKepSign} 
-                              disabled={kepState === 'reading'}
-                              style={{ alignSelf: 'flex-start', marginTop: '10px' }}
+                              className="btn btn-outline" 
+                              style={{ marginTop: '10px', padding: '2px 8px', fontSize: '12px', color: '#166534', borderColor: '#bbf7d0' }} 
+                              onClick={() => {
+                                setKepState('idle');
+                                setIsSigned(false);
+                                setKepFileName('');
+                                setKepFileBytes(null);
+                                setKepPassword('');
+                                setKepInfo(null);
+                                setSignatureDetails(null);
+                              }}
                             >
-                              {kepState === 'reading' ? (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                  <div className="spinner-border spinner-border-sm" role="status"></div>
-                                  <span>Зчитування сертифікатів...</span>
-                                </div>
-                              ) : (
-                                'Зчитати та підписати КЕП'
-                              )}
+                              Змінити або підписати іншим ключем
                             </button>
                           </div>
-                        )}
-
-                        {kepState === 'success' && kepInfo && (
-                          <div className="sign-success-badge">
-                            <div style={{ fontSize: '28px', color: '#2cbd72' }}>✓</div>
-                            <div style={{ flexGrow: 1 }}>
-                              <div style={{ fontWeight: 'bold', color: '#14532d', fontSize: '15px' }}>Кваліфікований електронний підпис (КЕП) накладено</div>
-                              <table className="sign-info-table">
-                                <tbody>
-                                  <tr>
-                                    <td>Підписувач:</td>
-                                    <td>{kepInfo.name}</td>
-                                  </tr>
-                                  <tr>
-                                    <td>ДРФО (ІПН):</td>
-                                    <td>{kepInfo.drfo}</td>
-                                  </tr>
-                                  <tr>
-                                    <td>АЦСК надавач:</td>
-                                    <td>{kepInfo.issuer}</td>
-                                  </tr>
-                                  <tr>
-                                    <td>Статус сертифіката:</td>
-                                    <td style={{ color: '#2cbd72' }}>Дійсний (перевірено в реальному часі)</td>
-                                  </tr>
-                                  <tr>
-                                    <td>Тип підпису:</td>
-                                    <td>Кваліфікований електронний підпис (КЕП)</td>
-                                  </tr>
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
