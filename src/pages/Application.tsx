@@ -13,12 +13,24 @@ export const Application: React.FC = () => {
   const [appNumber, setAppNumber] = useState('');
   const [showFullPreview, setShowFullPreview] = useState(false);
 
-  // Uploaded documents tracking
+  interface UploadedDocItem {
+    id: string;
+    name: string;
+    size: string;
+  }
+
+  // Uploaded documents tracking (multiple files supported per category)
   const [uploadedDocs, setUploadedDocs] = useState<{
-    passport?: { name: string; size: string };
-    education?: { name: string; size: string };
-    experience?: { name: string; size: string };
-  }>({});
+    passport: UploadedDocItem[];
+    education: UploadedDocItem[];
+    experience: UploadedDocItem[];
+    other: UploadedDocItem[];
+  }>({
+    passport: [],
+    education: [],
+    experience: [],
+    other: []
+  });
 
   // Form State
   const [formData, setFormData] = useState({
@@ -63,18 +75,43 @@ export const Application: React.FC = () => {
     return dateStr;
   };
 
-  const handleFileUpload = (docType: 'passport' | 'education' | 'experience', e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
+  const handleMultipleFileUpload = (
+    category: 'passport' | 'education' | 'experience' | 'other',
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const newItems: UploadedDocItem[] = Array.from(files).map(file => {
       const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
-      setUploadedDocs(prev => ({
-        ...prev,
-        [docType]: {
-          name: file.name,
-          size: `${sizeMb} МБ`
-        }
-      }));
-    }
+      return {
+        id: Math.random().toString(36).substring(2, 9) + Date.now().toString(36),
+        name: file.name,
+        size: `${sizeMb} МБ`
+      };
+    });
+
+    setUploadedDocs(prev => ({
+      ...prev,
+      [category]: [...prev[category], ...newItems]
+    }));
+
+    e.target.value = '';
+  };
+
+  const handleRemoveFile = (
+    category: 'passport' | 'education' | 'experience' | 'other',
+    id: string
+  ) => {
+    setUploadedDocs(prev => ({
+      ...prev,
+      [category]: prev[category].filter(item => item.id !== id)
+    }));
+  };
+
+  const formatDocList = (items: UploadedDocItem[], fallback: string) => {
+    if (!items || items.length === 0) return fallback;
+    return items.map(i => `${i.name} (${i.size})`).join(', ');
   };
 
   const handlePrintApplication = () => {
@@ -92,9 +129,10 @@ export const Application: React.FC = () => {
     const signerDrfo = kepInfo?.drfo || '—';
     const signerIssuer = kepInfo?.issuer || 'Акредитований центр сертифікації ключів';
 
-    const passportName = uploadedDocs.passport?.name ? `${uploadedDocs.passport.name} (${uploadedDocs.passport.size})` : 'Додано в електронній формі';
-    const educationName = uploadedDocs.education?.name ? `${uploadedDocs.education.name} (${uploadedDocs.education.size})` : 'Додано в електронній формі';
-    const experienceName = uploadedDocs.experience?.name ? `${uploadedDocs.experience.name} (${uploadedDocs.experience.size})` : (parseInt(formData.experience) > 0 ? 'Додано в електронній формі' : 'Не надається (стаж 0 років)');
+    const passportNames = formatDocList(uploadedDocs.passport, 'Додано в електронній формі');
+    const educationNames = formatDocList(uploadedDocs.education, 'Додано в електронній формі');
+    const experienceNames = formatDocList(uploadedDocs.experience, parseInt(formData.experience) > 0 ? 'Додано в електронній формі' : 'Не надається (стаж 0 років)');
+    const otherNames = formatDocList(uploadedDocs.other, '');
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -284,9 +322,10 @@ export const Application: React.FC = () => {
         <div style="margin-top: 10px; font-size: 12pt;">
           <strong>До заяви додано документи в електронній формі:</strong>
           <ol class="details-list">
-            <li>Копія паспорта громадянина України / ID-картки: <em>${passportName}</em></li>
-            <li>Копія документа про вищу освіту з додатком: <em>${educationName}</em></li>
-            <li>Документи, що підтверджують досвід та стаж роботи: <em>${experienceName}</em></li>
+            <li>Копія паспорта громадянина України / ID-картки: <em>${passportNames}</em></li>
+            <li>Копія документа про вищу освіту з додатком: <em>${educationNames}</em></li>
+            <li>Документи, що підтверджують досвід та стаж роботи: <em>${experienceNames}</em></li>
+            ${uploadedDocs.other && uploadedDocs.other.length > 0 ? `<li>Інші документи: <em>${otherNames}</em></li>` : ''}
             <li>Згода на збір та обробку персональних даних від ${today}</li>
           </ol>
         </div>
@@ -531,7 +570,10 @@ export const Application: React.FC = () => {
       level: formData.level,
       education: formData.education,
       experience: parseInt(formData.experience) || 0,
-      signature_details: signatureDetails
+      signature_details: {
+        ...signatureDetails,
+        uploaded_documents: uploadedDocs
+      }
     });
 
     if (successDb) {
@@ -931,12 +973,15 @@ export const Application: React.FC = () => {
 
                     <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
                       <h5 style={{ margin: '0 0 10px', color: 'var(--primary)', fontSize: '14px', borderBottom: '1px solid #e2e8f0', paddingBottom: '5px' }}>
-                        📎 Додані до заяви документи
+                        📎 Додані до заяви документи ({uploadedDocs.passport.length + uploadedDocs.education.length + uploadedDocs.experience.length + uploadedDocs.other.length} файлів)
                       </h5>
                       <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', lineHeight: '1.9' }}>
-                        <li>Копія паспорта / ID-картки: <strong>{uploadedDocs.passport?.name ? `${uploadedDocs.passport.name} (${uploadedDocs.passport.size})` : 'Додано в електронній формі'}</strong></li>
-                        <li>Копія документа про вищу освіту з додатком: <strong>{uploadedDocs.education?.name ? `${uploadedDocs.education.name} (${uploadedDocs.education.size})` : 'Додано в електронній формі'}</strong></li>
-                        <li>Документи про стаж та досвід роботи: <strong>{uploadedDocs.experience?.name ? `${uploadedDocs.experience.name} (${uploadedDocs.experience.size})` : (parseInt(formData.experience) > 0 ? 'Додано в електронній формі' : 'Не надається (стаж 0 років)')}</strong></li>
+                        <li>Копія паспорта / ID-картки ({uploadedDocs.passport.length}): <strong>{formatDocList(uploadedDocs.passport, 'Додано в електронній формі')}</strong></li>
+                        <li>Копія документа про вищу освіту з додатком ({uploadedDocs.education.length}): <strong>{formatDocList(uploadedDocs.education, 'Додано в електронній формі')}</strong></li>
+                        <li>Документи про стаж та досвід роботи ({uploadedDocs.experience.length}): <strong>{formatDocList(uploadedDocs.experience, parseInt(formData.experience) > 0 ? 'Додано в електронній формі' : 'Не надається (стаж 0 років)')}</strong></li>
+                        {uploadedDocs.other.length > 0 && (
+                          <li>Інші документи ({uploadedDocs.other.length}): <strong>{formatDocList(uploadedDocs.other, '—')}</strong></li>
+                        )}
                         <li>Електронна згода на збір та обробку персональних даних від <strong>{getTodayUkrainianDate().formatted}</strong></li>
                       </ul>
                     </div>
@@ -1092,44 +1137,149 @@ export const Application: React.FC = () => {
                 {step === 4 && (
                   <div>
                     <h3 className="mb-4">Крок 4. Завантаження документів</h3>
-                    <div className="alert alert-info">
-                      Усі документи повинні бути у форматі PDF, JPG або PNG. Максимальний розмір одного файлу - 5 МБ.
-                    </div>
-                    
-                    <div className="form-group">
-                      <label className="form-label">Копія паспорта громадянина України (або ID-картки) *</label>
-                      {uploadedDocs.passport ? (
-                        <div style={{ padding: '10px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13.5px' }}>
-                          <span>📄 <strong>{uploadedDocs.passport.name}</strong> ({uploadedDocs.passport.size})</span>
-                          <button type="button" className="btn btn-outline" style={{ padding: '2px 8px', fontSize: '12px' }} onClick={() => setUploadedDocs(prev => ({ ...prev, passport: undefined }))}>Змінити</button>
-                        </div>
-                      ) : (
-                        <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="form-control" onChange={(e) => handleFileUpload('passport', e)} />
-                      )}
+                    <div className="alert alert-info" style={{ marginBottom: '25px' }}>
+                      ℹ️ Усі документи повинні бути у форматі PDF, JPG, JPEG або PNG (до 10 МБ на файл). 
+                      <strong> До кожного пункту ви можете прикріпити один або декілька файлів</strong> (наприклад, окремо сторінки паспорта, диплом та додаток, кілька довідок про стаж).
                     </div>
 
-                    <div className="form-group">
-                      <label className="form-label">Копія документа про вищу освіту (диплом з додатком) *</label>
-                      {uploadedDocs.education ? (
-                        <div style={{ padding: '10px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13.5px' }}>
-                          <span>📄 <strong>{uploadedDocs.education.name}</strong> ({uploadedDocs.education.size})</span>
-                          <button type="button" className="btn btn-outline" style={{ padding: '2px 8px', fontSize: '12px' }} onClick={() => setUploadedDocs(prev => ({ ...prev, education: undefined }))}>Змінити</button>
+                    {/* 1. Passport */}
+                    <div className="form-group doc-upload-card" style={{ background: '#f8fafc', padding: '18px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <label className="form-label" style={{ fontWeight: 'bold', margin: 0, fontSize: '14.5px', color: 'var(--dark-blue)' }}>
+                          1. Копія паспорта громадянина України (або ID-картки) *
+                        </label>
+                        <span className="badge" style={{ background: uploadedDocs.passport.length > 0 ? '#22c55e' : '#94a3b8', color: '#fff', fontSize: '11px', padding: '3px 8px', borderRadius: '12px' }}>
+                          {uploadedDocs.passport.length} прикріплено
+                        </span>
+                      </div>
+                      <p style={{ fontSize: '12.5px', color: 'var(--text-muted)', margin: '0 0 12px' }}>
+                        Сторінки 1–2, сторінка з відміткою про реєстрацію або ID-картка з обох боків та витяг з реєстру територіальної громади.
+                      </p>
+
+                      {uploadedDocs.passport.length > 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+                          {uploadedDocs.passport.map(doc => (
+                            <div key={doc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', border: '1px solid #bbf7d0', padding: '8px 12px', borderRadius: '6px', fontSize: '13px' }}>
+                              <span style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#166534' }}>
+                                <span>📄</span> <strong>{doc.name}</strong> <span style={{ color: '#64748b', fontSize: '12px' }}>({doc.size})</span>
+                              </span>
+                              <button type="button" className="btn btn-outline" style={{ padding: '2px 8px', fontSize: '12px', color: '#ef4444', borderColor: '#fca5a5' }} onClick={() => handleRemoveFile('passport', doc.id)}>
+                                ✕ Видалити
+                              </button>
+                            </div>
+                          ))}
                         </div>
-                      ) : (
-                        <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="form-control" onChange={(e) => handleFileUpload('education', e)} />
                       )}
+
+                      <label className="btn btn-outline" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 14px', fontSize: '13px', cursor: 'pointer', background: '#fff' }}>
+                        <span>📎</span> {uploadedDocs.passport.length > 0 ? '+ Додати ще файл(и)' : 'Вибрати файл(и) паспорта'}
+                        <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png" style={{ display: 'none' }} onChange={(e) => handleMultipleFileUpload('passport', e)} />
+                      </label>
                     </div>
 
-                    <div className="form-group">
-                      <label className="form-label">Документи, що підтверджують стаж та досвід роботи</label>
-                      {uploadedDocs.experience ? (
-                        <div style={{ padding: '10px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13.5px' }}>
-                          <span>📄 <strong>{uploadedDocs.experience.name}</strong> ({uploadedDocs.experience.size})</span>
-                          <button type="button" className="btn btn-outline" style={{ padding: '2px 8px', fontSize: '12px' }} onClick={() => setUploadedDocs(prev => ({ ...prev, experience: undefined }))}>Змінити</button>
+                    {/* 2. Education */}
+                    <div className="form-group doc-upload-card" style={{ background: '#f8fafc', padding: '18px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <label className="form-label" style={{ fontWeight: 'bold', margin: 0, fontSize: '14.5px', color: 'var(--dark-blue)' }}>
+                          2. Копія документа про вищу освіту (диплом з додатком) *
+                        </label>
+                        <span className="badge" style={{ background: uploadedDocs.education.length > 0 ? '#22c55e' : '#94a3b8', color: '#fff', fontSize: '11px', padding: '3px 8px', borderRadius: '12px' }}>
+                          {uploadedDocs.education.length} прикріплено
+                        </span>
+                      </div>
+                      <p style={{ fontSize: '12.5px', color: 'var(--text-muted)', margin: '0 0 12px' }}>
+                        Диплом бакалавра / магістра / спеціаліста та додаток з оцінками до нього.
+                      </p>
+
+                      {uploadedDocs.education.length > 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+                          {uploadedDocs.education.map(doc => (
+                            <div key={doc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', border: '1px solid #bbf7d0', padding: '8px 12px', borderRadius: '6px', fontSize: '13px' }}>
+                              <span style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#166534' }}>
+                                <span>📄</span> <strong>{doc.name}</strong> <span style={{ color: '#64748b', fontSize: '12px' }}>({doc.size})</span>
+                              </span>
+                              <button type="button" className="btn btn-outline" style={{ padding: '2px 8px', fontSize: '12px', color: '#ef4444', borderColor: '#fca5a5' }} onClick={() => handleRemoveFile('education', doc.id)}>
+                                ✕ Видалити
+                              </button>
+                            </div>
+                          ))}
                         </div>
-                      ) : (
-                        <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="form-control" onChange={(e) => handleFileUpload('experience', e)} />
                       )}
+
+                      <label className="btn btn-outline" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 14px', fontSize: '13px', cursor: 'pointer', background: '#fff' }}>
+                        <span>📎</span> {uploadedDocs.education.length > 0 ? '+ Додати ще файл(и)' : 'Вибрати файл(и) про освіту'}
+                        <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png" style={{ display: 'none' }} onChange={(e) => handleMultipleFileUpload('education', e)} />
+                      </label>
+                    </div>
+
+                    {/* 3. Experience */}
+                    <div className="form-group doc-upload-card" style={{ background: '#f8fafc', padding: '18px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <label className="form-label" style={{ fontWeight: 'bold', margin: 0, fontSize: '14.5px', color: 'var(--dark-blue)' }}>
+                          3. Документи, що підтверджують стаж та досвід роботи
+                        </label>
+                        <span className="badge" style={{ background: uploadedDocs.experience.length > 0 ? '#22c55e' : '#94a3b8', color: '#fff', fontSize: '11px', padding: '3px 8px', borderRadius: '12px' }}>
+                          {uploadedDocs.experience.length} прикріплено
+                        </span>
+                      </div>
+                      <p style={{ fontSize: '12.5px', color: 'var(--text-muted)', margin: '0 0 12px' }}>
+                        Трудова книжка (заповнені сторінки), довідки з місця роботи, послужні списки, цивільно-правові договори, витяги з наказів тощо.
+                      </p>
+
+                      {uploadedDocs.experience.length > 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+                          {uploadedDocs.experience.map(doc => (
+                            <div key={doc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', border: '1px solid #bbf7d0', padding: '8px 12px', borderRadius: '6px', fontSize: '13px' }}>
+                              <span style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#166534' }}>
+                                <span>📄</span> <strong>{doc.name}</strong> <span style={{ color: '#64748b', fontSize: '12px' }}>({doc.size})</span>
+                              </span>
+                              <button type="button" className="btn btn-outline" style={{ padding: '2px 8px', fontSize: '12px', color: '#ef4444', borderColor: '#fca5a5' }} onClick={() => handleRemoveFile('experience', doc.id)}>
+                                ✕ Видалити
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <label className="btn btn-outline" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 14px', fontSize: '13px', cursor: 'pointer', background: '#fff' }}>
+                        <span>📎</span> {uploadedDocs.experience.length > 0 ? '+ Додати ще файл(и)' : 'Вибрати файл(и) про стаж'}
+                        <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png" style={{ display: 'none' }} onChange={(e) => handleMultipleFileUpload('experience', e)} />
+                      </label>
+                    </div>
+
+                    {/* 4. Other Documents */}
+                    <div className="form-group doc-upload-card" style={{ background: '#f8fafc', padding: '18px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <label className="form-label" style={{ fontWeight: 'bold', margin: 0, fontSize: '14.5px', color: 'var(--dark-blue)' }}>
+                          4. Інші документи (сертифікати, посвідчення, відзнаки)
+                        </label>
+                        <span className="badge" style={{ background: uploadedDocs.other.length > 0 ? '#22c55e' : '#94a3b8', color: '#fff', fontSize: '11px', padding: '3px 8px', borderRadius: '12px' }}>
+                          {uploadedDocs.other.length} прикріплено
+                        </span>
+                      </div>
+                      <p style={{ fontSize: '12.5px', color: 'var(--text-muted)', margin: '0 0 12px' }}>
+                        Сертифікати підвищення кваліфікації / тренінгів, посвідчення УБД / ветерана / особи з інвалідністю внаслідок війни, рекомендаційні листи тощо (за бажанням).
+                      </p>
+
+                      {uploadedDocs.other.length > 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+                          {uploadedDocs.other.map(doc => (
+                            <div key={doc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', border: '1px solid #bbf7d0', padding: '8px 12px', borderRadius: '6px', fontSize: '13px' }}>
+                              <span style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#166534' }}>
+                                <span>📄</span> <strong>{doc.name}</strong> <span style={{ color: '#64748b', fontSize: '12px' }}>({doc.size})</span>
+                              </span>
+                              <button type="button" className="btn btn-outline" style={{ padding: '2px 8px', fontSize: '12px', color: '#ef4444', borderColor: '#fca5a5' }} onClick={() => handleRemoveFile('other', doc.id)}>
+                                ✕ Видалити
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <label className="btn btn-outline" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 14px', fontSize: '13px', cursor: 'pointer', background: '#fff' }}>
+                        <span>📎</span> {uploadedDocs.other.length > 0 ? '+ Додати ще файл(и)' : 'Вибрати інші файл(и)'}
+                        <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png" style={{ display: 'none' }} onChange={(e) => handleMultipleFileUpload('other', e)} />
+                      </label>
                     </div>
                   </div>
                 )}
@@ -1147,7 +1297,9 @@ export const Application: React.FC = () => {
                       <p style={{ margin: '0 0 6px' }}><strong>Претендує на:</strong> {formData.level}</p>
                       <p style={{ margin: '0 0 6px' }}><strong>Освіта:</strong> {formData.education}</p>
                       <p style={{ margin: '0 0 6px' }}><strong>Згода на збір та обробку ПД:</strong> Надано ({getTodayUkrainianDate().formatted})</p>
-                      <p style={{ margin: '0' }}><strong>Додані документи:</strong> {uploadedDocs.passport ? 'Паспорт, ' : ''}{uploadedDocs.education ? 'Диплом, ' : ''}{uploadedDocs.experience ? 'Документи про стаж' : 'Електронна заява'}</p>
+                      <p style={{ margin: '0' }}>
+                        <strong>Додані документи:</strong> {uploadedDocs.passport.length} пасп., {uploadedDocs.education.length} осв., {uploadedDocs.experience.length} стаж{uploadedDocs.other.length > 0 ? `, ${uploadedDocs.other.length} інш.` : ''} (всього: {uploadedDocs.passport.length + uploadedDocs.education.length + uploadedDocs.experience.length + uploadedDocs.other.length} прикріплених файлів)
+                      </p>
                     </div>
 
                     <div style={{ padding: '20px', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#fff' }}>

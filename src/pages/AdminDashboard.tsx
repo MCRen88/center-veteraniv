@@ -339,10 +339,24 @@ export const AdminDashboard: React.FC = () => {
       }
     }
 
-    const signerName = sig?.certificateDetails?.subject?.CN || fullName;
-    const signerDrfo = sig?.certificateDetails?.subject?.serialNumber || '—';
-    const signerIssuer = sig?.certificateDetails?.issuer?.CN || 'Акредитований надавач електронних довірчих послуг';
+    const signerName = sig?.certificateDetails?.subject?.CN || sig?.signerName || fullName;
+    const signerDrfo = sig?.certificateDetails?.subject?.serialNumber || sig?.signerDrfo || '—';
+    const signerIssuer = sig?.certificateDetails?.issuer?.CN || sig?.issuer || 'Акредитований надавач електронних довірчих послуг';
     const signTime = sig?.timestamp || appDate;
+
+    const uploadedDocs = sig?.uploaded_documents || {};
+    const passportNames = uploadedDocs.passport && uploadedDocs.passport.length > 0
+      ? uploadedDocs.passport.map((i: any) => `${i.name} (${i.size})`).join(', ')
+      : 'Додано в електронній формі';
+    const educationNames = uploadedDocs.education && uploadedDocs.education.length > 0
+      ? uploadedDocs.education.map((i: any) => `${i.name} (${i.size})`).join(', ')
+      : 'Додано в електронній формі';
+    const experienceNames = uploadedDocs.experience && uploadedDocs.experience.length > 0
+      ? uploadedDocs.experience.map((i: any) => `${i.name} (${i.size})`).join(', ')
+      : (app.experience > 0 ? 'Додано в електронній формі' : 'Не надається (стаж 0 років)');
+    const otherNames = uploadedDocs.other && uploadedDocs.other.length > 0
+      ? uploadedDocs.other.map((i: any) => `${i.name} (${i.size})`).join(', ')
+      : '';
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -532,9 +546,10 @@ export const AdminDashboard: React.FC = () => {
         <div style="margin-top: 10px; font-size: 12pt;">
           <strong>До заяви додано документи в електронній формі:</strong>
           <ol class="details-list">
-            <li>Копія паспорта громадянина України / ID-картки: <em>Додано в електронній формі</em></li>
-            <li>Копія документа про вищу освіту з додатком: <em>Додано в електронній формі</em></li>
-            <li>Документи, що підтверджують досвід та стаж роботи: <em>${app.experience > 0 ? 'Додано в електронній формі' : 'Не надається (стаж 0 років)'}</em></li>
+            <li>Копія паспорта громадянина України / ID-картки: <em>${passportNames}</em></li>
+            <li>Копія документа про вищу освіту з додатком: <em>${educationNames}</em></li>
+            <li>Документи, що підтверджують досвід та стаж роботи: <em>${experienceNames}</em></li>
+            ${otherNames ? `<li>Інші документи: <em>${otherNames}</em></li>` : ''}
             <li>Згода на збір та обробку персональних даних від ${appDate}</li>
           </ol>
         </div>
@@ -2014,38 +2029,77 @@ export const AdminDashboard: React.FC = () => {
 
             <h4 className="mb-3" style={{ borderBottom: '1px solid #eee', paddingBottom: '8px', fontSize: '16px' }}>Завантажені документи (КЕП-шифровані)</h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '30px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: '#f8fafd', borderRadius: '8px', border: '1px solid #e1e8ed' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ fontSize: '24px' }}>📄</span>
-                  <div>
-                    <div style={{ fontSize: '14px', fontWeight: 'bold' }}>passport_scan_signed.pdf</div>
-                    <div style={{ fontSize: '12px', color: '#999' }}>Паспорт та ІПН • 2.4 MB • Підпис КЕП перевірено</div>
-                  </div>
-                </div>
-                <button className="btn btn-outline" style={{ padding: '4px 8px', fontSize: '12px', marginLeft: 'auto' }} onClick={() => alert('Завантаження файлу...')}>Завантажити</button>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: '#f8fafd', borderRadius: '8px', border: '1px solid #e1e8ed' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ fontSize: '24px' }}>📄</span>
-                  <div>
-                    <div style={{ fontSize: '14px', fontWeight: 'bold' }}>diploma_and_supplements.pdf</div>
-                    <div style={{ fontSize: '12px', color: '#999' }}>Документ про освіту • 3.1 MB • Підпис КЕП перевірено</div>
-                  </div>
-                </div>
-                <button className="btn btn-outline" style={{ padding: '4px 8px', fontSize: '12px', marginLeft: 'auto' }} onClick={() => alert('Завантаження файлу...')}>Завантажити</button>
-              </div>
-              {selectedApp.experience > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: '#f8fafd', borderRadius: '8px', border: '1px solid #e1e8ed' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ fontSize: '24px' }}>📄</span>
-                    <div>
-                      <div style={{ fontSize: '14px', fontWeight: 'bold' }}>employment_record.pdf</div>
-                      <div style={{ fontSize: '12px', color: '#999' }}>Трудова книжка / підтвердження стажу • 1.8 MB • Підпис КЕП перевірено</div>
+              {(() => {
+                let sig: any = null;
+                if (selectedApp.signature_details) {
+                  if (typeof selectedApp.signature_details === 'string') {
+                    try { sig = JSON.parse(selectedApp.signature_details); } catch(e) {}
+                  } else {
+                    sig = selectedApp.signature_details;
+                  }
+                }
+                const docs = sig?.uploaded_documents;
+                const items: Array<{ category: string; name: string; size: string }> = [];
+
+                if (docs) {
+                  docs.passport?.forEach((f: any) => items.push({ category: 'Паспорт / ID-картка', name: f.name, size: f.size }));
+                  docs.education?.forEach((f: any) => items.push({ category: 'Документ про освіту', name: f.name, size: f.size }));
+                  docs.experience?.forEach((f: any) => items.push({ category: 'Підтвердження стажу', name: f.name, size: f.size }));
+                  docs.other?.forEach((f: any) => items.push({ category: 'Інші документи', name: f.name, size: f.size }));
+                }
+
+                if (items.length === 0) {
+                  return (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: '#f8fafd', borderRadius: '8px', border: '1px solid #e1e8ed' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <span style={{ fontSize: '24px' }}>📄</span>
+                          <div>
+                            <div style={{ fontSize: '14px', fontWeight: 'bold' }}>passport_scan_signed.pdf</div>
+                            <div style={{ fontSize: '12px', color: '#999' }}>Паспорт та ІПН • 2.4 MB • Підпис КЕП перевірено</div>
+                          </div>
+                        </div>
+                        <button className="btn btn-outline" style={{ padding: '4px 8px', fontSize: '12px', marginLeft: 'auto' }} onClick={() => alert('Завантаження файлу...')}>Завантажити</button>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: '#f8fafd', borderRadius: '8px', border: '1px solid #e1e8ed' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <span style={{ fontSize: '24px' }}>📄</span>
+                          <div>
+                            <div style={{ fontSize: '14px', fontWeight: 'bold' }}>diploma_and_supplements.pdf</div>
+                            <div style={{ fontSize: '12px', color: '#999' }}>Документ про освіту • 3.1 MB • Підпис КЕП перевірено</div>
+                          </div>
+                        </div>
+                        <button className="btn btn-outline" style={{ padding: '4px 8px', fontSize: '12px', marginLeft: 'auto' }} onClick={() => alert('Завантаження файлу...')}>Завантажити</button>
+                      </div>
+                      {selectedApp.experience > 0 && (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: '#f8fafd', borderRadius: '8px', border: '1px solid #e1e8ed' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <span style={{ fontSize: '24px' }}>📄</span>
+                            <div>
+                              <div style={{ fontSize: '14px', fontWeight: 'bold' }}>employment_record.pdf</div>
+                              <div style={{ fontSize: '12px', color: '#999' }}>Трудова книжка / підтвердження стажу • 1.8 MB • Підпис КЕП перевірено</div>
+                            </div>
+                          </div>
+                          <button className="btn btn-outline" style={{ padding: '4px 8px', fontSize: '12px', marginLeft: 'auto' }} onClick={() => alert('Завантаження файлу...')}>Завантажити</button>
+                        </div>
+                      )}
+                    </>
+                  );
+                }
+
+                return items.map((item, idx) => (
+                  <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: '#f8fafd', borderRadius: '8px', border: '1px solid #e1e8ed' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ fontSize: '24px' }}>📄</span>
+                      <div>
+                        <div style={{ fontSize: '14px', fontWeight: 'bold' }}>{item.name}</div>
+                        <div style={{ fontSize: '12px', color: '#64748b' }}>{item.category} • {item.size} • Засвідчено КЕП</div>
+                      </div>
                     </div>
+                    <button className="btn btn-outline" style={{ padding: '4px 8px', fontSize: '12px', marginLeft: 'auto' }} onClick={() => alert(`Завантаження файлу ${item.name}...`)}>Завантажити</button>
                   </div>
-                  <button className="btn btn-outline" style={{ padding: '4px 8px', fontSize: '12px', marginLeft: 'auto' }} onClick={() => alert('Завантаження файлу...')}>Завантажити</button>
-                </div>
-              )}
+                ));
+              })()}
             </div>
 
             <div className="d-flex justify-content-end" style={{ gap: '10px', borderTop: '1px solid #eee', paddingTop: '20px' }}>
