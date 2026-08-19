@@ -145,13 +145,16 @@ export const speakText = async (
 
       // If online synthesis failed (common when cloud voice fails in Chromium), retry once with local fallback
       if (event.error === 'synthesis-failed' && !isRetry && voices.length > 0) {
-        console.warn("TTS: synthesis-failed on primary voice, attempting fallback...");
+        console.warn("TTS: synthesis-failed on primary voice, attempting local fallback...");
         speakText(text, onStart, onEnd, true);
         return;
       }
 
-      console.warn("TTS: SpeechSynthesis error:", event.error);
-      if (onEnd) onEnd();
+      console.warn("TTS: SpeechSynthesis error:", event.error, "- attempting Audio MP3 fallback...");
+      
+      // Since the user is on Vivaldi (Arch Linux) without compiled Speech Dispatcher support,
+      // fallback to Google Translate unofficial TTS MP3 endpoint which will play now that ffmpeg codecs are installed.
+      playAudioFallback(text, onStart, onEnd);
     };
 
     activeUtterance = utterance;
@@ -173,12 +176,86 @@ export const speakText = async (
 
     setTimeout(() => {
       if (activeUtterance === utterance && typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.speak(utterance);
+        // If voices is completely empty, it means Chromium TTS engine is totally dead/disabled.
+        // Skip straight to the audio fallback instead of letting it fail silently.
+        if (voices.length === 0) {
+          stopSpeaking(); // clear any pending state
+          console.log("TTS: No voices found in browser. Jumping directly to Audio MP3 fallback.");
+          playAudioFallback(text, onStart, onEnd);
+        } else {
+          window.speechSynthesis.speak(utterance);
+        }
       }
     }, 60);
 
   } catch (err) {
     console.error("TTS: SpeechSynthesis execution error:", err);
+    playAudioFallback(text, onStart, onEnd);
+  }
+};
+
+let activeAudio: HTMLAudioElement | null = null;
+
+const playAudioFallback = (text: string, onStart?: () => void, onEnd?: () => void) => {
+  try {
+    if (activeAudio) {
+      activeAudio.pause();
+      if (activeAudio.parentNode) activeAudio.parentNode.removeChild(activeAudio);
+      activeAudio.src = '';
+      activeAudio = null;
+    }
+
+    const safeText = text.length > 200 ? text.substring(0, 197) + '...' : text;
+    const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=uk&client=tw-ob&q=${encodeURIComponent(safeText)}`;
+    
+    // Create an audio element and append it to the body to prevent "removed from document" abort errors
+    const audio = document.createElement('audio');
+    audio.style.display = 'none';
+    audio.src = url;
+    audio.crossOrigin = 'anonymous'; // helps with some CORS policies
+    document.body.appendChild(audio);
+    
+    activeAudio = audio;
+
+    audio.onplay = () => {
+      if (onStart) onStart();
+    };
+
+    audio.onended = () => {
+      if (activeAudio === audio) activeAudio = null;
+      if (audio.parentNode) audio.parentNode.removeChild(audio);
+      if (onEnd) onEnd();
+    };
+
+    audio.onerror = (e) => {
+      console.error("TTS: Audio Fallback Error:", e);
+      if (activeAudio === audio) activeAudio = null;
+      if (audio.parentNode) audio.parentNode.removeChild(audio);
+      
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('tts-error', { 
+          detail: { 
+            message: "Неможливо відтворити аудіо. Браузер не підтримує формат MP3, або запит заблоковано.",
+            error: "audio-fallback-failed"
+          } 
+        }));
+      }
+      if (onEnd) onEnd();
+    };
+
+    // Browsers require play() to be caught if prevented by autoplay policies
+    const playPromise = audio.play();
+    if (playPromise !== undefined) {
+      playPromise.catch(err => {
+        console.error("TTS: Audio play() prevented by browser policy:", err);
+        if (activeAudio === audio) activeAudio = null;
+        if (audio.parentNode) audio.parentNode.removeChild(audio);
+        if (onEnd) onEnd();
+      });
+    }
+
+  } catch (e) {
+    console.error("TTS: Failed to setup Audio fallback", e);
     if (onEnd) onEnd();
   }
 };
@@ -200,13 +277,22 @@ export const stopSpeaking = () => {
     window.speechSynthesis.cancel();
   }
   activeUtterance = null;
+  
+  if (activeAudio) {
+    activeAudio.pause();
+    if (activeAudio.parentNode) activeAudio.parentNode.removeChild(activeAudio);
+    activeAudio.src = '';
+    activeAudio = null;
+  }
 };
 
 /**
  * Checks if the speech synthesis is currently speaking.
  */
 export const isSpeakingActive = (): boolean => {
-  return typeof window !== 'undefined' && ('speechSynthesis' in window) && Boolean(window.speechSynthesis.speaking);
+  const isWebSpeechActive = typeof window !== 'undefined' && ('speechSynthesis' in window) && Boolean(window.speechSynthesis.speaking);
+  const isAudioActive = activeAudio !== null && !activeAudio.paused && !activeAudio.ended;
+  return isWebSpeechActive || isAudioActive;
 };
 
 

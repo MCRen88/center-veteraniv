@@ -365,8 +365,8 @@ export const AccessibilityPanel: React.FC = () => {
               <div style={{ marginTop: '10px' }}>
                 <button
                   type="button"
-                  className="a11y-btn"
-                  style={{ width: '100%', padding: '6px 10px', fontSize: '12px', background: isPlayingSample ? '#fee2e2' : '#f1f5f9', color: isPlayingSample ? '#dc2626' : '#1e293b', border: isPlayingSample ? '1px solid #f87171' : '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer' }}
+                  className={`a11y-btn ${isPlayingSample ? 'tts-speaking' : ''}`}
+                  style={{ width: '100%', padding: '6px 10px', fontSize: '12px', background: isPlayingSample ? '#e74c3c' : '#f1f5f9', color: isPlayingSample ? '#fff' : '#1e293b', border: isPlayingSample ? '1px solid #e74c3c' : '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer' }}
                   onClick={() => {
                     if (isPlayingSample) {
                       stopSpeaking();
