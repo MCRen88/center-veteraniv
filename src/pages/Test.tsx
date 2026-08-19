@@ -937,8 +937,8 @@ export const Test: React.FC = () => {
                 </h3>
                 <p style={{ fontSize: '15px', margin: 0, lineHeight: 1.6, color: 'var(--text-dark)' }}>
                   {overallPassed 
-                    ? "Вітаємо! Ви успішно подолали обидва кваліфікаційні пороги (теорія: 75%+, практика: 80%+). Ви повністю підтвердили відповідність кваліфікаційним вимогам професійного стандарту фахівця із супроводу ветеранів війни та демобілізованих осіб. Ваш офіційний сертифікат згенеровано." 
-                    : "Для успішного складання кваліфікаційного іспиту необхідно подолати обидва пороги (75% для теоретичного тесту та 80% для блоку кейсів). Оскільки практичний поріг не подолано, кваліфікаційний іспит не складено. Рекомендуємо оновити знання та спробувати ще раз після узгодження з адміністратором."}
+                    ? "Вітаємо! Ви успішно подолали обидва кваліфікаційні пороги (теорія: 75%+, практика: 80%+). Ви повністю підтвердили відповідність кваліфікаційним вимогам професійного стандарту фахівця із супроводу ветеранів війни та демобілізованих осіб. Ваш сертифікат згенеровано та внесено до публічного реєстру кваліфікованих фахівців." 
+                    : "Для успішного складання кваліфікаційного іспиту необхідно подолати обидва пороги (75% для теоретичного тесту та 80% для блоку кейсів). Оскільки практичний поріг не подолано, кваліфікаційний іспит не складено. Сертифікат не видано. Рекомендуємо оновити знання та спробувати ще раз після узгодження з адміністратором."}
                 </p>
               </div>
 
@@ -950,9 +950,14 @@ export const Test: React.FC = () => {
                   Назад до результатів тесту
                 </button>
                 {overallPassed && (
-                  <button className="btn btn-primary" style={{ background: '#2ecc71' }} onClick={downloadCert}>
-                    Завантажити сертифікат
-                  </button>
+                  <>
+                    <button className="btn btn-primary" style={{ background: '#2ecc71' }} onClick={downloadCert}>
+                      Завантажити сертифікат
+                    </button>
+                    <button className="btn btn-primary" style={{ background: '#0f3460' }} onClick={() => navigate('/registry')}>
+                      📋 Переглянути у Реєстрі
+                    </button>
+                  </>
                 )}
                  {(currentUser.role !== 'user' || currentUser.testPermission || isImpersonating) && (
                   <button className="btn btn-primary" style={{ background: '#3498db' }} onClick={startCases}>
@@ -1180,9 +1185,14 @@ export const Test: React.FC = () => {
               <button className="btn btn-primary" onClick={() => startTest(mode)}>Спробувати ще раз</button>
             )}
             {passed && !wasTerminated && (
-              <button className="btn btn-primary" style={{ background: '#2ecc71' }} onClick={downloadCert}>
-                Завантажити сертифікат
-              </button>
+              <>
+                <button className="btn btn-primary" style={{ background: '#2ecc71' }} onClick={downloadCert}>
+                  Завантажити сертифікат
+                </button>
+                <button className="btn btn-primary" style={{ background: '#0f3460' }} onClick={() => navigate('/registry')}>
+                  📋 Переглянути у Реєстрі
+                </button>
+              </>
             )}
             {!wasTerminated && passed && (
               <button className="btn btn-primary" style={{ background: '#3498db' }} onClick={startCases}>

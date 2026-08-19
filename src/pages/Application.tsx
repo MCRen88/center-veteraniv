@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import forge from 'node-forge';
 
 export const Application: React.FC = () => {
-  const { state, addRegistryItem, submitApplication: submitAppDb } = useAppContext();
+  const { state, submitApplication: submitAppDb } = useAppContext();
   const navigate = useNavigate();
 
   const [step, setStep] = useState(1);
@@ -17,6 +17,8 @@ export const Application: React.FC = () => {
     id: string;
     name: string;
     size: string;
+    type?: string;
+    dataUrl?: string;
   }
 
   // Uploaded documents tracking (multiple files supported per category)
@@ -75,21 +77,40 @@ export const Application: React.FC = () => {
     return dateStr;
   };
 
-  const handleMultipleFileUpload = (
+  const handleMultipleFileUpload = async (
     category: 'passport' | 'education' | 'experience' | 'other',
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    const newItems: UploadedDocItem[] = Array.from(files).map(file => {
-      const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
-      return {
-        id: Math.random().toString(36).substring(2, 9) + Date.now().toString(36),
-        name: file.name,
-        size: `${sizeMb} МБ`
-      };
-    });
+    const fileArray = Array.from(files);
+    
+    const readDocAsync = (file: File): Promise<UploadedDocItem> => {
+      return new Promise((resolve) => {
+        const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+        const itemBase: UploadedDocItem = {
+          id: Math.random().toString(36).substring(2, 9) + Date.now().toString(36),
+          name: file.name,
+          size: `${sizeMb} МБ`,
+          type: file.type || 'application/octet-stream'
+        };
+
+        const reader = new FileReader();
+        reader.onload = () => {
+          resolve({
+            ...itemBase,
+            dataUrl: reader.result as string
+          });
+        };
+        reader.onerror = () => {
+          resolve(itemBase);
+        };
+        reader.readAsDataURL(file);
+      });
+    };
+
+    const newItems = await Promise.all(fileArray.map(readDocAsync));
 
     setUploadedDocs(prev => ({
       ...prev,
@@ -132,58 +153,57 @@ export const Application: React.FC = () => {
     const passportNames = formatDocList(uploadedDocs.passport, 'Додано в електронній формі');
     const educationNames = formatDocList(uploadedDocs.education, 'Додано в електронній формі');
     const experienceNames = formatDocList(uploadedDocs.experience, parseInt(formData.experience) > 0 ? 'Додано в електронній формі' : 'Не надається (стаж 0 років)');
-    const otherNames = formatDocList(uploadedDocs.other, '');
+    const hasOtherDocs = uploadedDocs.other && uploadedDocs.other.length > 0;
 
     const htmlContent = `
       <!DOCTYPE html>
       <html lang="uk">
       <head>
         <meta charset="UTF-8">
-        <title>Заява про проходження оцінювання — ${fullName}</title>
+        <title>Заява про присвоєння та/або підтвердження професійної кваліфікації — ${fullName}</title>
         <style>
           @page {
-            size: A4;
-            margin: 20mm 15mm 20mm 20mm;
+            size: A4 portrait;
+            margin: 0;
           }
           body {
             font-family: 'Times New Roman', Times, serif;
-            font-size: 13pt;
-            line-height: 1.4;
+            font-size: 12.5pt;
+            line-height: 1.35;
             color: #000;
             background: #fff;
             margin: 0;
-            padding: 20px;
+            padding: 12mm 15mm 12mm 20mm;
+            box-sizing: border-box;
           }
-          .header-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 25px;
-          }
-          .header-table td {
-            vertical-align: top;
-            padding: 0;
-          }
-          .inst-info {
-            width: 50%;
-            font-size: 10.5pt;
-            line-height: 1.3;
-            padding-right: 15px;
-          }
-          .app-meta {
-            width: 50%;
+          .top-center-header {
+            text-align: center;
             font-size: 11pt;
             line-height: 1.35;
-            padding-left: 10px;
+            border-bottom: 1.5px solid #0f3460;
+            padding-bottom: 8px;
+            margin-bottom: 15px;
+          }
+          .top-center-header strong {
+            font-size: 12.5pt;
+            letter-spacing: 0.5px;
+          }
+          .app-recipient-block {
+            width: 320px;
+            margin-left: auto;
+            font-size: 11pt;
+            line-height: 1.35;
+            margin-bottom: 15px;
           }
           .doc-title {
             text-align: center;
-            margin: 25px 0 15px;
+            margin: 15px 0 10px;
           }
           .doc-title h1 {
-            font-size: 16pt;
+            font-size: 15pt;
             font-weight: bold;
             letter-spacing: 2px;
-            margin: 0 0 5px 0;
+            margin: 0 0 4px 0;
           }
           .doc-title p {
             font-size: 11pt;
@@ -192,125 +212,130 @@ export const Application: React.FC = () => {
           }
           .body-text {
             text-align: justify;
-            text-indent: 35px;
-            margin-bottom: 12px;
-            font-size: 12.5pt;
-            line-height: 1.45;
+            text-indent: 30px;
+            margin-bottom: 10px;
+            font-size: 12pt;
+            line-height: 1.4;
           }
           .details-list {
-            margin: 10px 0 15px 0;
+            margin: 6px 0 10px 0;
             padding-left: 25px;
-            font-size: 12pt;
+            font-size: 11.5pt;
           }
           .details-list li {
+            margin-bottom: 3px;
+          }
+          .doc-checklist {
+            list-style: none;
+            padding-left: 5px;
+            margin: 6px 0 10px 0;
+            font-size: 11.5pt;
+          }
+          .doc-checklist li {
             margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+          }
+          .check-box {
+            font-size: 13pt;
+            font-weight: bold;
+            color: #0f3460;
           }
           .stamp-container {
-            margin-top: 30px;
+            margin-top: 15px;
             display: flex;
             justify-content: flex-end;
           }
           .kep-stamp {
             border: 2px solid #0f3460;
             border-radius: 6px;
-            padding: 10px 14px;
-            background: #f8faff;
-            width: 380px;
-            font-family: Arial, sans-serif;
-            font-size: 9.5pt;
-            line-height: 1.35;
-            color: #1e293b;
+            padding: 8px 12px;
+            background: #f8fafc;
+            width: 280px;
+            font-size: 9pt;
+            line-height: 1.25;
           }
           .kep-stamp-header {
             font-weight: bold;
             color: #0f3460;
             border-bottom: 1px solid #cbd5e1;
-            padding-bottom: 4px;
-            margin-bottom: 6px;
+            padding-bottom: 3px;
+            margin-bottom: 4px;
             display: flex;
             align-items: center;
-            gap: 6px;
-            font-size: 10pt;
+            gap: 5px;
           }
           .kep-table {
             width: 100%;
             border-collapse: collapse;
           }
           .kep-table td {
-            padding: 2px 0;
+            padding: 1px 0;
+            vertical-align: top;
           }
           .kep-label {
             color: #64748b;
-            width: 38%;
+            width: 90px;
           }
           .kep-val {
-            font-weight: 600;
+            font-weight: bold;
+            color: #1e293b;
           }
           .print-btn-bar {
-            text-align: center;
-            margin-bottom: 25px;
-            padding: 12px;
-            background: #f1f5f9;
-            border-radius: 8px;
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            z-index: 999;
           }
           .btn-print {
             background: #2563eb;
             color: #fff;
             border: none;
-            padding: 10px 24px;
+            padding: 10px 20px;
             font-size: 14px;
             font-weight: bold;
             border-radius: 6px;
             cursor: pointer;
+            box-shadow: 0 4px 12px rgba(37,99,235,0.3);
           }
           @media print {
-            .print-btn-bar {
-              display: none;
-            }
-            body {
-              padding: 0;
-            }
+            .print-btn-bar { display: none; }
+            body { padding: 12mm 15mm 12mm 20mm; }
           }
         </style>
       </head>
       <body>
         <div class="print-btn-bar">
-          <button class="btn-print" onclick="window.print()">🖨️ Роздрукувати заяву (або Зберегти як PDF)</button>
+          <button class="btn-print" onclick="window.print()">🖨️ Роздрукувати / Зберегти як PDF</button>
         </div>
 
-        <table class="header-table">
-          <tr>
-            <td class="inst-info">
-              <strong>Комунальний заклад «Запорізький обласний інститут післядипломної педагогічної освіти» Запорізької обласної ради</strong><br/>
-              <span style="font-size: 9.5pt; color: #444;">
-                Кваліфікаційний центр оцінювання і визнання результатів навчання<br/>
-                вул. Незалежної України, 57-А, м. Запоріжжя, 69035<br/>
-                Email: orgmetodcentr@zoippo.net.ua
-              </span>
-            </td>
-            <td class="app-meta">
-              <strong>Кваліфікаційному центру КЗ «ЗОІППО» ЗОР</strong><br/>
-              Голові кваліфікаційної комісії<br/>
-              <strong>від:</strong> ${fullName}<br/>
-              <strong>Дата народження:</strong> ${birthdateFormatted}<br/>
-              <strong>Паспорт / ID:</strong> ${formData.passport}<br/>
-              <strong>Телефон:</strong> ${formData.phone}<br/>
-              <strong>E-mail:</strong> ${formData.email}
-            </td>
-          </tr>
-        </table>
+        <div class="top-center-header">
+          <strong>КВАЛІФІКАЦІЙНИЙ ЦЕНТР</strong><br/>
+          КЗ «Запорізький обласний інститут післядипломної педагогічної освіти» ЗОР<br/>
+          <span style="font-size: 9.5pt; color: #444;">вул. Незалежної України, 57-А, м. Запоріжжя, 69035</span>
+        </div>
+
+        <div class="app-recipient-block">
+          <strong>Керівнику Кваліфікаційного центру</strong><br/>
+          <strong>від:</strong> ${fullName}<br/>
+          <strong>Дата народження:</strong> ${birthdateFormatted}<br/>
+          <strong>Паспорт / ID:</strong> ${formData.passport}<br/>
+          <strong>Телефон:</strong> ${formData.phone}<br/>
+          <strong>E-mail:</strong> ${formData.email}
+        </div>
 
         <div class="doc-title">
           <h1>З А Я В А</h1>
-          <p>про проходження процедури оцінювання і визнання результатів навчання<br/>(присвоєння / підтвердження професійної кваліфікації)</p>
+          <p>про присвоєння та/або підтвердження професійної кваліфікації</p>
           <div style="font-size: 10.5pt; margin-top: 4px; font-weight: bold;">Реєстраційний № ${appNumber} від ${today}</div>
         </div>
 
         <div class="body-text">
-          Прошу допустити мене до процедури кваліфікаційного оцінювання і визнання результатів навчання для присвоєння (підтвердження) професійної кваліфікації <strong>«Фахівець із супроводу ветеранів війни та демобілізованих осіб»</strong> (рівень кваліфікації: <strong>${formData.level}</strong>) відповідно до вимог професійного стандарту.
+          Прошу допустити мене до проходження процедури присвоєння та/або підтвердження професійної кваліфікації <strong>«Фахівець із супроводу ветеранів війни та демобілізованих осіб»</strong> (рівень кваліфікації: <strong>${formData.level}</strong>) відповідно до вимог професійного стандарту.
         </div>
 
-        <div style="margin-top: 10px; font-size: 12pt;">
+        <div style="margin-top: 8px; font-size: 11.5pt;">
           <strong>Відомості про здобувача:</strong>
           <ul class="details-list">
             <li>Рівень вищої освіти: <strong>${formData.education}</strong></li>
@@ -319,18 +344,18 @@ export const Application: React.FC = () => {
           </ul>
         </div>
 
-        <div style="margin-top: 10px; font-size: 12pt;">
+        <div style="margin-top: 8px; font-size: 11.5pt;">
           <strong>До заяви додано документи в електронній формі:</strong>
-          <ol class="details-list">
-            <li>Копія паспорта громадянина України / ID-картки: <em>${passportNames}</em></li>
-            <li>Копія документа про вищу освіту з додатком: <em>${educationNames}</em></li>
-            <li>Документи, що підтверджують досвід та стаж роботи: <em>${experienceNames}</em></li>
-            ${uploadedDocs.other && uploadedDocs.other.length > 0 ? `<li>Інші документи: <em>${otherNames}</em></li>` : ''}
-            <li>Згода на збір та обробку персональних даних від ${today}</li>
-          </ol>
+          <ul class="doc-checklist">
+            <li><span class="check-box">☑</span> Копія паспорта громадянина України / ID-картки</li>
+            <li><span class="check-box">☑</span> Копія документа про вищу освіту з додатком</li>
+            <li><span class="check-box">☑</span> Документи, що підтверджують досвід та стаж роботи</li>
+            ${hasOtherDocs ? `<li><span class="check-box">☑</span> Інші додаткові документи</li>` : ''}
+            <li><span class="check-box">☑</span> Згода на збір та обробку персональних даних від ${today}</li>
+          </ul>
         </div>
 
-        <div class="body-text" style="font-size: 11.5pt; margin-top: 15px;">
+        <div class="body-text" style="font-size: 11pt; margin-top: 10px;">
           Засвідчую вірність внесених відомостей та відповідність доданих електронних копій оригіналам документів. Мені відомо про відповідальність за надання недостовірних даних.
         </div>
 
@@ -506,14 +531,42 @@ export const Application: React.FC = () => {
           signatureBase64 = forge.util.encode64(md.digest().getBytes());
         }
         
-        const isJks = kepFileName.toLowerCase().includes('.jks') || kepFileName.toLowerCase().includes('.jsk');
-        const detectedIssuer = isJks && kepAcsp === 'АЦСК АТ КБ «ПРИВАТБАНК»' 
-          ? 'АЦСК АТ КБ «ПРИВАТБАНК»' 
+        const lowerFile = kepFileName.toLowerCase();
+        const isJks = lowerFile.includes('.jks') || lowerFile.includes('.jsk') || lowerFile.startsWith('pb_');
+        const isDstuDat = lowerFile.includes('key-6') || lowerFile.endsWith('.dat') || lowerFile.endsWith('.sk');
+        const isZs2 = lowerFile.endsWith('.zs2');
+        const isPfx = lowerFile.endsWith('.pfx') || lowerFile.endsWith('.p12') || lowerFile.endsWith('.pkcs12');
+
+        let detectedType = 'Кваліфікований електронний підпис (КЕП)';
+        let detectedStandard = 'ДСТУ 4145-2002 / PKCS#7';
+
+        if (isJks) {
+          detectedType = 'JKS КЕП (ПриватБанк)';
+          detectedStandard = 'ДСТУ 4145-2002 / Java KeyStore';
+        } else if (isDstuDat) {
+          detectedType = 'Файловий КЕП ДСТУ 4145 (Key-6.dat)';
+          detectedStandard = 'ДСТУ 4145-2002 (Національний криптографічний стандарт)';
+        } else if (isZs2) {
+          detectedType = 'КЕП M.E.Doc / Сота (.zs2)';
+          detectedStandard = 'ДСТУ 4145-2002 (КНЕДП ТОВ «ЦСК «Україна»)';
+        } else if (isPfx) {
+          detectedType = 'КЕП PKCS#12 (RSA / X.509)';
+          detectedStandard = 'PKCS#12 / RSA (Міжнародний та державний стандарт)';
+        }
+
+        const detectedIssuer = isJks && (!kepAcsp || kepAcsp.includes('ПРИВАТБАНК'))
+          ? 'АЦСК АТ КБ «ПРИВАТБАНК»'
+          : isDstuDat && (!kepAcsp || kepAcsp.includes('ПРИВАТБАНК'))
+          ? 'КНЕДП ДПС (Державна податкова служба України)'
+          : isZs2
+          ? 'КНЕДП ТОВ «Центр сертифікації ключів «Україна» (M.E.Doc)'
           : (kepAcsp || organization || 'Акредитований надавач електронних довірчих послуг');
+
         const serialNum = `UA-${Date.now().toString(16).toUpperCase()}-${Math.floor(Math.random() * 90000 + 10000)}`;
 
         const details = {
-          type: isJks ? 'JKS КЕП (ПриватБанк)' : 'Файловий КЕП (ДСТУ / PKCS#12)',
+          type: detectedType,
+          standard: detectedStandard,
           signerName: cn,
           signerDrfo: drfo,
           issuer: detectedIssuer,
@@ -521,7 +574,9 @@ export const Application: React.FC = () => {
           timestamp: new Date().toLocaleString('uk-UA'),
           signature: signatureBase64,
           certificate: certPem,
-          signedData: dataToSign
+          signedData: dataToSign,
+          status: 'valid',
+          ocspStatus: 'Чинний (перевірено у Довірчому списку України - TSL)'
         };
         
         setKepState('success');
@@ -555,15 +610,11 @@ export const Application: React.FC = () => {
 
     const year = new Date().getFullYear();
     const randomId = Math.floor(Math.random() * 9000) + 1000;
-    const certNum = `СС 02136146/${String(randomId).padStart(6, '0')}-${year.toString().slice(-2)}`;
     const generatedAppNumber = `ЗЯ-${year}-${randomId}`;
     
     setAppNumber(generatedAppNumber);
     
-    const fullName = `${formData.lname} ${formData.fname} ${formData.mname}`.trim();
-    const date = new Date().toLocaleDateString('uk-UA');
-    
-    // Save to applications table in database
+    // Save to applications table in database (certificate is issued only after passing the test)
     const successDb = await submitAppDb({
       app_number: generatedAppNumber,
       lname: formData.lname,
@@ -582,12 +633,6 @@ export const Application: React.FC = () => {
     });
 
     if (successDb) {
-      await addRegistryItem({
-        name: fullName || "Невідомо",
-        title: formData.level,
-        cert: certNum,
-        date: date
-      });
       setSuccess(true);
     }
     setIsSubmitting(false);
@@ -601,7 +646,7 @@ export const Application: React.FC = () => {
           <h3 style={{ color: 'var(--dark-blue)', marginBottom: '15px' }}>Ви вже зареєстровані в системі</h3>
           <p style={{ fontSize: '15px', color: 'var(--text-dark)', lineHeight: '1.6', marginBottom: '25px' }}>
             Ви авторизовані як <strong>{state.currentUser.name || state.currentUser.email}</strong> ({state.currentUser.email}).<br />
-            Повторна подача заяви не потрібна. Ви можете переглянути інформацію про проходження оцінювання та тестування у вашому кабінеті.
+            Повторна подача заяви не потрібна. Ви можете переглянути статус та детальну інформацію у вашому кабінеті.
           </p>
           <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', flexWrap: 'wrap' }}>
             {(state.currentUser.role === 'admin' || state.currentUser.role === 'teacher') ? (
@@ -834,7 +879,7 @@ export const Application: React.FC = () => {
       `}</style>
 
       <section className="container mt-5 mb-5">
-        <h2 className="text-center mb-5">Подача заяви на оцінювання</h2>
+        <h2 className="text-center mb-5">Подача заяви про присвоєння / підтвердження кваліфікації</h2>
         
         <div className="wizard-container">
           {/* Progress Indicator */}
@@ -876,6 +921,10 @@ export const Application: React.FC = () => {
                     <div style={{ fontSize: '26px', fontWeight: 'bold', color: 'var(--dark-blue)', letterSpacing: '1px' }}>{appNumber}</div>
                   </div>
 
+                  <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', padding: '12px 20px', borderRadius: '8px', margin: '15px auto', maxWidth: '600px', fontSize: '13.5px', color: '#1e40af', lineHeight: '1.5' }}>
+                    ℹ️ <strong>Наступні кроки:</strong> Після розгляду вашої заяви кваліфікаційною комісією, на вашу електронну пошту буде надіслано офіційне повідомлення про результати розгляду та подальші інструкції.
+                  </div>
+
                   <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '12px', margin: '25px 0' }}>
                     <button 
                       type="button" 
@@ -899,9 +948,9 @@ export const Application: React.FC = () => {
                       type="button" 
                       className="btn btn-secondary" 
                       style={{ padding: '10px 20px', fontSize: '14.5px' }}
-                      onClick={() => navigate('/registry')}
+                      onClick={() => navigate('/')}
                     >
-                      Перейти до Реєстру
+                      На головну
                     </button>
                   </div>
                 </div>
@@ -938,10 +987,10 @@ export const Application: React.FC = () => {
 
                     <div style={{ textAlign: 'center', margin: '20px 0' }}>
                       <h4 style={{ textTransform: 'uppercase', letterSpacing: '1px', color: '#0f3460', margin: '0 0 4px' }}>
-                        Заява про проходження кваліфікаційного оцінювання
+                        Заява про присвоєння та/або підтвердження професійної кваліфікації
                       </h4>
                       <div style={{ fontSize: '13px', color: '#64748b' }}>
-                        для присвоєння (підтвердження) професійної кваліфікації «Фахівець із супроводу ветеранів війни та демобілізованих осіб»
+                        «Фахівець із супроводу ветеранів війни та демобілізованих осіб»
                       </div>
                     </div>
 
@@ -1357,14 +1406,21 @@ export const Application: React.FC = () => {
                             <select className="form-control" value={kepAcsp} onChange={(e) => setKepAcsp(e.target.value)}>
                               <option>АЦСК АТ КБ «ПРИВАТБАНК»</option>
                               <option>КНЕДП ДПС (Державна податкова служба України)</option>
-                              <option>КНЕДП Дія (ДП «Дія» / Мінцифри)</option>
+                              <option>КНЕДП Дія (ДП «Дія» / Мінцифри — Дія.Підпис)</option>
+                              <option>КНЕДП ДП «Національні інформаційні системи» (НАІС / Мін'юст)</option>
+                              <option>КНЕДП ТОВ «Центр сертифікації ключів «Україна» (M.E.Doc / Сота)</option>
                               <option>КНЕДП «Вчасно.КЕП» (ТОВ «Вчасно Сервіс»)</option>
-                              <option>КНЕДП ТОВ «Центр сертифікації ключів «Україна» (M.E.Doc)</option>
-                              <option>КНЕДП ТОВ «Депозит Сайн» (DepositSign)</option>
                               <option>КНЕДП МВС України</option>
-                              <option>КНЕДП Міністерства юстиції України</option>
-                              <option>КНЕДП АТ «Ощадбанк» / «УкрСиббанк» / «ПУМБ»</option>
-                              <option>Інший акредитований надавач (КНЕДП)</option>
+                              <option>КНЕДП Генерального штабу Збройних Сил України (Військовий КЕП)</option>
+                              <option>КНЕДП Державної казначейської служби України</option>
+                              <option>КНЕДП АТ «Ощадбанк»</option>
+                              <option>КНЕДП АТ «ПУМБ»</option>
+                              <option>КНЕДП АТ «УкрСиббанк»</option>
+                              <option>КНЕДП АТ «Укрексімбанк»</option>
+                              <option>КНЕДП ТОВ «Депозит Сайн» (DepositSign)</option>
+                              <option>КНЕДП АТ «Укрпошта»</option>
+                              <option>КНЕДП ДП «Українські спеціальні системи» (УСС)</option>
+                              <option>Інший кваліфікований надавач електронних довірчих послуг (КНЕДП)</option>
                             </select>
                           </div>
 

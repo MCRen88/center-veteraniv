@@ -44,8 +44,8 @@ export const defaultEmailConfig: EmailVerificationConfig = {
   smtpPass: '',
   senderEmail: 'orgmetodcentr@zoippo.net.ua',
   senderName: 'КЗ «ЗОІППО» ЗОР (Кваліфікаційний центр)',
-  emailSubject: 'Код підтвердження для підписання заяви на сертифікацію',
-  emailTemplate: `Шановний(а) {name}!\n\nВаш одноразовий код підтвердження для верифікації особи та підписання заяви на оцінювання в Кваліфікаційному центрі:\n\n{code}\n\nКод дійсний протягом {expiry} хвилин. Якщо ви не подавали заяву в КЗ «ЗОІППО» ЗОР, проігноруйте цей лист.\n\nЗ повагою,\nКваліфікаційний центр КЗ «ЗОІППО» ЗОР\norgmetodcentr@zoippo.net.ua`,
+  emailSubject: 'Код підтвердження для підписання заяви про присвоєння/підтвердження кваліфікації',
+  emailTemplate: `Шановний(а) {name}!\n\nВаш одноразовий код підтвердження для верифікації особи та підписання заяви про присвоєння та/або підтвердження професійної кваліфікації в Кваліфікаційному центрі:\n\n{code}\n\nКод дійсний протягом {expiry} хвилин. Якщо ви не подавали заяву в КЗ «ЗОІППО» ЗОР, проігноруйте цей лист.\n\nЗ повагою,\nКваліфікаційний центр КЗ «ЗОІППО» ЗОР\norgmetodcentr@zoippo.net.ua`,
   codeLength: 6,
   codeExpiryMinutes: 10,
   enabled: true
@@ -78,6 +78,8 @@ interface AppState {
 interface AppContextType {
   state: AppState;
   addRegistryItem: (item: Omit<RegistryItem, 'id'>) => Promise<void>;
+  updateRegistryItem: (id: number, item: Omit<RegistryItem, 'id'>) => Promise<void>;
+  deleteRegistryItem: (id: number) => Promise<void>;
   // Auth
   login: (email: string, pass: string) => Promise<boolean>;
   logout: () => Promise<void>;
@@ -289,6 +291,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const updateRegistryItem = async (id: number, item: Omit<RegistryItem, 'id'>) => {
+    const { data, error } = await supabase.from('registry').update(item).eq('id', id).select();
+    if (!error && data) {
+      setState(prev => ({
+        ...prev,
+        registry: prev.registry.map(r => r.id === id ? data[0] : r)
+      }));
+    } else {
+      console.error(error);
+      alert("Помилка оновлення запису реєстру");
+    }
+  };
+
+  const deleteRegistryItem = async (id: number) => {
+    const { error } = await supabase.from('registry').delete().eq('id', id);
+    if (!error) {
+      setState(prev => ({
+        ...prev,
+        registry: prev.registry.filter(r => r.id !== id)
+      }));
+    } else {
+      console.error(error);
+      alert("Помилка видалення запису реєстру");
+    }
+  };
+
   const login = async (email: string, pass: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
     if (error) {
@@ -411,6 +439,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }]).select();
 
     if (!error && data) {
+      // Якщо тест складено — видати сертифікат та додати до реєстру
+      if (score.passed && state.currentUser) {
+        const year = new Date().getFullYear();
+        const randomId = Math.floor(Math.random() * 9000) + 1000;
+        const certNum = `СС 02136146/${String(randomId).padStart(6, '0')}-${year.toString().slice(-2)}`;
+        const date = new Date().toLocaleDateString('uk-UA');
+        await addRegistryItem({
+          name: state.currentUser.name || 'Невідомо',
+          title: 'Фахівець із супроводу ветеранів війни та демобілізованих осіб',
+          cert: certNum,
+          date: date
+        });
+      }
+
       let nextPermission = state.currentUser.testPermission;
       
       if (state.currentUser.role === 'user') {
@@ -672,6 +714,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     <AppContext.Provider value={{ 
       state, 
       addRegistryItem, 
+      updateRegistryItem,
+      deleteRegistryItem,
       login, 
       logout, 
       adminCreateUser, 
