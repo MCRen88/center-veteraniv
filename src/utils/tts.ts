@@ -48,7 +48,7 @@ if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
  * Speaks text using window.speechSynthesis.
  * Automatically resolves the best matching voice with graceful local fallback and synthesis-failed recovery.
  */
-export const speakText = (
+export const speakText = async (
   text: string, 
   onStart?: () => void, 
   onEnd?: () => void,
@@ -80,6 +80,9 @@ export const speakText = (
       window.speechSynthesis.resume();
     }
 
+    // Await available voices so we never query an uninitialized voice list
+    const voices = await getAvailableVoices();
+
     const savedSpeed = localStorage.getItem('accessibility-tts-speed');
     const speed = savedSpeed ? parseFloat(savedSpeed) : 1.0;
     const preferredVoiceURI = localStorage.getItem('accessibility-tts-voice-uri');
@@ -88,7 +91,6 @@ export const speakText = (
     utterance.rate = Math.max(0.5, Math.min(2.0, speed));
     utterance.pitch = 1.0;
 
-    const voices = window.speechSynthesis.getVoices() || [];
     let selectedVoice: SpeechSynthesisVoice | null = null;
 
     if (!isRetry && preferredVoiceURI) {
@@ -141,9 +143,9 @@ export const speakText = (
         return;
       }
 
-      // If online synthesis failed (common when cloud voice fails in Chromium), retry once with local voice
+      // If online synthesis failed (common when cloud voice fails in Chromium), retry once with local fallback
       if (event.error === 'synthesis-failed' && !isRetry && voices.length > 0) {
-        console.warn("TTS: Primary voice failed, falling back to local system voice...");
+        console.warn("TTS: synthesis-failed on primary voice, attempting fallback...");
         speakText(text, onStart, onEnd, true);
         return;
       }
