@@ -230,8 +230,19 @@ export const Test: React.FC = () => {
           setCurrentQuestionIndex(parsed.currentQuestionIndex ?? 0);
           if (parsed.testQuestions && parsed.testQuestions.length > 0) {
             setTestQuestions(parsed.testQuestions);
+            const qLen = parsed.testQuestions.length;
+            const restoredAnswers = new Array(qLen).fill(-1);
+            if (Array.isArray(parsed.answers)) {
+              parsed.answers.forEach((ans: any, i: number) => {
+                if (i < qLen && typeof ans === 'number') {
+                  restoredAnswers[i] = ans;
+                }
+              });
+            }
+            setAnswers(restoredAnswers);
+          } else {
+            setAnswers(parsed.answers ?? []);
           }
-          setAnswers(parsed.answers ?? []);
           setIsFinished(parsed.isFinished ?? false);
           setScore(parsed.score ?? 0);
           
@@ -394,13 +405,6 @@ export const Test: React.FC = () => {
     setCurrentQuestionIndex(nextIdx);
   };
 
-  useEffect(() => {
-    if (!mode) {
-      setTestQuestions(state.questions);
-    }
-  }, [state.questions, mode]);
-
-
   const startTest = (selectedMode: TestMode) => {
     // Practice mode is strictly restricted to Admin users
     let effectiveMode = selectedMode;
@@ -499,8 +503,8 @@ export const Test: React.FC = () => {
     setAnswers(newAnswers);
 
     // Перевіряємо, чи це була остання невідповідна відповідь
-    const wasAllAnswered = answers.every(a => a !== -1);
-    const isAllAnswered = newAnswers.every(a => a !== -1);
+    const wasAllAnswered = testQuestions.length > 0 && answers.length === testQuestions.length && answers.every(a => typeof a === 'number' && a >= 0);
+    const isAllAnswered = testQuestions.length > 0 && newAnswers.length === testQuestions.length && newAnswers.every(a => typeof a === 'number' && a >= 0);
     
     if (!wasAllAnswered && isAllAnswered) {
       setShowCompletionModal(true);
@@ -1245,7 +1249,7 @@ export const Test: React.FC = () => {
       );
     }
 
-    const hasAnsweredAll = answers.every(a => a !== -1);
+    const hasAnsweredAll = testQuestions.length > 0 && answers.length === testQuestions.length && answers.every(a => typeof a === 'number' && a >= 0);
 
     return (
       <>
@@ -1391,13 +1395,14 @@ export const Test: React.FC = () => {
               </div>
               
               <div className="options">
-                {question.options.map((opt: string, idx: number) => {
+                {(question?.options || []).map((opt: string, idx: number) => {
                   let className = "option-card";
-                  const isSelected = answers[currentQuestionIndex] === idx;
+                  const currentAns = answers[currentQuestionIndex];
+                  const isSelected = currentAns === idx;
                   if (isSelected) className += " selected";
                   
-                  if (mode === 'practice' && answers[currentQuestionIndex] !== -1) {
-                    if (idx === question.correct) className += " correct";
+                  if (mode === 'practice' && typeof currentAns === 'number' && currentAns >= 0) {
+                    if (idx === question?.correct) className += " correct";
                     else if (isSelected) className += " wrong";
                   }
                   
@@ -1451,7 +1456,8 @@ export const Test: React.FC = () => {
                 {testQuestions.map((_, idx) => {
                   let classes = "q-map-btn";
                   if (currentQuestionIndex === idx) classes += " current";
-                  if (answers[idx] !== -1) classes += " answered";
+                  const ans = answers[idx];
+                  if (typeof ans === 'number' && ans >= 0) classes += " answered";
                   
                   return (
                     <button key={idx} className={classes} onClick={() => setCurrentQuestionIndex(idx)}>
