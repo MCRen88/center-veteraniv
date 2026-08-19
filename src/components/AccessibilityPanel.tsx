@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { speakText, stopSpeaking } from '../utils/tts';
+import { speakText, stopSpeaking, getAvailableVoices } from '../utils/tts';
 
 type FontSize = 'normal' | 'large' | 'xlarge';
 type ContrastMode = 'normal' | 'high-contrast';
@@ -7,6 +7,10 @@ type ContrastMode = 'normal' | 'high-contrast';
 export const AccessibilityPanel: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isPlayingSample, setIsPlayingSample] = useState(false);
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [selectedVoiceURI, setSelectedVoiceURI] = useState<string>(() => {
+    return localStorage.getItem('accessibility-tts-voice-uri') || '';
+  });
   const [fontSize, setFontSize] = useState<FontSize>(() => {
     return (localStorage.getItem('accessibility-font-size') as FontSize) || 'normal';
   });
@@ -47,6 +51,22 @@ export const AccessibilityPanel: React.FC = () => {
     applyContrast(contrast);
   }, [contrast]);
 
+  // Load available voices when panel opens
+  useEffect(() => {
+    getAvailableVoices().then(voices => {
+      setAvailableVoices(voices);
+    });
+  }, [isOpen]);
+
+  const handleVoiceChange = (voiceURI: string) => {
+    setSelectedVoiceURI(voiceURI);
+    if (voiceURI) {
+      localStorage.setItem('accessibility-tts-voice-uri', voiceURI);
+    } else {
+      localStorage.removeItem('accessibility-tts-voice-uri');
+    }
+  };
+
   const handleFontSizeChange = (size: FontSize) => {
     setFontSize(size);
     localStorage.setItem('accessibility-font-size', size);
@@ -74,6 +94,7 @@ export const AccessibilityPanel: React.FC = () => {
     handleContrastChange('normal');
     handleAutoReadChange(false);
     handleTTSSpeedChange(1.0);
+    handleVoiceChange('');
   };
 
   return (
@@ -310,6 +331,36 @@ export const AccessibilityPanel: React.FC = () => {
                   Швидка
                 </button>
               </div>
+
+              {availableVoices.length > 0 && (
+                <div style={{ marginTop: '8px' }}>
+                  <div className="a11y-label" style={{ marginBottom: '4px', fontSize: '13px' }}>Голос синтезатора:</div>
+                  <select
+                    value={selectedVoiceURI}
+                    onChange={(e) => handleVoiceChange(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '6px 8px',
+                      fontSize: '12px',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid #cbd5e1',
+                      background: '#fff',
+                      color: '#334155'
+                    }}
+                  >
+                    <option value="">Автовибір (Український / Системний)</option>
+                    {availableVoices.map((v) => {
+                      const isUk = (v.lang && (v.lang.toLowerCase().startsWith('uk') || v.lang.toLowerCase().includes('ukr'))) ||
+                        (v.name && (v.name.toLowerCase().includes('ukrain') || v.name.toLowerCase().includes('україн')));
+                      return (
+                        <option key={v.voiceURI} value={v.voiceURI}>
+                          {isUk ? '🇺🇦 ' : ''}{v.name} ({v.lang})
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              )}
 
               <div style={{ marginTop: '10px' }}>
                 <button
