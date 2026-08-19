@@ -150,9 +150,6 @@ export const Application: React.FC = () => {
     const signerDrfo = kepInfo?.drfo || '—';
     const signerIssuer = kepInfo?.issuer || 'Акредитований центр сертифікації ключів';
 
-    const passportNames = formatDocList(uploadedDocs.passport, 'Додано в електронній формі');
-    const educationNames = formatDocList(uploadedDocs.education, 'Додано в електронній формі');
-    const experienceNames = formatDocList(uploadedDocs.experience, parseInt(formData.experience) > 0 ? 'Додано в електронній формі' : 'Не надається (стаж 0 років)');
     const hasOtherDocs = uploadedDocs.other && uploadedDocs.other.length > 0;
 
     const htmlContent = `

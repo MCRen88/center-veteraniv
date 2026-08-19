@@ -1995,7 +1995,7 @@ export const AdminDashboard: React.FC = () => {
                 </p>
               </div>
               <div className="d-flex gap-2">
-                <button className="btn btn-outline" onClick={() => navigate('/registry')} target="_blank">
+                <button className="btn btn-outline" onClick={() => window.open('/registry', '_blank')}>
                   🌐 Публічний реєстр
                 </button>
                 <button className="btn btn-primary" onClick={startAddCert}>
