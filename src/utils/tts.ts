@@ -1,10 +1,5 @@
 let activeUtterance: SpeechSynthesisUtterance | null = null;
-let activeAudio: HTMLAudioElement | null = null;
 let keepAliveTimer: any = null;
-let audioChunks: string[] = [];
-let currentChunkIndex = 0;
-let ttsOnStartCallback: (() => void) | null = null;
-let ttsOnEndCallback: (() => void) | null = null;
 
 // Pre-load voices on module load
 if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -17,136 +12,8 @@ if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
 }
 
 /**
- * Splits text into safe chunks under a maximum character length, preserving sentences.
- */
-const splitTextIntoChunks = (text: string, maxLength: number = 180): string[] => {
-  const chunks: string[] = [];
-  const sentences = text.split(/([.?!]+)/);
-  let currentChunk = "";
-  
-  for (let i = 0; i < sentences.length; i += 2) {
-    const sentence = sentences[i] + (sentences[i + 1] || "");
-    if (!sentence.trim()) continue;
-    
-    if ((currentChunk + sentence).length <= maxLength) {
-      currentChunk += (currentChunk ? " " : "") + sentence;
-    } else {
-      if (currentChunk) {
-        chunks.push(currentChunk);
-      }
-      
-      if (sentence.length > maxLength) {
-        const words = sentence.split(/\s+/);
-        let wordChunk = "";
-        for (const word of words) {
-          if ((wordChunk + word).length <= maxLength) {
-            wordChunk += (wordChunk ? " " : "") + word;
-          } else {
-            if (wordChunk) chunks.push(wordChunk);
-            wordChunk = word;
-          }
-        }
-        currentChunk = wordChunk;
-      } else {
-        currentChunk = sentence;
-      }
-    }
-  }
-  
-  if (currentChunk.trim()) {
-    chunks.push(currentChunk);
-  }
-  
-  return chunks;
-};
-
-/**
- * Plays the next chunk in the fallback audio queue using direct Google Translate TTS.
- */
-const playNextAudioChunk = () => {
-  if (currentChunkIndex >= audioChunks.length) {
-    if (ttsOnEndCallback) ttsOnEndCallback();
-    activeAudio = null;
-    return;
-  }
-  
-  const chunkText = audioChunks[currentChunkIndex];
-  const encodedText = encodeURIComponent(chunkText);
-  const savedSpeed = localStorage.getItem('accessibility-tts-speed');
-  const speed = savedSpeed ? parseFloat(savedSpeed) : 1.0;
-  
-  // Use direct public Google Translate TTS endpoint
-  const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=uk&client=tw-ob&q=${encodedText}`;
-  
-  activeAudio = new Audio();
-  activeAudio.preload = "auto";
-  
-  activeAudio.onended = () => {
-    currentChunkIndex++;
-    playNextAudioChunk();
-  };
-  
-  activeAudio.onerror = (e) => {
-    console.warn("TTS Audio Fallback error:", e);
-    currentChunkIndex++;
-    if (currentChunkIndex < audioChunks.length) {
-      playNextAudioChunk();
-    } else {
-      if (ttsOnEndCallback) ttsOnEndCallback();
-      activeAudio = null;
-    }
-  };
-  
-  activeAudio.src = url;
-  activeAudio.playbackRate = speed;
-  
-  activeAudio.play().catch((err) => {
-    console.warn("TTS Audio Fallback play() prevented:", err);
-    if (ttsOnEndCallback) ttsOnEndCallback();
-    activeAudio = null;
-  });
-};
-
-/**
- * Fallback speech player when SpeechSynthesis is unavailable.
- */
-const speakWithAudioFallback = (text: string, onStart?: () => void, onEnd?: () => void) => {
-  stopAudioFallback();
-  
-  ttsOnStartCallback = onStart || null;
-  ttsOnEndCallback = onEnd || null;
-  
-  audioChunks = splitTextIntoChunks(text, 150);
-  currentChunkIndex = 0;
-  
-  if (audioChunks.length === 0) {
-    if (onEnd) onEnd();
-    return;
-  }
-  
-  if (ttsOnStartCallback) ttsOnStartCallback();
-  playNextAudioChunk();
-};
-
-/**
- * Stops any ongoing fallback audio playback.
- */
-const stopAudioFallback = () => {
-  if (activeAudio) {
-    activeAudio.pause();
-    activeAudio.onended = null;
-    activeAudio.onerror = null;
-    activeAudio = null;
-  }
-  audioChunks = [];
-  currentChunkIndex = 0;
-  ttsOnStartCallback = null;
-  ttsOnEndCallback = null;
-};
-
-/**
  * Speaks text using window.speechSynthesis in Ukrainian language.
- * Features rate customization, automatic voice detection, and Chrome keep-alive.
+ * Features rate customization, automatic voice detection, cancellation safety, and Chrome keep-alive.
  */
 export const speakText = (
   text: string, 
@@ -158,6 +25,16 @@ export const speakText = (
     return;
   }
 
+  // If SpeechSynthesis is not supported in browser
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+    console.warn("TTS: SpeechSynthesis is not supported in this browser.");
+    if (onEnd) onEnd();
+    return;
+  }
+
+  // Stop any active speech and clear previous callbacks
+  stopSpeaking();
+
   // Clean up text format: replace symbols, arrows, collapse spaces
   const cleanText = text
     .replace(/->|→/g, ', далі, ')
@@ -165,17 +42,8 @@ export const speakText = (
     .replace(/\s+/g, ' ')
     .trim();
 
-  // If SpeechSynthesis is not supported in browser, try audio fallback
-  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-    speakWithAudioFallback(cleanText, onStart, onEnd);
-    return;
-  }
-
-  // Reset any active state
-  stopSpeaking();
-
   try {
-    // Unpause if in paused state (browser glitch workaround)
+    // Unpause if speech synthesis is in a paused state (Chromium bug workaround)
     if (window.speechSynthesis.paused) {
       window.speechSynthesis.resume();
     }
@@ -183,10 +51,10 @@ export const speakText = (
     const savedSpeed = localStorage.getItem('accessibility-tts-speed');
     const speed = savedSpeed ? parseFloat(savedSpeed) : 1.0;
 
-    activeUtterance = new SpeechSynthesisUtterance(cleanText);
-    activeUtterance.lang = 'uk-UA';
-    activeUtterance.rate = speed;
-    activeUtterance.pitch = 1.0;
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.rate = Math.max(0.5, Math.min(2.0, speed));
+    utterance.pitch = 1.0;
+    utterance.lang = 'uk-UA';
 
     // Pick best available voice (Ukrainian preferred)
     const voices = window.speechSynthesis.getVoices();
@@ -196,58 +64,68 @@ export const speakText = (
         (v.name && (v.name.toLowerCase().includes('ukrain') || v.name.toLowerCase().includes('україн')))
       );
       if (ukVoice) {
-        activeUtterance.voice = ukVoice;
+        utterance.voice = ukVoice;
+        utterance.lang = ukVoice.lang;
       }
     }
-
-    let hasStarted = false;
-
-    activeUtterance.onstart = () => {
-      hasStarted = true;
-      if (onStart) onStart();
-    };
 
     const cleanup = () => {
       if (keepAliveTimer) {
         clearInterval(keepAliveTimer);
         keepAliveTimer = null;
       }
-      activeUtterance = null;
+      if (activeUtterance === utterance) {
+        activeUtterance = null;
+      }
     };
 
-    activeUtterance.onend = () => {
+    utterance.onstart = () => {
+      if (onStart) onStart();
+    };
+
+    utterance.onend = () => {
       cleanup();
       if (onEnd) onEnd();
     };
 
-    activeUtterance.onerror = (event) => {
+    utterance.onerror = (event: SpeechSynthesisErrorEvent) => {
       cleanup();
-      console.warn("SpeechSynthesis utterance event error:", event);
-      if (!hasStarted) {
-        // If system speech failed before start, attempt fallback
-        speakWithAudioFallback(cleanText, onStart, onEnd);
-      } else {
+      // 'canceled' and 'interrupted' are expected when user stops speech or navigates
+      if (event.error === 'canceled' || event.error === 'interrupted') {
         if (onEnd) onEnd();
+        return;
       }
+      console.warn("TTS: SpeechSynthesis event error:", event.error);
+      if (onEnd) onEnd();
     };
+
+    activeUtterance = utterance;
 
     // Chrome 15-second utterance pause workaround (keep alive)
     keepAliveTimer = setInterval(() => {
-      if (!window.speechSynthesis.speaking) {
-        if (keepAliveTimer) {
-          clearInterval(keepAliveTimer);
-          keepAliveTimer = null;
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        if (!window.speechSynthesis.speaking) {
+          if (keepAliveTimer) {
+            clearInterval(keepAliveTimer);
+            keepAliveTimer = null;
+          }
+        } else {
+          window.speechSynthesis.pause();
+          window.speechSynthesis.resume();
         }
-      } else {
-        window.speechSynthesis.pause();
-        window.speechSynthesis.resume();
       }
     }, 10000);
 
-    window.speechSynthesis.speak(activeUtterance);
+    // Brief timeout prevents immediate cancellation bug in Chromium
+    setTimeout(() => {
+      if (activeUtterance === utterance && typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.speak(utterance);
+      }
+    }, 60);
+
   } catch (err) {
-    console.error("SpeechSynthesis execution error:", err);
-    speakWithAudioFallback(cleanText, onStart, onEnd);
+    console.error("TTS: SpeechSynthesis execution error:", err);
+    if (onEnd) onEnd();
   }
 };
 
@@ -260,9 +138,13 @@ export const stopSpeaking = () => {
     keepAliveTimer = null;
   }
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    if (activeUtterance) {
+      activeUtterance.onstart = null;
+      activeUtterance.onend = null;
+      activeUtterance.onerror = null;
+    }
     window.speechSynthesis.cancel();
   }
-  stopAudioFallback();
   activeUtterance = null;
 };
 
@@ -270,9 +152,7 @@ export const stopSpeaking = () => {
  * Checks if the speech synthesis is currently speaking.
  */
 export const isSpeakingActive = (): boolean => {
-  const isSpeechSynthesisSpeaking = typeof window !== 'undefined' && ('speechSynthesis' in window) && window.speechSynthesis.speaking;
-  const isAudioPlaying = activeAudio !== null && !activeAudio.paused;
-  return Boolean(isSpeechSynthesisSpeaking || isAudioPlaying);
+  return typeof window !== 'undefined' && ('speechSynthesis' in window) && Boolean(window.speechSynthesis.speaking);
 };
 
 
