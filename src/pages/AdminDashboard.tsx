@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAppContext, type Role, type Question, type Case, type RegistryItem } from '../context/AppContext';
+import { useAppContext, type Role, type Question, type Case, type RegistryItem, type Application } from '../context/AppContext';
 import forge from 'node-forge';
 
 
@@ -19,6 +19,7 @@ export const AdminDashboard: React.FC = () => {
     updateCase,
     deleteCase,
     updateApplicationStatus,
+    deleteApplication,
     addRegistryItem,
     updateRegistryItem,
     deleteRegistryItem
@@ -27,6 +28,12 @@ export const AdminDashboard: React.FC = () => {
   console.log('AdminDashboard: state.cases length =', state.cases ? state.cases.length : 'undefined');
   const [activeTab, setActiveTab] = useState<'users' | 'applications' | 'tests' | 'registry' | 'analytics'>('users');
   const [testsSubTab, setTestsSubTab] = useState<'questions' | 'cases'>('questions');
+
+  // Two-step application delete states
+  const [appToDelete, setAppToDelete] = useState<Application | null>(null);
+  const [deleteAppStep, setDeleteAppStep] = useState<1 | 2>(1);
+  const [deleteAppConfirmText, setDeleteAppConfirmText] = useState('');
+  const [isDeletingApp, setIsDeletingApp] = useState(false);
 
   // Case Modal State
   const [isCaseModalOpen, setIsCaseModalOpen] = useState(false);
@@ -242,6 +249,36 @@ export const AdminDashboard: React.FC = () => {
     if (confirm("Ви дійсно бажаєте відхилити цю заяву?")) {
       await updateApplicationStatus(id, 'rejected');
       alert("Заяву відхилено.");
+    }
+  };
+
+  const initiateDeleteApp = (app: Application) => {
+    setAppToDelete(app);
+    setDeleteAppStep(1);
+    setDeleteAppConfirmText('');
+  };
+
+  const handleConfirmDeleteApp = async () => {
+    if (!appToDelete) return;
+
+    if (deleteAppStep === 1) {
+      setDeleteAppStep(2);
+      setDeleteAppConfirmText('');
+      return;
+    }
+
+    if (deleteAppStep === 2) {
+      setIsDeletingApp(true);
+      const success = await deleteApplication(appToDelete.id);
+      setIsDeletingApp(false);
+      if (success) {
+        if (selectedApp?.id === appToDelete.id) {
+          setSelectedApp(null);
+        }
+        const appNum = appToDelete.app_number;
+        setAppToDelete(null);
+        alert(`Заяву ${appNum} успішно видалено.`);
+      }
     }
   };
 
@@ -1967,13 +2004,21 @@ export const AdminDashboard: React.FC = () => {
                               </button>
                               <button 
                                 className="btn btn-outline" 
-                                style={{ padding: '4px 8px', fontSize: '12px', color: '#e74c3c', borderColor: '#e74c3c' }}
+                                style={{ padding: '4px 8px', fontSize: '12px', color: '#e74c3c', borderColor: '#e74c3c', marginRight: '5px' }}
                                 onClick={() => handleRejectApp(app.id)}
                               >
                                 ✗ Відхилити
                               </button>
                             </>
                           )}
+                          <button 
+                            className="btn btn-outline" 
+                            style={{ padding: '4px 8px', fontSize: '12px', color: '#e74c3c', borderColor: '#e74c3c' }}
+                            onClick={() => initiateDeleteApp(app)}
+                            title="Видалити заяву"
+                          >
+                            🗑 Видалити
+                          </button>
                         </td>
                       </tr>
                     ))
@@ -2827,34 +2872,46 @@ export const AdminDashboard: React.FC = () => {
               })()}
             </div>
 
-            <div className="d-flex justify-content-end" style={{ gap: '10px', borderTop: '1px solid #eee', paddingTop: '20px' }}>
-              <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '6px' }} onClick={() => printOfficialApplication(selectedApp)}>
-                <span>🖨️</span> Роздрукувати заяву
-              </button>
-              <button className="btn btn-outline" onClick={() => setSelectedApp(null)}>Закрити</button>
-              {selectedApp.status === 'pending' && (
-                <>
-                  <button 
-                    className="btn btn-outline" 
-                    style={{ color: '#e74c3c', borderColor: '#e74c3c' }}
-                    onClick={async () => {
-                      await handleRejectApp(selectedApp.id);
-                      setSelectedApp(null);
-                    }}
-                  >
-                    Відхилити
-                  </button>
-                  <button 
-                    className="btn btn-primary"
-                    onClick={async () => {
-                      await handleApproveApp(selectedApp);
-                      setSelectedApp(null);
-                    }}
-                  >
-                    Схвалити заяву
-                  </button>
-                </>
-              )}
+            <div className="d-flex justify-content-between align-items-center flex-wrap" style={{ gap: '10px', borderTop: '1px solid #eee', paddingTop: '20px' }}>
+              <div>
+                <button 
+                  type="button"
+                  className="btn btn-outline" 
+                  style={{ color: '#dc2626', borderColor: '#fca5a5', background: '#fff1f2', display: 'flex', alignItems: 'center', gap: '6px' }} 
+                  onClick={() => initiateDeleteApp(selectedApp)}
+                >
+                  <span>🗑</span> Видалити заяву
+                </button>
+              </div>
+              <div className="d-flex gap-2">
+                <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '6px' }} onClick={() => printOfficialApplication(selectedApp)}>
+                  <span>🖨️</span> Роздрукувати заяву
+                </button>
+                <button className="btn btn-outline" onClick={() => setSelectedApp(null)}>Закрити</button>
+                {selectedApp.status === 'pending' && (
+                  <>
+                    <button 
+                      className="btn btn-outline" 
+                      style={{ color: '#e74c3c', borderColor: '#e74c3c' }}
+                      onClick={async () => {
+                        await handleRejectApp(selectedApp.id);
+                        setSelectedApp(null);
+                      }}
+                    >
+                      Відхилити
+                    </button>
+                    <button 
+                      className="btn btn-primary"
+                      onClick={async () => {
+                        await handleApproveApp(selectedApp);
+                        setSelectedApp(null);
+                      }}
+                    >
+                      Схвалити заяву
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -3476,6 +3533,147 @@ export const AdminDashboard: React.FC = () => {
                 <span>⬇️</span> Завантажити файл
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2-Step Application Delete Modal */}
+      {appToDelete && (
+        <div className="modal-overlay" style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.7)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1300,
+          backdropFilter: 'blur(2px)'
+        }}>
+          <div className="card" style={{ maxWidth: '560px', width: '100%', margin: '20px', background: '#fff', borderRadius: '12px', padding: '28px', borderTop: '5px solid #dc2626' }}>
+            {deleteAppStep === 1 ? (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                  <div style={{ background: '#fee2e2', color: '#dc2626', width: '46px', height: '46px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', flexShrink: 0 }}>
+                    ⚠️
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '18px', color: '#991b1b' }}>
+                      Попередження: Видалення заяви здобувача
+                    </h3>
+                    <span style={{ fontSize: '12.5px', color: '#6b7280' }}>Етап 1 з 2 • Попереднє підтвердження</span>
+                  </div>
+                </div>
+
+                <p style={{ fontSize: '14px', color: '#374151', lineHeight: '1.5', marginBottom: '18px' }}>
+                  Ви збираєтесь вилучити з системи офіційну реєстраційну заяву про присвоєння/підтвердження кваліфікації:
+                </p>
+
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '14px 18px', marginBottom: '20px', fontSize: '13.5px', lineHeight: '1.6' }}>
+                  <div><strong>Номер заяви:</strong> <span style={{ color: '#0f3460', fontWeight: 'bold' }}>{appToDelete.app_number}</span></div>
+                  <div><strong>Здобувач:</strong> {appToDelete.lname} {appToDelete.fname} {appToDelete.mname}</div>
+                  <div><strong>Рівень кваліфікації:</strong> {appToDelete.level}</div>
+                  <div><strong>Електронна пошта:</strong> {appToDelete.email}</div>
+                  <div><strong>Поточний статус:</strong> {appToDelete.status === 'approved' ? 'Схвалено' : appToDelete.status === 'rejected' ? 'Відхилено' : 'Очікує розгляду'}</div>
+                </div>
+
+                <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: '8px', padding: '12px 16px', color: '#9f1239', fontSize: '13px', lineHeight: '1.45', marginBottom: '25px' }}>
+                  ❗ <strong>Увага:</strong> Видалення призведе до безповоротного знищення заяви, збережених скан-копій документів, криптографічного протоколу та реквізитів КЕП.
+                </div>
+
+                <div className="d-flex justify-content-end gap-2">
+                  <button 
+                    type="button" 
+                    className="btn btn-outline" 
+                    onClick={() => setAppToDelete(null)}
+                  >
+                    Скасувати
+                  </button>
+                  <button 
+                    type="button" 
+                    className="btn btn-danger" 
+                    style={{ background: '#dc2626', borderColor: '#dc2626', color: '#fff', padding: '8px 18px', fontWeight: 600 }}
+                    onClick={() => setDeleteAppStep(2)}
+                  >
+                    Продовжити видалення →
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                  <div style={{ background: '#fef2f2', color: '#991b1b', width: '46px', height: '46px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', flexShrink: 0 }}>
+                    🚨
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '18px', color: '#7f1d1d' }}>
+                      Остаточне підтвердження видалення
+                    </h3>
+                    <span style={{ fontSize: '12.5px', color: '#dc2626', fontWeight: 600 }}>Етап 2 з 2 • Незворотна дія</span>
+                  </div>
+                </div>
+
+                <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '14px 16px', color: '#991b1b', fontSize: '13.5px', marginBottom: '20px', lineHeight: '1.5' }}>
+                  Для остаточного підтвердження видалення заяви <strong>{appToDelete.app_number}</strong> ({appToDelete.lname} {appToDelete.fname}), введіть номер заяви <code>{appToDelete.app_number}</code> або слово <code>ВИДАЛИТИ</code> нижче:
+                </div>
+
+                <div className="form-group mb-4">
+                  <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '6px' }}>
+                    Введіть <strong>{appToDelete.app_number}</strong> або <strong>ВИДАЛИТИ</strong>:
+                  </label>
+                  <input 
+                    type="text" 
+                    className="form-control" 
+                    placeholder={appToDelete.app_number}
+                    value={deleteAppConfirmText}
+                    onChange={(e) => setDeleteAppConfirmText(e.target.value)}
+                    autoFocus
+                    style={{ borderColor: '#dc2626', fontSize: '14px', fontWeight: 600 }}
+                  />
+                </div>
+
+                <div className="d-flex justify-content-between align-items-center">
+                  <button 
+                    type="button" 
+                    className="btn btn-outline" 
+                    onClick={() => setDeleteAppStep(1)}
+                    disabled={isDeletingApp}
+                  >
+                    ← Назад (до етапу 1)
+                  </button>
+
+                  <div className="d-flex gap-2">
+                    <button 
+                      type="button" 
+                      className="btn btn-outline" 
+                      onClick={() => setAppToDelete(null)}
+                      disabled={isDeletingApp}
+                    >
+                      Скасувати
+                    </button>
+                    <button 
+                      type="button" 
+                      className="btn btn-danger" 
+                      style={{ 
+                        background: '#b91c1c', 
+                        borderColor: '#b91c1c', 
+                        color: '#fff', 
+                        padding: '8px 18px', 
+                        fontWeight: 600,
+                        opacity: (deleteAppConfirmText.trim() === appToDelete.app_number || deleteAppConfirmText.trim().toUpperCase() === 'ВИДАЛИТИ') ? 1 : 0.5,
+                        cursor: (deleteAppConfirmText.trim() === appToDelete.app_number || deleteAppConfirmText.trim().toUpperCase() === 'ВИДАЛИТИ') ? 'pointer' : 'not-allowed'
+                      }}
+                      disabled={isDeletingApp || (deleteAppConfirmText.trim() !== appToDelete.app_number && deleteAppConfirmText.trim().toUpperCase() !== 'ВИДАЛИТИ')}
+                      onClick={handleConfirmDeleteApp}
+                    >
+                      {isDeletingApp ? 'Видалення...' : '🗑 Остаточно видалити'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

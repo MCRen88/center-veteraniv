@@ -94,6 +94,7 @@ interface AppContextType {
   saveTestScore: (score: Omit<TestScore, 'id' | 'created_at' | 'user_id'> & { details?: any }) => Promise<void>;
   submitApplication: (app: Omit<Application, 'id' | 'created_at' | 'status'>) => Promise<boolean>;
   updateApplicationStatus: (id: string, status: 'pending' | 'approved' | 'rejected') => Promise<void>;
+  deleteApplication: (id: string) => Promise<boolean>;
   // Admin Test Mgmt
   addQuestion: (q: Omit<Question, 'id'>) => Promise<void>;
   updateQuestion: (id: number, q: Omit<Question, 'id'>) => Promise<void>;
@@ -499,6 +500,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const deleteApplication = async (id: string) => {
+    const { error } = await supabase.from('applications').delete().eq('id', id);
+    if (error) {
+      alert("Помилка видалення заяви: " + error.message);
+      return false;
+    } else {
+      setState(prev => ({
+        ...prev,
+        applications: prev.applications.filter(app => app.id !== id)
+      }));
+      return true;
+    }
+  };
+
   const addQuestion = async (q: Omit<Question, 'id'>) => {
     const dbQ = {
       cat_id: q.catId,
@@ -727,6 +742,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       saveTestScore, 
       submitApplication, 
       updateApplicationStatus, 
+      deleteApplication,
       addQuestion, 
       updateQuestion, 
       deleteQuestion, 
