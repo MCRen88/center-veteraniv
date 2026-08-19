@@ -1887,10 +1887,10 @@ export const AdminDashboard: React.FC = () => {
                     </thead>
                     <tbody>
                       {(state.questions || []).map((q, idx) => (
-                        <tr key={idx}>
+                        <tr key={q?.id || idx}>
                           <td>{idx + 1}</td>
-                          <td><span style={{ fontSize: '12px', background: '#eee', padding: '2px 6px', borderRadius: '4px' }}>{q.catId || q.catName.split('.')[0]}</span></td>
-                          <td style={{ fontSize: '14px' }}>{q.question.substring(0, 80)}{q.question.length > 80 ? '...' : ''}</td>
+                          <td><span style={{ fontSize: '12px', background: '#eee', padding: '2px 6px', borderRadius: '4px' }}>{q?.catId || q?.catName?.split('.')[0] || '1'}</span></td>
+                          <td style={{ fontSize: '14px' }}>{(q?.question || '').substring(0, 80)}{(q?.question || '').length > 80 ? '...' : ''}</td>
                           <td style={{ whiteSpace: 'nowrap' }}>
                             <button className="btn btn-outline" style={{ padding: '2px 8px', fontSize: '12px', marginRight: '5px' }} onClick={() => startEditQuestion(q)}>✎ Редагувати</button>
                             <button className="btn btn-outline" style={{ padding: '2px 8px', fontSize: '12px', color: '#e74c3c', borderColor: '#e74c3c' }} onClick={() => { if(confirm('Видалити запитання?')) deleteQuestion(q.id) }}>🗑</button>

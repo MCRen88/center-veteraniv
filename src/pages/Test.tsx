@@ -3,6 +3,7 @@ import { useAppContext } from '../context/AppContext';
 import type { Question } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
 import { casesDb } from '../data/casesDb';
+import { questionsDb } from '../data/questionsDb';
 import { speakText, stopSpeaking } from '../utils/tts';
 import { variant1Questions, variant2Questions } from '../data/variantsData';
 
@@ -84,7 +85,9 @@ export const Test: React.FC = () => {
   const activeCases = selectedVariant ? casesList.filter(c => selectedVariant === 2 ? c.id > 10 : c.id <= 10) : casesList;
 
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [testQuestions, setTestQuestions] = useState(state.questions);
+  const [testQuestions, setTestQuestions] = useState<Question[]>(() => 
+    (state.questions && state.questions.length > 0) ? state.questions : questionsDb
+  );
   const [answers, setAnswers] = useState<number[]>([]);
   const [isFinished, setIsFinished] = useState(false);
   const [score, setScore] = useState(0);
@@ -444,16 +447,17 @@ export const Test: React.FC = () => {
       return matches / Math.max(words1.length, words2.length);
     };
 
+    const pool = (state.questions && state.questions.length > 0) ? state.questions : questionsDb;
     const matchedQs: Question[] = [];
     variantList.forEach((vQText) => {
       const normVQ = normalizeText(vQText);
-      const found = state.questions.find(sq => normalizeText(sq.question) === normVQ);
+      const found = pool.find(sq => normalizeText(sq.question) === normVQ);
       if (found) {
         matchedQs.push(found);
       } else {
         let bestRatio = 0;
         let bestMatch: Question | undefined;
-        state.questions.forEach(sq => {
+        pool.forEach(sq => {
           const ratio = getSimilarity(normVQ, normalizeText(sq.question));
           if (ratio > bestRatio) {
             bestRatio = ratio;
@@ -468,7 +472,7 @@ export const Test: React.FC = () => {
       }
     });
 
-    const finalQuestions = matchedQs.length > 0 ? matchedQs : state.questions;
+    const finalQuestions = matchedQs.length > 0 ? matchedQs : pool;
     const shuffled = [...finalQuestions].sort(() => 0.5 - Math.random());
     setTestQuestions(shuffled);
     setExamEndTime(Date.now() + 7200 * 1000);
@@ -529,7 +533,8 @@ export const Test: React.FC = () => {
     
     const categoryStats: { [key: string]: { correct: number; total: number } } = {};
     testQuestions.forEach((q, idx) => {
-      const cat = q.catName;
+      if (!q) return;
+      const cat = q.catName || 'Загальні питання';
       if (!categoryStats[cat]) {
         categoryStats[cat] = { correct: 0, total: 0 };
       }
@@ -560,9 +565,9 @@ export const Test: React.FC = () => {
 
     let style = 'Збалансований';
     let description = 'Кандидат демонструє оптимальний баланс швидкості та якості прийняття рішень. Працює в стабільному темпі, приділяючи помірну увагу кожному питанню.';
-    let strengths = ['Стабільний темп роботи', 'Адекватна самооцінка впевненості', 'Низький рівень помилок через неуважність'];
-    let weaknesses = ['Можлива легка нерішучість на складних запитаннях'];
-    
+    let strengths: string[] | string = ['Стабільний темп роботи', 'Адекватна самооцінка впевненості', 'Низький рівень помилок через неуважність'];
+    let weaknesses: string[] | string = ['Можлива легка нерішучість на складних запитаннях'];
+
     const scoreRate = totalQuestions > 0 ? finalScore / totalQuestions : 0;
 
     if (avgTime < 15 && totalChanges <= 2) {
@@ -610,13 +615,13 @@ export const Test: React.FC = () => {
       recommendations = 'Дотримуйтеся обраної стратегії. Ви демонструєте ідеальний баланс темпу та якості.';
     }
 
-    const questionsBreakdown = testQuestions.map((q, idx) => ({
-      id: q.id,
-      question: q.question,
-      catId: q.catId,
-      catName: q.catName,
-      options: q.options,
-      correct: q.correct,
+    const questionsBreakdown = testQuestions.filter(Boolean).map((q, idx) => ({
+      id: q?.id || idx,
+      question: q?.question || '',
+      catId: q?.catId || '1',
+      catName: q?.catName || 'Загальні питання',
+      options: q?.options || [],
+      correct: q?.correct ?? 0,
       selected: answers[idx],
       timeSpent: finalTimePerQuestion[idx] || 0,
       changes: answerChanges[idx] || 0
@@ -1214,7 +1219,32 @@ export const Test: React.FC = () => {
   }
 
   if (mode) {
-    const question = testQuestions[currentQuestionIndex];
+    if (!testQuestions || testQuestions.length === 0) {
+      return (
+        <div className="container mt-5 mb-5 text-center">
+          <div className="card" style={{ maxWidth: '500px', margin: '0 auto', padding: '30px' }}>
+            <div style={{ fontSize: '40px', marginBottom: '15px' }}>⏳</div>
+            <h4>Формування запитань...</h4>
+            <p className="text-muted mt-2">Завантажуємо базу запитань, будь ласка зачекайте.</p>
+            <button className="btn btn-primary mt-3" onClick={() => startTest(mode)}>Розпочати знову</button>
+          </div>
+        </div>
+      );
+    }
+
+    const question = testQuestions[currentQuestionIndex] || testQuestions[0] || questionsDb[0];
+    if (!question) {
+      return (
+        <div className="container mt-5 mb-5 text-center">
+          <div className="card" style={{ maxWidth: '500px', margin: '0 auto', padding: '30px' }}>
+            <h4>Помилка завантаження</h4>
+            <p className="text-muted mt-2">Не вдалося завантажити поточне запитання.</p>
+            <button className="btn btn-primary mt-3" onClick={() => startTest(mode)}>Перезапустити тест</button>
+          </div>
+        </div>
+      );
+    }
+
     const hasAnsweredAll = answers.every(a => a !== -1);
 
     return (
@@ -1329,13 +1359,13 @@ export const Test: React.FC = () => {
                   Варіант {selectedVariant}
                 </span>
               </div>
-              <span style={{ color: 'var(--blue)', fontWeight: 500 }}>{question.catName}</span>
+              <span style={{ color: 'var(--blue)', fontWeight: 500 }}>{question?.catName || 'Загальні питання'}</span>
             </div>
             
             <div className="card mb-4">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '15px', marginBottom: '20px' }}>
                 <h3 style={{ fontSize: '20px', lineHeight: 1.4, margin: 0, fontFamily: 'Roboto, sans-serif', flex: 1 }}>
-                  {question.question}
+                  {question?.question || ''}
                 </h3>
                 <button
                   className={`btn ${isSpeaking ? 'btn-danger tts-speaking' : 'btn-outline'}`}

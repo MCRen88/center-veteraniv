@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { supabaseAdmin } from '../lib/supabaseAdmin';
 import type { Database } from '../lib/database.types';
 import { casesDb, type CaseQuestion as Case } from '../data/casesDb';
+import { questionsDb } from '../data/questionsDb';
 
 export type Role = 'user' | 'teacher' | 'admin';
 export type { Case };
@@ -152,15 +153,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const { data: registry, error: rError } = await supabase.from('registry').select('*');
     if (rError) console.error('AppContext error fetching registry:', rError.message);
     
-    const questionsList = dbQuestions?.map((q: any) => ({
-      id: q.id,
-      catId: q.cat_id || q.catId,
-      catName: q.cat_name || q.catName,
-      question: q.question,
-      options: q.options,
-      correct: q.correct,
-      explanation: q.explanation
-    })) || [];
+    let questionsList: Question[] = [];
+    if (dbQuestions && dbQuestions.length > 0) {
+      questionsList = dbQuestions.map((q: any) => ({
+        id: q.id,
+        catId: q.cat_id || q.catId || '1',
+        catName: q.cat_name || q.catName || 'Загальні питання',
+        question: q.question || '',
+        options: q.options || [],
+        correct: typeof q.correct === 'number' ? q.correct : 0,
+        explanation: q.explanation || ''
+      }));
+    } else {
+      questionsList = [...questionsDb];
+    }
 
     let casesList: Case[] = [];
     try {
