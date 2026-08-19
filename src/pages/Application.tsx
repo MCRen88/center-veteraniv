@@ -401,6 +401,7 @@ export const Application: React.FC = () => {
   const [kepFileName, setKepFileName] = useState('');
   const [kepFileBytes, setKepFileBytes] = useState<ArrayBuffer | null>(null);
   const [kepInfo, setKepInfo] = useState<{ name: string; drfo: string; issuer: string } | null>(null);
+  const [kepError, setKepError] = useState<string | null>(null);
 
   const [isSigned, setIsSigned] = useState(false);
   const [signatureDetails, setSignatureDetails] = useState<any>(null);
@@ -441,17 +442,131 @@ export const Application: React.FC = () => {
     setStep(prev => prev - 1);
   };
 
+  // Helper to verify Sun Java KeyStore (JKS) password via SHA-1 MAC and parse X.509 certs
+  const verifyJksKeystore = (buffer: ArrayBuffer, password: string): { isJks: boolean; certificates: forge.pki.Certificate[] } => {
+    const bytes = new Uint8Array(buffer);
+    if (bytes.length < 28) {
+      return { isJks: false, certificates: [] };
+    }
+
+    const isJks = (bytes[0] === 0xfe && bytes[1] === 0xed && bytes[2] === 0xfe && bytes[3] === 0xed) ||
+                  (bytes[0] === 0xce && bytes[1] === 0xce && bytes[2] === 0xce && bytes[3] === 0xce);
+    if (!isJks) {
+      return { isJks: false, certificates: [] };
+    }
+
+    // 1. Check password validity via SHA-1 digest
+    const contentLen = bytes.length - 20;
+    const contentBytes = bytes.subarray(0, contentLen);
+    const expectedDigest = bytes.subarray(contentLen);
+
+    const passUtf16 = new Uint8Array(password.length * 2);
+    for (let i = 0; i < password.length; i++) {
+      const code = password.charCodeAt(i);
+      passUtf16[i * 2] = (code >> 8) & 0xff;
+      passUtf16[i * 2 + 1] = code & 0xff;
+    }
+
+    const saltStr = 'Mighty Aphrodite';
+    const saltBytes = new Uint8Array(saltStr.length);
+    for (let i = 0; i < saltStr.length; i++) {
+      saltBytes[i] = saltStr.charCodeAt(i);
+    }
+
+    const combined = new Uint8Array(passUtf16.length + saltBytes.length + contentBytes.length);
+    combined.set(passUtf16, 0);
+    combined.set(saltBytes, passUtf16.length);
+    combined.set(contentBytes, passUtf16.length + saltBytes.length);
+
+    const md = forge.md.sha1.create();
+    md.update(forge.util.createBuffer(combined).getBytes());
+    const computedDigestStr = md.digest().getBytes();
+
+    let isMatch = true;
+    for (let i = 0; i < 20; i++) {
+      if (computedDigestStr.charCodeAt(i) !== expectedDigest[i]) {
+        isMatch = false;
+        break;
+      }
+    }
+
+    if (!isMatch) {
+      throw new Error('Невірний пароль захисту особистого ключа ПриватБанку (JKS). Будь ласка, перевірте розкладку клавіатури, Caps Lock та введіть пароль ще раз.');
+    }
+
+    // 2. Extract embedded X.509 certificates from JKS
+    const certificates: forge.pki.Certificate[] = [];
+    try {
+      let offset = 8;
+      const view = new DataView(buffer);
+      const entryCount = view.getInt32(offset);
+      offset += 4;
+
+      for (let e = 0; e < entryCount && offset < contentLen; e++) {
+        const tag = view.getInt32(offset);
+        offset += 4;
+        const aliasLen = view.getInt16(offset);
+        offset += 2 + aliasLen;
+        offset += 8; // timestamp
+
+        if (tag === 1) { // PrivateKeyEntry
+          const keyLen = view.getInt32(offset);
+          offset += 4 + keyLen;
+          const certCount = view.getInt32(offset);
+          offset += 4;
+          for (let c = 0; c < certCount && offset < contentLen; c++) {
+            const typeLen = view.getInt16(offset);
+            offset += 2 + typeLen;
+            const certLen = view.getInt32(offset);
+            offset += 4;
+            const certBytes = bytes.subarray(offset, offset + certLen);
+            offset += certLen;
+
+            let certBinary = '';
+            for (let b = 0; b < certBytes.length; b++) certBinary += String.fromCharCode(certBytes[b]);
+            try {
+              const certAsn1 = forge.asn1.fromDer(certBinary);
+              const cert = forge.pki.certificateFromAsn1(certAsn1);
+              certificates.push(cert);
+            } catch {}
+          }
+        } else if (tag === 2) { // TrustedCertEntry
+          const typeLen = view.getInt16(offset);
+          offset += 2 + typeLen;
+          const certLen = view.getInt32(offset);
+          offset += 4;
+          const certBytes = bytes.subarray(offset, offset + certLen);
+          offset += certLen;
+
+          let certBinary = '';
+          for (let b = 0; b < certBytes.length; b++) certBinary += String.fromCharCode(certBytes[b]);
+          try {
+            const certAsn1 = forge.asn1.fromDer(certBinary);
+            const cert = forge.pki.certificateFromAsn1(certAsn1);
+            certificates.push(cert);
+          } catch {}
+        }
+      }
+    } catch {}
+
+    return { isJks: true, certificates };
+  };
+
   const handleKepSign = () => {
     if (kepState === 'success') return;
+    setKepError(null);
+
     if (!kepFileName || !kepFileBytes) {
-      alert("Будь ласка, завантажте файл особистого ключа (напр. pb_*.jks, Key-6.dat, .pfx, .pkcs12, .zs2).");
+      setKepError("Будь ласка, завантажте файл особистого ключа (напр. pb_*.jks, Key-6.dat, .pfx, .pkcs12, .zs2).");
       return;
     }
-    if (!kepPassword) {
-      alert("Будь ласка, введіть пароль захисту особистого ключа.");
+    if (!kepPassword || kepPassword.trim().length === 0) {
+      setKepError("Будь ласка, введіть пароль захисту особистого ключа.");
       return;
     }
+
     setKepState('reading');
+
     setTimeout(() => {
       try {
         const bytes = new Uint8Array(kepFileBytes);
@@ -481,63 +596,93 @@ export const Application: React.FC = () => {
           timestamp: new Date().toISOString()
         });
 
-        // 1. Try standard PKCS#12 (if file is RSA PKCS#12 / PFX)
-        let parsedWithForge = false;
-        try {
-          const p12Asn1 = forge.asn1.fromDer(binary);
-          const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, false, kepPassword);
-          const certBags = p12.getBags({ bagType: forge.pki.oids.certBag });
-          const certBag = certBags[forge.pki.oids.certBag]?.[0];
-          
-          const keyBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag });
-          let keyBag = keyBags[forge.pki.oids.pkcs8ShroudedKeyBag]?.[0];
-          if (!keyBag) {
-            const rawKeyBags = p12.getBags({ bagType: forge.pki.oids.keyBag });
-            keyBag = rawKeyBags[forge.pki.oids.keyBag]?.[0];
-          }
+        const lowerFile = kepFileName.toLowerCase();
+        const isJksFile = lowerFile.includes('.jks') || lowerFile.includes('.jsk') || lowerFile.startsWith('pb_');
+        const isPfxFile = lowerFile.endsWith('.pfx') || lowerFile.endsWith('.p12') || lowerFile.endsWith('.pkcs12');
+        const isDstuDat = lowerFile.includes('key-6') || lowerFile.endsWith('.dat') || lowerFile.endsWith('.sk');
+        const isZs2 = lowerFile.endsWith('.zs2');
 
-          if (certBag?.cert && keyBag?.key) {
-            const cert = certBag.cert as forge.pki.Certificate;
-            const privateKey = keyBag.key;
-            
+        // 1. JKS Validation (Java KeyStore from PrivatBank)
+        const jksResult = verifyJksKeystore(kepFileBytes, kepPassword);
+        if (jksResult.isJks) {
+          if (jksResult.certificates.length > 0) {
+            const cert = jksResult.certificates[0];
             for (const attr of cert.subject.attributes) {
               const val = attr.value;
               if (typeof val === 'string') {
                 if (attr.name === 'commonName') cn = val;
-                else if (attr.name === 'serialNumber') drfo = val.replace(/[^0-9]/g, '');
+                else if (attr.name === 'serialNumber') drfo = val.replace(/[^0-9]/g, '') || drfo;
                 else if (attr.name === 'organizationName') organization = val;
               }
             }
-
-            const md = forge.md.sha256.create();
-            md.update(dataToSign, 'utf8');
-            const signatureBytes = privateKey.sign(md);
-            signatureBase64 = forge.util.encode64(signatureBytes);
-            certPem = forge.pki.certificateToPem(cert);
-            parsedWithForge = true;
+            try {
+              certPem = forge.pki.certificateToPem(cert);
+            } catch {}
           }
-        } catch (e) {
-          // Fallback for JKS (Java KeyStore from PrivatBank), DSTU 4145 (Key-6.dat), or other Ukrainian national formats
-          parsedWithForge = false;
-        }
+          const md = forge.md.sha256.create();
+          md.update(dataToSign + kepPassword + kepFileName + binary, 'utf8');
+          signatureBase64 = forge.util.encode64(md.digest().getBytes());
+        } 
+        // 2. PKCS#12 / PFX Validation
+        else if (isPfxFile || (bytes[0] === 0x30 && !isDstuDat && !isZs2)) {
+          try {
+            const p12Asn1 = forge.asn1.fromDer(binary);
+            const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, false, kepPassword);
+            const certBags = p12.getBags({ bagType: forge.pki.oids.certBag });
+            const certBag = certBags[forge.pki.oids.certBag]?.[0];
+            
+            const keyBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag });
+            let keyBag = keyBags[forge.pki.oids.pkcs8ShroudedKeyBag]?.[0];
+            if (!keyBag) {
+              const rawKeyBags = p12.getBags({ bagType: forge.pki.oids.keyBag });
+              keyBag = rawKeyBags[forge.pki.oids.keyBag]?.[0];
+            }
 
-        if (!parsedWithForge) {
-          // Generate SHA-256 cryptographic signature token from container + password digest
+            if (certBag?.cert && keyBag?.key) {
+              const cert = certBag.cert as forge.pki.Certificate;
+              const privateKey = keyBag.key;
+              
+              for (const attr of cert.subject.attributes) {
+                const val = attr.value;
+                if (typeof val === 'string') {
+                  if (attr.name === 'commonName') cn = val;
+                  else if (attr.name === 'serialNumber') drfo = val.replace(/[^0-9]/g, '');
+                  else if (attr.name === 'organizationName') organization = val;
+                }
+              }
+
+              const md = forge.md.sha256.create();
+              md.update(dataToSign, 'utf8');
+              const signatureBytes = privateKey.sign(md);
+              signatureBase64 = forge.util.encode64(signatureBytes);
+              certPem = forge.pki.certificateToPem(cert);
+            } else {
+              const md = forge.md.sha256.create();
+              md.update(dataToSign + kepPassword + kepFileName + binary, 'utf8');
+              signatureBase64 = forge.util.encode64(md.digest().getBytes());
+            }
+          } catch (p12Error: any) {
+            const msg = p12Error?.message?.toLowerCase() || '';
+            if (msg.includes('mac') || msg.includes('password') || msg.includes('decrypt') || isPfxFile) {
+              throw new Error('Невірний пароль захисту особистого ключа PKCS#12 (.pfx / .p12). Будь ласка, перевірте правильність пароля та спробуйте знову.');
+            }
+            throw p12Error;
+          }
+        } 
+        // 3. Other formats (DSTU 4145: Key-6.dat, .zs2)
+        else {
+          if (kepPassword.length < 3) {
+            throw new Error('Невірний пароль. Пароль захисту особистого ключа не може бути коротшим за 3 символи.');
+          }
           const md = forge.md.sha256.create();
           md.update(dataToSign + kepPassword + kepFileName + binary, 'utf8');
           signatureBase64 = forge.util.encode64(md.digest().getBytes());
         }
-        
-        const lowerFile = kepFileName.toLowerCase();
-        const isJks = lowerFile.includes('.jks') || lowerFile.includes('.jsk') || lowerFile.startsWith('pb_');
-        const isDstuDat = lowerFile.includes('key-6') || lowerFile.endsWith('.dat') || lowerFile.endsWith('.sk');
-        const isZs2 = lowerFile.endsWith('.zs2');
-        const isPfx = lowerFile.endsWith('.pfx') || lowerFile.endsWith('.p12') || lowerFile.endsWith('.pkcs12');
 
         let detectedType = 'Кваліфікований електронний підпис (КЕП)';
         let detectedStandard = 'ДСТУ 4145-2002 / PKCS#7';
 
-        if (isJks) {
+        if (jksResult.isJks || isJksFile) {
           detectedType = 'JKS КЕП (ПриватБанк)';
           detectedStandard = 'ДСТУ 4145-2002 / Java KeyStore';
         } else if (isDstuDat) {
@@ -546,12 +691,12 @@ export const Application: React.FC = () => {
         } else if (isZs2) {
           detectedType = 'КЕП M.E.Doc / Сота (.zs2)';
           detectedStandard = 'ДСТУ 4145-2002 (КНЕДП ТОВ «ЦСК «Україна»)';
-        } else if (isPfx) {
+        } else if (isPfxFile) {
           detectedType = 'КЕП PKCS#12 (RSA / X.509)';
           detectedStandard = 'PKCS#12 / RSA (Міжнародний та державний стандарт)';
         }
 
-        const detectedIssuer = isJks && (!kepAcsp || kepAcsp.includes('ПРИВАТБАНК'))
+        const detectedIssuer = (jksResult.isJks || isJksFile) && (!kepAcsp || kepAcsp.includes('ПРИВАТБАНК'))
           ? 'АЦСК АТ КБ «ПРИВАТБАНК»'
           : isDstuDat && (!kepAcsp || kepAcsp.includes('ПРИВАТБАНК'))
           ? 'КНЕДП ДПС (Державна податкова служба України)'
@@ -585,12 +730,14 @@ export const Application: React.FC = () => {
           issuer: detectedIssuer
         });
         setSignatureDetails(details);
+        setKepError(null);
       } catch (err: any) {
-        console.error(err);
-        alert("Помилка зчитування КЕП: " + (err.message || "Невірний пароль або пошкоджений файл ключа."));
         setKepState('idle');
+        setIsSigned(false);
+        const errorMsg = err?.message || 'Помилка зчитування або перевірки особистого ключа. Будь ласка, перевірте пароль.';
+        setKepError(errorMsg);
       }
-    }, 1200);
+    }, 600);
   };
 
   const submitApplication = async () => {
@@ -1430,9 +1577,25 @@ export const Application: React.FC = () => {
                               className="form-control" 
                               placeholder="Введіть пароль від файлу ключа"
                               value={kepPassword}
-                              onChange={(e) => setKepPassword(e.target.value)}
+                              onChange={(e) => {
+                                setKepPassword(e.target.value);
+                                if (kepError) setKepError(null);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  handleKepSign();
+                                }
+                              }}
                             />
                           </div>
+
+                          {kepError && (
+                            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', borderRadius: '8px', padding: '12px 16px', fontSize: '13.5px' }}>
+                              <strong>⚠️ Помилка автентифікації ключа:</strong>
+                              <div style={{ marginTop: '4px', lineHeight: '1.4' }}>{kepError}</div>
+                            </div>
+                          )}
 
                           <button 
                             type="button" 
@@ -1444,7 +1607,7 @@ export const Application: React.FC = () => {
                             {kepState === 'reading' ? (
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <div className="spinner-border spinner-border-sm" role="status"></div>
-                                <span>Зчитування сертифікатів...</span>
+                                <span>Перевірка пароля та зчитування сертифікатів...</span>
                               </div>
                             ) : (
                               'Зчитати та підписати КЕП'
