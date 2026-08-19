@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { speakText, stopSpeaking } from '../utils/tts';
 
 type FontSize = 'normal' | 'large' | 'xlarge';
 type ContrastMode = 'normal' | 'high-contrast';
 
 export const AccessibilityPanel: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const [isPlayingSample, setIsPlayingSample] = useState(false);
   const [fontSize, setFontSize] = useState<FontSize>(() => {
     return (localStorage.getItem('accessibility-font-size') as FontSize) || 'normal';
   });
@@ -306,6 +308,28 @@ export const AccessibilityPanel: React.FC = () => {
                   onClick={() => handleTTSSpeedChange(1.25)}
                 >
                   Швидка
+                </button>
+              </div>
+
+              <div style={{ marginTop: '10px' }}>
+                <button
+                  type="button"
+                  className="a11y-btn"
+                  style={{ width: '100%', padding: '6px 10px', fontSize: '12px', background: isPlayingSample ? '#fee2e2' : '#f1f5f9', color: isPlayingSample ? '#dc2626' : '#1e293b', border: isPlayingSample ? '1px solid #f87171' : '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer' }}
+                  onClick={() => {
+                    if (isPlayingSample) {
+                      stopSpeaking();
+                      setIsPlayingSample(false);
+                    } else {
+                      speakText(
+                        "Це зразок озвучування тексту українською мовою для кваліфікаційного центру.",
+                        () => setIsPlayingSample(true),
+                        () => setIsPlayingSample(false)
+                      );
+                    }
+                  }}
+                >
+                  {isPlayingSample ? "⏹️ Зупинити зразок" : "🔊 Прослухати зразок голосу"}
                 </button>
               </div>
             </div>

@@ -174,9 +174,10 @@ export const Test: React.FC = () => {
     } else {
       const question = testQuestions[currentQuestionIndex];
       if (question) {
-        const optionsText = question.options.map((opt: string, idx: number) => `Варіант ${idx + 1}: ${opt}`).join('. ');
+        const letters = ['А', 'Б', 'В', 'Г', 'Д'];
+        const optionsText = question.options.map((opt: string, idx: number) => `Варіант ${letters[idx] || (idx + 1)}: ${opt}`).join('. ');
         speakText(
-          `${question.question}. ${optionsText}`,
+          `Запитання ${currentQuestionIndex + 1}. ${question.question}. Варіанти відповідей: ${optionsText}`,
           () => setIsSpeaking(true),
           () => setIsSpeaking(false)
         );
@@ -191,9 +192,10 @@ export const Test: React.FC = () => {
     } else {
       const currentCase = activeCases[currentCaseIndex];
       if (currentCase) {
-        const optionsText = currentCase.options.map((opt: string, idx: number) => `Варіант ${String.fromCharCode(65 + idx)}: ${opt}`).join('. ');
+        const letters = ['А', 'Б', 'В', 'Г', 'Д'];
+        const optionsText = currentCase.options.map((opt: string, idx: number) => `Варіант ${letters[idx] || (idx + 1)}: ${opt}`).join('. ');
         speakText(
-          `Опис ситуації: ${currentCase.situation}. Запитання: ${currentCase.question}. ${optionsText}`,
+          `Практична ситуація ${currentCaseIndex + 1}. ${currentCase.title ? currentCase.title + '.' : ''} Опис ситуації: ${currentCase.situation}. Запитання: ${currentCase.question}. ${optionsText}`,
           () => setIsSpeaking(true),
           () => setIsSpeaking(false)
         );
@@ -397,10 +399,16 @@ export const Test: React.FC = () => {
 
 
   const startTest = (selectedMode: TestMode) => {
+    // Practice mode is strictly restricted to Admin users
+    let effectiveMode = selectedMode;
+    if (effectiveMode === 'practice' && state.currentUser?.role !== 'admin' && !isImpersonating) {
+      effectiveMode = 'exam';
+    }
+
     const variant = Math.random() < 0.5 ? 1 : 2;
     setSelectedVariant(variant);
 
-    setMode(selectedMode);
+    setMode(effectiveMode);
     setWarnings(0);
     setShowWarningModal(false);
     setShowCompletionModal(false);
