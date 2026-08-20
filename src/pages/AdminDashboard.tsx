@@ -495,11 +495,11 @@ export const AdminDashboard: React.FC = () => {
     return `СС 02136146/${String(randomId).padStart(6, '0')}-${year.toString().slice(-2)}`;
   };
 
-  const startAddCert = () => {
+  const startAddCert = (defaultName = '') => {
     setEditingCert(null);
     setCertModalMode('create');
     setCertForm({
-      name: '',
+      name: defaultName,
       title: 'Фахівець із супроводу ветеранів війни та демобілізованих осіб',
       cert: generateCertNumber(),
       date: new Date().toLocaleDateString('uk-UA')
@@ -2424,18 +2424,29 @@ export const AdminDashboard: React.FC = () => {
               <p className="text-muted mb-4" style={{ fontSize: '14px' }}>Користувач ще не проходив тестування.</p>
             )}
 
-            <div className="d-flex justify-content-between align-items-center" style={{ marginTop: '30px', borderTop: '1px solid #eee', paddingTop: '20px' }}>
+            <div className="d-flex justify-content-between align-items-center" style={{ marginTop: '30px', borderTop: '1px solid #eee', paddingTop: '20px', gap: '10px', flexWrap: 'wrap' }}>
               {isAdmin && (
-                <button 
-                  className="btn btn-primary"
-                  onClick={() => {
-                    impersonateUser(selectedUser.id);
-                    setSelectedUser(null);
-                    navigate('/dashboard');
-                  }}
-                >
-                  👤 Увійти як цей користувач
-                </button>
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                  <button 
+                    className="btn btn-primary"
+                    onClick={() => {
+                      impersonateUser(selectedUser.id);
+                      setSelectedUser(null);
+                      navigate('/dashboard');
+                    }}
+                  >
+                    👤 Увійти як цей користувач
+                  </button>
+                  <button 
+                    className="btn btn-primary"
+                    style={{ background: '#2ecc71', borderColor: '#27ae60' }}
+                    onClick={() => {
+                      startAddCert(selectedUser.name);
+                    }}
+                  >
+                    🎖️ Видати сертифікат вручну
+                  </button>
+                </div>
               )}
               <button className="btn btn-outline" style={{ marginLeft: 'auto' }} onClick={() => setSelectedUser(null)}>Закрити</button>
             </div>

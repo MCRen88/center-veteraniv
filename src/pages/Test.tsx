@@ -893,42 +893,24 @@ export const Test: React.FC = () => {
       if (casesFinished) {
         const casesPercentage = Math.round((casesScore / activeCases.length) * 100);
         const casesPassed = casesPercentage >= 80;
-        const overallPassed = casesPassed && !wasTerminated;
 
         return (
           <div className="container mt-5 mb-5">
-            {overallPassed && <Confetti />}
-            <style>{`
-              @keyframes trophy-pop {
-                0% { transform: scale(0.3) rotate(-15deg); opacity: 0; }
-                50% { transform: scale(1.15) rotate(10deg); }
-                70% { transform: scale(0.9) rotate(-5deg); }
-                100% { transform: scale(1) rotate(0); opacity: 1; }
-              }
-              .trophy-animated {
-                display: inline-block;
-                animation: trophy-pop 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
-              }
-            `}</style>
             <div className="card text-center" style={{ maxWidth: '800px', margin: '0 auto', padding: '40px' }}>
               <div style={{ fontSize: '70px', marginBottom: '20px' }}>
-                {overallPassed ? (
-                  <span className="trophy-animated">🏆</span>
-                ) : (
-                  <span>⚠️</span>
-                )}
+                📋
               </div>
               <h2 style={{ fontFamily: 'Comfortaa, sans-serif' }}>Завершено оцінювання кейсів</h2>
               <p style={{ fontSize: '20px', margin: '20px 0 25px' }}>
                 Ви дали правильні відповіді на <strong>{casesScore} з {activeCases.length}</strong> практичних кейсів ({casesPercentage}%).
               </p>
               
-              <div className={`alert ${casesPassed ? 'alert-success' : 'alert-danger'} mb-4`} style={{ textAlign: 'left', lineHeight: 1.6 }}>
+              <div className={`alert ${casesPassed ? 'alert-success' : 'alert-info'} mb-4`} style={{ textAlign: 'left', lineHeight: 1.6 }}>
                 <strong>Оцінка практичної частини:</strong><br />
                 {casesPassed ? (
                   `🎉 Прохідний поріг практичних кейсів успішно подолано (${casesPercentage}% при нормі 80% або більше).`
                 ) : (
-                  `❌ Прохідний поріг практичних кейсів не подолано (${casesPercentage}% при нормі 80% або більше).`
+                  `Результат практичного блоку становить ${casesPercentage}% (норма 80% або більше).`
                 )}
                 <div style={{ marginTop: '10px', fontSize: '14px', color: 'var(--text-muted)' }}>
                   <strong>Детальний аналіз: </strong>
@@ -943,41 +925,33 @@ export const Test: React.FC = () => {
               </div>
 
               <div className="card mb-4" style={{ 
-                background: overallPassed ? 'rgba(46, 204, 113, 0.05)' : 'rgba(231, 76, 60, 0.05)', 
-                border: overallPassed ? '2px solid #2ecc71' : '2px solid #e74c3c',
+                background: 'rgba(35, 57, 93, 0.04)', 
+                border: '2px solid var(--blue)',
                 padding: '25px',
                 borderRadius: '10px',
                 textAlign: 'left'
               }}>
-                <h3 style={{ fontFamily: 'Comfortaa, sans-serif', color: overallPassed ? '#27ae60' : '#c0392b', marginBottom: '15px', textAlign: 'center' }}>
-                  {overallPassed ? "🏆 Загальний результат: Кваліфікаційний іспит складено" : "⚠️ Загальний результат: Кваліфікаційний іспит не складено"}
+                <h3 style={{ fontFamily: 'Comfortaa, sans-serif', color: 'var(--dark-blue)', marginBottom: '15px', textAlign: 'center' }}>
+                  📝 Кваліфікаційне оцінювання завершено
                 </h3>
                 <p style={{ fontSize: '15px', margin: 0, lineHeight: 1.6, color: 'var(--text-dark)' }}>
-                  {overallPassed 
-                    ? "Вітаємо! Ви успішно подолали обидва кваліфікаційні пороги (теорія: 75%+, практика: 80%+). Ви повністю підтвердили відповідність кваліфікаційним вимогам професійного стандарту фахівця із супроводу ветеранів війни та демобілізованих осіб. Ваш сертифікат згенеровано та внесено до публічного реєстру кваліфікованих фахівців." 
-                    : "Для успішного складання кваліфікаційного іспиту необхідно подолати обидва пороги (75% для теоретичного тесту та 80% для блоку кейсів). Оскільки практичний поріг не подолано, кваліфікаційний іспит не складено. Сертифікат не видано. Рекомендуємо оновити знання та спробувати ще раз після узгодження з адміністратором."}
+                  Ви завершили проходження обох блоків кваліфікаційного оцінювання (теоретичний тест та практичні завдання). 
+                  Всі ваші результати зафіксовані в системі та передані адміністратору / кваліфікаційній комісії.
                 </p>
+                <div style={{ marginTop: '14px', padding: '12px 16px', background: '#fff', borderRadius: '8px', borderLeft: '4px solid var(--blue)', fontSize: '14px', lineHeight: 1.5 }}>
+                  ℹ️ <strong>Зверніть увагу:</strong> Сертифікат про присвоєння кваліфікації <strong>не генерується автоматично</strong>. Сертифікат видається та вноситься до публічного Реєстру <strong>виключно адміністратором вручну</strong> після перевірки та затвердження результатів.
+                </div>
               </div>
 
-              <div className="mt-4 d-flex justify-content-center gap-3">
+              <div className="mt-4 d-flex justify-content-center gap-3" style={{ flexWrap: 'wrap' }}>
                 <button className="btn btn-outline" onClick={exitTest}>
                   В кабінет
                 </button>
                 <button className="btn btn-primary" onClick={() => setShowCases(false)}>
                   Назад до результатів тесту
                 </button>
-                {overallPassed && (
-                  <>
-                    <button className="btn btn-primary" style={{ background: '#2ecc71' }} onClick={downloadCert}>
-                      Завантажити сертифікат
-                    </button>
-                    <button className="btn btn-primary" style={{ background: '#0f3460' }} onClick={() => navigate('/registry')}>
-                      📋 Переглянути у Реєстрі
-                    </button>
-                  </>
-                )}
-                 {(currentUser.role !== 'user' || currentUser.testPermission || isImpersonating) && (
-                  <button className="btn btn-primary" style={{ background: '#3498db' }} onClick={startCases}>
+                {(currentUser.role !== 'user' || currentUser.testPermission || isImpersonating) && (
+                  <button className="btn btn-outline" onClick={startCases}>
                     Спробувати кейси ще раз
                   </button>
                 )}
@@ -1182,38 +1156,31 @@ export const Test: React.FC = () => {
               ? 'Тестування заблоковано через порушення правил.' 
               : `Ви дали правильну відповідь на ${score} з ${testQuestions.length} запитань.`}
           </p>
-          <div className={`alert ${passed ? 'alert-success' : 'alert-danger'}`}>
+          <div className={`alert ${passed ? 'alert-success' : 'alert-info'}`}>
             {wasTerminated ? (
               <strong>Тестування автоматично завершено та анульовано через повторний вихід з вікна тестування (перемикання вкладок/програм).</strong>
             ) : passed ? (
               <>
-                <strong>🎉 Вітаємо! Прохідний поріг теоретичного тесту пройдено ({percentage}% при нормі 75% або більше).</strong><br />
-                Ви дали правильну відповідь на {score} з {testQuestions.length} запитань і успішно підтвердили теоретичні знання. 
-                Тепер ви можете перейти до вирішення практичних кейсів для завершення кваліфікації.
+                <strong>🎉 Вітаємо! Теоретичний тест успішно складено ({percentage}% при нормі 75% або більше).</strong><br />
+                Ви дали правильну відповідь на {score} з {testQuestions.length} запитань і підтвердили теоретичні знання. 
+                Тепер ви можете перейти до виконання практичних завдань (кейсів).
               </>
             ) : (
-              `На жаль, ви не подолали прохідний поріг теоретичного тесту (ваш результат: ${percentage}% при нормі 75%). Рекомендуємо повторити матеріал та спробувати ще раз.`
+              <>
+                <strong>Теоретичний тест завершено ({percentage}% правильних відповідей).</strong><br />
+                Незалежно від набраного бала за теоретичну частину, вам відкрито доступ до виконання практичних завдань (кейсів).
+              </>
             )}
           </div>
           
-          <div className="mt-4 d-flex justify-content-center gap-3">
+          <div className="mt-4 d-flex justify-content-center gap-3" style={{ flexWrap: 'wrap' }}>
             <button className="btn btn-outline" onClick={exitTest}>В кабінет</button>
             {(currentUser.role !== 'user' || currentUser.testPermission || isImpersonating) && (
-              <button className="btn btn-primary" onClick={() => startTest(mode)}>Спробувати ще раз</button>
+              <button className="btn btn-outline" onClick={() => startTest(mode)}>Спробувати тест ще раз</button>
             )}
-            {passed && !wasTerminated && (
-              <>
-                <button className="btn btn-primary" style={{ background: '#2ecc71' }} onClick={downloadCert}>
-                  Завантажити сертифікат
-                </button>
-                <button className="btn btn-primary" style={{ background: '#0f3460' }} onClick={() => navigate('/registry')}>
-                  📋 Переглянути у Реєстрі
-                </button>
-              </>
-            )}
-            {!wasTerminated && passed && (
-              <button className="btn btn-primary" style={{ background: '#3498db' }} onClick={startCases}>
-                Перейти до професійних кейсів
+            {!wasTerminated && (
+              <button className="btn btn-primary" style={{ background: '#3498db', borderColor: '#2980b9' }} onClick={startCases}>
+                Перейти до практичних завдань ➔
               </button>
             )}
           </div>
@@ -1262,8 +1229,13 @@ export const Test: React.FC = () => {
           .option-card.correct { border-color: #2ecc71; background: rgba(46, 204, 113, 0.1); }
           .option-card.wrong { border-color: #e74c3c; background: rgba(231, 76, 60, 0.1); }
           .q-map-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
-          .q-map-btn { aspect-ratio: 1; border-radius: 4px; border: 1px solid #ddd; background: white; cursor: pointer; }
-          .q-map-btn.current { border-color: var(--blue); border-width: 2px; }
+          .q-map-btn { aspect-ratio: 1; border-radius: 6px; border: 1px solid #ddd; background: white; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.2s ease; }
+          .q-map-btn:hover { border-color: var(--blue); }
+          .q-map-btn.current { border-color: var(--blue); border-width: 2px; box-shadow: 0 0 0 2px rgba(81, 144, 207, 0.35); }
+          .q-map-btn.correct { background: #2ecc71 !important; color: white !important; border-color: #27ae60 !important; }
+          .q-map-btn.correct:hover { background: #27ae60 !important; }
+          .q-map-btn.wrong { background: #e74c3c !important; color: white !important; border-color: #c0392b !important; }
+          .q-map-btn.wrong:hover { background: #c0392b !important; }
           .q-map-btn.answered { background: var(--light-blue); color: white; border-color: var(--light-blue); }
         `}</style>
         
@@ -1452,19 +1424,42 @@ export const Test: React.FC = () => {
               )}
 
               <h4 className="mb-3">Карта питань</h4>
-              <div className="q-map-grid mb-4 notranslate" translate="no">
-                {testQuestions.map((_, idx) => {
+              <div className="q-map-grid mb-3 notranslate" translate="no">
+                {testQuestions.map((q, idx) => {
                   let classes = "q-map-btn notranslate";
                   if (currentQuestionIndex === idx) classes += " current";
                   const ans = answers[idx];
-                  if (typeof ans === 'number' && ans >= 0) classes += " answered";
+                  if (typeof ans === 'number' && ans >= 0) {
+                    if (ans === q?.correct) {
+                      classes += " correct";
+                    } else {
+                      classes += " wrong";
+                    }
+                  }
                   
                   return (
-                    <button key={idx} className={classes} onClick={() => setCurrentQuestionIndex(idx)} translate="no">
+                    <button 
+                      key={idx} 
+                      className={classes} 
+                      onClick={() => setCurrentQuestionIndex(idx)} 
+                      translate="no"
+                      title={`Запитання ${idx + 1}${typeof ans === 'number' && ans >= 0 ? (ans === q?.correct ? ' (Правильно)' : ' (Неправильно)') : ''}`}
+                    >
                       {idx + 1}
                     </button>
                   );
                 })}
+              </div>
+
+              <div className="d-flex flex-column gap-1 mb-4" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                <div className="d-flex align-items-center gap-2">
+                  <span style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#2ecc71', display: 'inline-block', flexShrink: 0 }}></span>
+                  <span>Правильна відповідь</span>
+                </div>
+                <div className="d-flex align-items-center gap-2">
+                  <span style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#e74c3c', display: 'inline-block', flexShrink: 0 }}></span>
+                  <span>Неправильна відповідь</span>
+                </div>
               </div>
               
               {mode === 'exam' && (

@@ -352,6 +352,18 @@ body.accessibility-high-contrast .q-map-btn.answered {
   border-color: #ffff00 !important;
   color: #ffff00 !important;
 }
+body.accessibility-high-contrast .q-map-btn.correct {
+  background-color: #002b00 !important;
+  border-color: #00ff00 !important;
+  color: #00ff00 !important;
+  font-weight: bold;
+}
+body.accessibility-high-contrast .q-map-btn.wrong {
+  background-color: #2b0000 !important;
+  border-color: #ff0000 !important;
+  color: #ff0000 !important;
+  font-weight: bold;
+}
 body.accessibility-high-contrast .alert {
   background-color: #000000 !important;
   border: 2px solid #ffffff !important;

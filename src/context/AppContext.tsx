@@ -446,20 +446,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }]).select();
 
     if (!error && data) {
-      // Якщо тест складено — видати сертифікат та додати до реєстру
-      if (score.passed && state.currentUser) {
-        const year = new Date().getFullYear();
-        const randomId = Math.floor(Math.random() * 9000) + 1000;
-        const certNum = `СС 02136146/${String(randomId).padStart(6, '0')}-${year.toString().slice(-2)}`;
-        const date = new Date().toLocaleDateString('uk-UA');
-        await addRegistryItem({
-          name: state.currentUser.name || 'Невідомо',
-          title: 'Фахівець із супроводу ветеранів війни та демобілізованих осіб',
-          cert: certNum,
-          date: date
-        });
-      }
-
       let nextPermission = state.currentUser.testPermission;
       
       if (state.currentUser.role === 'user') {
