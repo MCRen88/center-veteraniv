@@ -495,11 +495,12 @@ export const AdminDashboard: React.FC = () => {
     return `СС 02136146/${String(randomId).padStart(6, '0')}-${year.toString().slice(-2)}`;
   };
 
-  const startAddCert = (defaultName = '') => {
+  const startAddCert = (defaultName?: string | React.MouseEvent) => {
+    const name = typeof defaultName === 'string' ? defaultName : '';
     setEditingCert(null);
     setCertModalMode('create');
     setCertForm({
-      name: defaultName,
+      name,
       title: 'Фахівець із супроводу ветеранів війни та демобілізованих осіб',
       cert: generateCertNumber(),
       date: new Date().toLocaleDateString('uk-UA')

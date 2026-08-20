@@ -9,71 +9,6 @@ import { variant1Questions, variant2Questions } from '../data/variantsData';
 
 type TestMode = 'exam' | 'practice' | null;
 
-const Confetti: React.FC = () => {
-  const pieces = Array.from({ length: 80 });
-  const colors = ['#f1c40f', '#e74c3c', '#3498db', '#2ecc71', '#9b59b6', '#e67e22', '#1abc9c', '#e84393'];
-  
-  return (
-    <>
-      <style>{`
-        @keyframes confetti-fall {
-          0% {
-            transform: translateY(-10vh) translateX(0) rotate(0deg);
-            opacity: 1;
-          }
-          50% {
-            transform: translateY(50vh) translateX(60px) rotate(180deg);
-            opacity: 0.9;
-          }
-          100% {
-            transform: translateY(110vh) translateX(-30px) rotate(360deg);
-            opacity: 0;
-          }
-        }
-        .confetti-wrapper {
-          position: fixed;
-          top: 0;
-          left: 0;
-          width: 100%;
-          height: 100%;
-          pointer-events: none;
-          z-index: 9999;
-          overflow: hidden;
-        }
-      `}</style>
-      <div className="confetti-wrapper">
-        {pieces.map((_, i) => {
-          const left = Math.random() * 100;
-          const delay = Math.random() * 6;
-          const duration = Math.random() * 4 + 3; // 3 to 7s
-          const color = colors[Math.floor(Math.random() * colors.length)];
-          const size = Math.random() * 10 + 6; // 6px to 16px
-          const shape = Math.random() > 0.5 ? '50%' : '0%';
-          
-          return (
-            <div
-              key={i}
-              className="confetti-piece"
-              style={{
-                position: 'absolute',
-                left: `${left}%`,
-                top: `-20px`,
-                width: `${size}px`,
-                height: `${size}px`,
-                backgroundColor: color,
-                borderRadius: shape,
-                transform: `rotate(${Math.random() * 360}deg)`,
-                animation: `confetti-fall ${duration}s linear infinite`,
-                animationDelay: `${delay}s`,
-              }}
-            />
-          );
-        })}
-      </div>
-    </>
-  );
-};
-
 export const Test: React.FC = () => {
   const { state, saveTestScore } = useAppContext();
   const navigate = useNavigate();
@@ -818,47 +753,6 @@ export const Test: React.FC = () => {
       window.removeEventListener('blur', handleBlur);
     };
   }, [mode, isFinished, showCases, casesFinished]);
-
-
-
-  const downloadCert = () => {
-    const scorePercentage = Math.round((score / testQuestions.length) * 100);
-    const date = new Date().toLocaleDateString('uk-UA');
-    
-    const certWindow = window.open('', '_blank');
-    if (certWindow) {
-      certWindow.document.write(`
-        <html><head><title>Сертифікат</title>
-        <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&family=Roboto&display=swap" rel="stylesheet">
-        <style>
-          body { font-family: 'Roboto', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #fff; }
-          .cert-border { border: 10px solid #23395d; padding: 40px; text-align: center; width: 800px; position: relative; }
-          .cert-title { font-family: 'Comfortaa', sans-serif; font-size: 40px; color: #23395d; margin-bottom: 20px; }
-          .cert-name { font-family: 'Comfortaa', sans-serif; font-size: 36px; font-weight: bold; color: #4069a5; margin: 30px 0; text-decoration: underline; }
-          .cert-watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); opacity: 0.05; font-size: 150px; color: #23395d; font-family: 'Comfortaa'; z-index: -1; pointer-events: none;}
-        </style>
-        </head><body>
-          <div class="cert-border">
-            <div class="cert-watermark">ЗОІППО</div>
-            <div class="cert-title">СЕРТИФІКАТ</div>
-            <div style="font-size: 20px;">про проходження онлайн-тестування</div>
-            <div class="cert-name">${currentUser?.name || ''}</div>
-            <div style="font-size: 18px; line-height: 1.5; margin-bottom: 40px;">
-              Успішно пройшов(ла) тестування на знання професійного стандарту<br>
-              "Фахівець із супроводу ветеранів війни та демобілізованих осіб"<br><br>
-              <strong>Результат: ${scorePercentage}% (${score} з ${testQuestions.length} правильних відповідей)</strong>
-            </div>
-            <div style="display: flex; justify-content: space-between; font-weight: bold;">
-              <div>Дата: ${date}</div>
-              <div>Кваліфікаційний центр КЗ "ЗОІППО" ЗОР</div>
-            </div>
-          </div>
-          <script>window.print();</script>
-        </body></html>
-      `);
-      certWindow.document.close();
-    }
-  };
 
   const currentUser = state.currentUser;
 
