@@ -1452,15 +1452,15 @@ export const Test: React.FC = () => {
               )}
 
               <h4 className="mb-3">Карта питань</h4>
-              <div className="q-map-grid mb-4">
+              <div className="q-map-grid mb-4 notranslate" translate="no">
                 {testQuestions.map((_, idx) => {
-                  let classes = "q-map-btn";
+                  let classes = "q-map-btn notranslate";
                   if (currentQuestionIndex === idx) classes += " current";
                   const ans = answers[idx];
                   if (typeof ans === 'number' && ans >= 0) classes += " answered";
                   
                   return (
-                    <button key={idx} className={classes} onClick={() => setCurrentQuestionIndex(idx)}>
+                    <button key={idx} className={classes} onClick={() => setCurrentQuestionIndex(idx)} translate="no">
                       {idx + 1}
                     </button>
                   );
