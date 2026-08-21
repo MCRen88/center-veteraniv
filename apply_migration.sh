@@ -42,6 +42,7 @@ else
         "007_update_cases.sql"
         "008_remove_demo_certificates.sql"
         "009_add_signature_details.sql"
+        "010_user_visits.sql"
     )
 fi
 

@@ -95,6 +95,27 @@ export const UserDashboard: React.FC = () => {
             <h4 className="mb-3">Мої дані</h4>
             <p><strong>ПІБ:</strong> {user.name}</p>
             <p><strong>Email:</strong> {user.email}</p>
+            <p><strong>Статус сесії:</strong> 
+              <span style={{ 
+                display: 'inline-flex', 
+                alignItems: 'center', 
+                gap: '6px', 
+                marginLeft: '10px', 
+                color: '#27ae60', 
+                fontWeight: 'bold',
+                fontSize: '13px'
+              }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#2ecc71', display: 'inline-block', boxShadow: '0 0 6px #2ecc71' }}></span>
+                Онлайн зараз
+              </span>
+            </p>
+            {user.lastSignInAt && (
+              <p><strong>Останній вхід:</strong> 
+                <span style={{ color: 'var(--text-muted)', marginLeft: '10px' }}>
+                  {new Date(user.lastSignInAt).toLocaleString('uk-UA')}
+                </span>
+              </p>
+            )}
             <p><strong>Статус допуску до тесту:</strong> 
               {hasTestPermission ? (
                 <span style={{ color: '#2ecc71', fontWeight: 'bold', marginLeft: '10px' }}>Допущено</span>

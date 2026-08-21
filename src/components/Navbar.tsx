@@ -284,7 +284,41 @@ export const Navbar: React.FC = () => {
             {state.currentUser ? (
               <>
                 {(state.currentUser.role === 'admin' || state.currentUser.role === 'teacher') ? (
-                  <NavLink to="/admin" className={({isActive}) => isActive ? "nav-link active" : "nav-link"} onClick={() => setMobileMenuOpen(false)}>Адмін-панель</NavLink>
+                  <>
+                    <NavLink to="/admin" className={({isActive}) => isActive ? "nav-link active" : "nav-link"} onClick={() => setMobileMenuOpen(false)}>Адмін-панель</NavLink>
+                    <div 
+                      onClick={() => {
+                        navigate('/admin');
+                        setMobileMenuOpen(false);
+                      }}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        background: 'rgba(46, 204, 113, 0.12)',
+                        color: '#27ae60',
+                        border: '1px solid rgba(46, 204, 113, 0.3)',
+                        padding: '4px 10px',
+                        borderRadius: '20px',
+                        fontSize: '12.5px',
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        fontFamily: 'Comfortaa, cursive',
+                        whiteSpace: 'nowrap'
+                      }}
+                      title="Користувачів зараз онлайн (натисніть для перегляду монітора)"
+                    >
+                      <span style={{
+                        width: '8px',
+                        height: '8px',
+                        backgroundColor: '#2ecc71',
+                        borderRadius: '50%',
+                        display: 'inline-block',
+                        boxShadow: '0 0 8px #2ecc71'
+                      }} />
+                      <span>{state.onlineUsers.filter(u => u.isOnline).length || 1} онлайн</span>
+                    </div>
+                  </>
                 ) : (
                   <NavLink to="/dashboard" className={({isActive}) => isActive ? "nav-link active" : "nav-link"} onClick={() => setMobileMenuOpen(false)}>Кабінет</NavLink>
                 )}

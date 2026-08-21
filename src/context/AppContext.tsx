@@ -4,9 +4,10 @@ import { supabaseAdmin } from '../lib/supabaseAdmin';
 import type { Database } from '../lib/database.types';
 import { casesDb, type CaseQuestion as Case } from '../data/casesDb';
 import { questionsDb } from '../data/questionsDb';
+import { trackActivity, type VisitRecord } from '../utils/tracker';
 
 export type Role = 'user' | 'teacher' | 'admin';
-export type { Case };
+export type { Case, VisitRecord };
 
 export type RegistryItem = Database['public']['Tables']['registry']['Row'];
 export type Question = Database['public']['Tables']['questions']['Row'];
@@ -20,6 +21,23 @@ export interface User {
   role: Role;
   testPermission: boolean;
   testScores: TestScore[];
+  lastSeenAt?: string | null;
+  lastSignInAt?: string | null;
+  currentPage?: string | null;
+  currentDevice?: string | null;
+}
+
+export interface OnlineUser {
+  id: string;
+  name: string;
+  email: string;
+  role: Role | 'guest';
+  lastSeenAt: string;
+  currentPage: string;
+  currentDevice: string;
+  isOnline: boolean;
+  isAway: boolean;
+  sessionId?: string;
 }
 
 export interface EmailVerificationConfig {
@@ -70,6 +88,8 @@ interface AppState {
   cases: Case[];
   users: User[];
   applications: Application[];
+  visits: VisitRecord[];
+  onlineUsers: OnlineUser[];
   currentUser: User | null;
   originalAdminUser: User | null;
   isLoading: boolean;
@@ -108,6 +128,7 @@ interface AppContextType {
   updateEmailConfig: (config: Partial<EmailVerificationConfig>) => void;
   sendVerificationEmail: (toEmail: string, recipientName?: string) => Promise<{ success: boolean; code: string; message: string }>;
   fetchData: () => Promise<void>;
+  fetchVisitsData: () => Promise<void>;
 }
 
 const defaultState: AppState = {
@@ -116,6 +137,8 @@ const defaultState: AppState = {
   cases: [],
   users: [],
   applications: [],
+  visits: [],
+  onlineUsers: [],
   currentUser: null,
   originalAdminUser: null,
   isLoading: true,
@@ -127,7 +150,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setState] = useState<AppState>(defaultState);
 
-  const fetchCurrentUserProfile = async (userId: string, email: string) => {
+  const fetchCurrentUserProfile = async (userId: string, email: string): Promise<User | null> => {
     const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).single();
     if (profile) {
       const { data: scores } = await supabase.from('test_scores').select('*').eq('user_id', userId).order('created_at', { ascending: false });
@@ -137,7 +160,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         email: email,
         role: profile.role as Role,
         testPermission: profile.test_permission,
-        testScores: scores || []
+        testScores: scores || [],
+        lastSeenAt: profile.last_seen_at || null,
+        lastSignInAt: profile.last_sign_in_at || null,
+        currentPage: profile.current_page || null,
+        currentDevice: profile.current_device || null
       };
     }
     return null;
@@ -195,6 +222,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     
     let usersList: User[] = [];
     let applicationsList: Application[] = [];
+    let visitsList: VisitRecord[] = [];
+    let onlineUsersList: OnlineUser[] = [];
     
     // Retrieve current user profile dynamically to avoid stale state closures
     const { data: { session } } = await supabase.auth.getSession();
@@ -202,7 +231,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (session?.user) {
       const { data: profile, error: pSingleError } = await supabase
         .from('profiles')
-        .select('role')
+        .select('*')
         .eq('id', session.user.id)
         .single();
       if (pSingleError) {
@@ -214,7 +243,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     
     if (currentRole === 'admin' || currentRole === 'teacher') {
-      const { data: profiles, error: pError } = await supabase.from('profiles').select('*');
+      const { data: profiles, error: pError } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
       if (pError) {
         console.error('AppContext error fetching profiles list:', pError.message);
       }
@@ -231,8 +260,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           email: p.email || '',
           role: p.role as Role,
           testPermission: p.test_permission,
-          testScores: allScores?.filter(s => s.user_id === p.id) || []
+          testScores: allScores?.filter(s => s.user_id === p.id) || [],
+          lastSeenAt: p.last_seen_at || null,
+          lastSignInAt: p.last_sign_in_at || null,
+          currentPage: p.current_page || null,
+          currentDevice: p.current_device || null
         }));
+
+        // Calculate online registered users
+        const now = Date.now();
+        profiles.forEach(p => {
+          if (p.last_seen_at) {
+            const lastSeenTime = new Date(p.last_seen_at).getTime();
+            const diffMs = now - lastSeenTime;
+            if (diffMs <= 5 * 60 * 1000) {
+              onlineUsersList.push({
+                id: p.id,
+                name: p.name,
+                email: p.email || '',
+                role: p.role as Role,
+                lastSeenAt: p.last_seen_at,
+                currentPage: p.current_page || '/',
+                currentDevice: p.current_device || 'Невідомий пристрій',
+                isOnline: diffMs <= 2 * 60 * 1000,
+                isAway: diffMs > 2 * 60 * 1000 && diffMs <= 5 * 60 * 1000
+              });
+            }
+          }
+        });
       }
       
       const { data: apps, error: appError } = await supabase.from('applications').select('*').order('created_at', { ascending: false });
@@ -241,6 +296,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       if (apps) {
         applicationsList = apps;
+      }
+
+      // Fetch visit logs
+      const { data: vData, error: vError } = await supabase
+        .from('user_visits')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(500);
+
+      if (vError) {
+        console.error('AppContext error fetching user_visits:', vError.message);
+      } else if (vData) {
+        visitsList = vData;
+
+        // Extract active guest sessions
+        const now = Date.now();
+        const guestMap = new Map<string, any>();
+        vData.forEach(v => {
+          if (!v.user_id && v.session_id) {
+            const lastSeenTime = new Date(v.last_seen_at || v.created_at).getTime();
+            const diffMs = now - lastSeenTime;
+            if (diffMs <= 5 * 60 * 1000 && !guestMap.has(v.session_id)) {
+              guestMap.set(v.session_id, v);
+            }
+          }
+        });
+
+        guestMap.forEach((v, sessId) => {
+          const lastSeenTime = new Date(v.last_seen_at || v.created_at).getTime();
+          const diffMs = now - lastSeenTime;
+          onlineUsersList.push({
+            id: `guest_${sessId}`,
+            name: `Гість (${sessId.slice(0, 8)})`,
+            email: 'Неавторизований відвідувач',
+            role: 'guest',
+            lastSeenAt: v.last_seen_at || v.created_at,
+            currentPage: v.path || '/',
+            currentDevice: v.browser ? `${v.device_type === 'Mobile' ? '📱' : '🖥️'} ${v.browser} (${v.os || ''})` : 'Гість',
+            isOnline: diffMs <= 2 * 60 * 1000,
+            isAway: diffMs > 2 * 60 * 1000 && diffMs <= 5 * 60 * 1000,
+            sessionId: sessId
+          });
+        });
       }
     }
 
@@ -251,8 +349,117 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       registry: registry || [],
       users: usersList,
       applications: applicationsList,
+      visits: visitsList,
+      onlineUsers: onlineUsersList,
       isLoading: false
     }));
+  };
+
+  const fetchVisitsData = async () => {
+    try {
+      const { data: vData, error: vError } = await supabase
+        .from('user_visits')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(500);
+
+      if (vError) {
+        console.error('Error in fetchVisitsData (user_visits):', vError.message);
+      }
+
+      const { data: profiles, error: pError } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (pError) {
+        console.error('Error in fetchVisitsData (profiles):', pError.message);
+      }
+
+      const now = Date.now();
+      const onlineList: OnlineUser[] = [];
+
+      if (profiles && profiles.length > 0) {
+        profiles.forEach(p => {
+          if (p.last_seen_at) {
+            const lastSeenTime = new Date(p.last_seen_at).getTime();
+            const diffMs = now - lastSeenTime;
+            if (diffMs <= 5 * 60 * 1000) {
+              onlineList.push({
+                id: p.id,
+                name: p.name,
+                email: p.email || '',
+                role: p.role as Role,
+                lastSeenAt: p.last_seen_at,
+                currentPage: p.current_page || '/',
+                currentDevice: p.current_device || 'Невідомий пристрій',
+                isOnline: diffMs <= 2 * 60 * 1000,
+                isAway: diffMs > 2 * 60 * 1000 && diffMs <= 5 * 60 * 1000
+              });
+            }
+          }
+        });
+      }
+
+      if (vData && vData.length > 0) {
+        const guestMap = new Map<string, any>();
+        vData.forEach(v => {
+          if (!v.user_id && v.session_id) {
+            const lastSeenTime = new Date(v.last_seen_at || v.created_at).getTime();
+            const diffMs = now - lastSeenTime;
+            if (diffMs <= 5 * 60 * 1000 && !guestMap.has(v.session_id)) {
+              guestMap.set(v.session_id, v);
+            }
+          }
+        });
+
+        guestMap.forEach((v, sessId) => {
+          const lastSeenTime = new Date(v.last_seen_at || v.created_at).getTime();
+          const diffMs = now - lastSeenTime;
+          onlineList.push({
+            id: `guest_${sessId}`,
+            name: `Гість (${sessId.slice(0, 8)})`,
+            email: 'Неавторизований відвідувач',
+            role: 'guest',
+            lastSeenAt: v.last_seen_at || v.created_at,
+            currentPage: v.path || '/',
+            currentDevice: v.browser ? `${v.device_type === 'Mobile' ? '📱' : '🖥️'} ${v.browser} (${v.os || ''})` : 'Гість',
+            isOnline: diffMs <= 2 * 60 * 1000,
+            isAway: diffMs > 2 * 60 * 1000 && diffMs <= 5 * 60 * 1000,
+            sessionId: sessId
+          });
+        });
+      }
+
+      // Also update usersList in state with refreshed lastSeenAt / currentPage
+      setState(prev => {
+        let updatedUsers = prev.users;
+        if (profiles && profiles.length > 0) {
+          updatedUsers = prev.users.map(u => {
+            const p = profiles.find(prof => prof.id === u.id);
+            if (p) {
+              return {
+                ...u,
+                lastSeenAt: p.last_seen_at || null,
+                lastSignInAt: p.last_sign_in_at || null,
+                currentPage: p.current_page || null,
+                currentDevice: p.current_device || null
+              };
+            }
+            return u;
+          });
+        }
+
+        return {
+          ...prev,
+          visits: vData || [],
+          onlineUsers: onlineList,
+          users: updatedUsers
+        };
+      });
+    } catch (err) {
+      console.error('Error fetching visits data:', err);
+    }
   };
 
   useEffect(() => {
@@ -325,15 +532,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const login = async (email: string, pass: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
     if (error) {
       alert("Невірний логін або пароль");
       return false;
+    }
+    if (data?.user) {
+      const userProfile = await fetchCurrentUserProfile(data.user.id, data.user.email || email);
+      if (userProfile) {
+        await trackActivity({
+          path: window.location.pathname,
+          action: 'login',
+          user: userProfile
+        });
+      }
     }
     return true;
   };
 
   const logout = async () => {
+    if (state.currentUser) {
+      await trackActivity({
+        path: window.location.pathname,
+        action: 'logout',
+        user: state.currentUser
+      });
+    }
     await supabase.auth.signOut();
   };
 
@@ -743,7 +967,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deleteCase, 
       updateEmailConfig,
       sendVerificationEmail,
-      fetchData 
+      fetchData,
+      fetchVisitsData
     }}>
       {children}
     </AppContext.Provider>

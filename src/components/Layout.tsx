@@ -1,11 +1,52 @@
 import React, { useState, useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { Navbar } from './Navbar';
 import { Footer } from './Footer';
 import { AccessibilityPanel } from './AccessibilityPanel';
+import { useAppContext } from '../context/AppContext';
+import { trackActivity } from '../utils/tracker';
 
 export const Layout: React.FC = () => {
   const [ttsError, setTtsError] = useState<string | null>(null);
+  const location = useLocation();
+  const { state } = useAppContext();
+
+  // Track page visits on location change
+  useEffect(() => {
+    trackActivity({
+      path: location.pathname,
+      action: 'visit',
+      user: state.currentUser
+    });
+  }, [location.pathname, state.currentUser?.id]);
+
+  // Periodic heartbeat every 25 seconds while tab is active
+  useEffect(() => {
+    const sendHeartbeat = () => {
+      if (document.visibilityState === 'visible') {
+        trackActivity({
+          path: location.pathname,
+          action: 'heartbeat',
+          user: state.currentUser
+        });
+      }
+    };
+
+    const intervalId = setInterval(sendHeartbeat, 25000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        sendHeartbeat();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [location.pathname, state.currentUser?.id]);
 
   useEffect(() => {
     const handleTtsError = (e: Event) => {
