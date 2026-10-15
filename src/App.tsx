@@ -11,6 +11,7 @@ import { Login } from './pages/Login';
 import { UserDashboard } from './pages/UserDashboard';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { TestAnalysis } from './pages/TestAnalysis';
+import { Booklet } from './pages/Booklet';
 
 export const App: React.FC = () => {
   return (
@@ -20,6 +21,7 @@ export const App: React.FC = () => {
           <Route path="/" element={<Layout />}>
             <Route index element={<Home />} />
             <Route path="docs" element={<Docs />} />
+            <Route path="booklet" element={<Booklet />} />
             <Route path="test" element={<Test />} />
             <Route path="application" element={<Application />} />
             <Route path="registry" element={<Registry />} />
