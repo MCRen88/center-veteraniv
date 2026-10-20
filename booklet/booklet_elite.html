@@ -1,0 +1,1871 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Кваліфікаційний центр КЗ «ЗОІППО» ЗОР — Елітний буклет (Варіант 2)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@400;500;600;700&family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --obsidian: #060d1a;
+  --navy-deep: #0a1628;
+  --navy-royal: #10223e;
+  --navy-mid: #183159;
+  --gold-champagne: #d4af37;
+  --gold-light: #e7c973;
+  --gold-pale: #f5ebd1;
+  --gold-bronze: #9a7432;
+  --gold-dark: #75551e;
+  --ivory: #faf8f4;
+  --alabaster: #f3efe6;
+  --parchment: #e9e2d3;
+  --ink-dark: #091324;
+  --ink-body: #1e293b;
+  --ink-muted: #475569;
+  --line-gold: rgba(212, 175, 55, 0.38);
+  --line-warm: #d8cfc0;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: var(--ink-body);
+  background: #1e2430;
+  line-height: 1.32;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  font-family: 'Montserrat', sans-serif;
+  color: var(--ink-dark);
+  letter-spacing: -0.015em;
+}
+
+/* ==================== АРКУШ А4 LANDSCAPE (297мм × 210мм) ==================== */
+.sheet-caption {
+  width: 297mm;
+  margin: 10mm auto -5mm;
+  font: 600 9.5pt 'Montserrat', sans-serif;
+  color: #e2e8f0;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sheet {
+  width: 297mm;
+  height: 210mm;
+  margin: 8mm auto;
+  display: grid;
+  grid-template-columns: repeat(3, 99mm);
+  background: var(--ivory);
+  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.55);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Лінії фальцювання на екрані */
+.sheet::before, .sheet::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px dashed rgba(154, 116, 50, 0.45);
+  z-index: 20;
+  pointer-events: none;
+}
+.sheet::before { left: 99mm; }
+.sheet::after { left: 198mm; }
+
+/* ==================== БАЗОВА ПАНЕЛЬ (99мм × 210мм) ==================== */
+.panel {
+  width: 99mm;
+  height: 210mm;
+  padding: 7.2mm 6.8mm 6.6mm;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  background: var(--ivory);
+}
+
+/* Тонка архітектурна рамка для світлих панелей */
+.panel.editorial::before {
+  content: '';
+  position: absolute;
+  inset: 3mm;
+  border: 0.7px solid rgba(154, 116, 50, 0.28);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.panel > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* Верхній колонтитул панелі (архітектурна індексація) */
+.arch-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line-warm);
+  padding-bottom: 1.4mm;
+  margin-bottom: 2mm;
+}
+
+.arch-code {
+  font: 700 6.7pt 'Montserrat', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  color: var(--gold-bronze);
+  display: inline-flex;
+  align-items: center;
+  gap: 1.4mm;
+}
+
+.arch-code::before {
+  content: '';
+  width: 1.7mm;
+  height: 1.7mm;
+  background: var(--gold-champagne);
+  transform: rotate(45deg);
+  display: inline-block;
+}
+
+.arch-section-num {
+  font: 600 6.7pt 'Montserrat', sans-serif;
+  letter-spacing: 0.1em;
+  color: var(--ink-muted);
+}
+
+.panel-heading {
+  font-size: 12.2pt;
+  font-weight: 800;
+  line-height: 1.15;
+  color: var(--ink-dark);
+  margin-bottom: 1.5mm;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+}
+
+.panel-heading span {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-style: italic;
+  font-weight: 700;
+  text-transform: none;
+  font-size: 14pt;
+  color: var(--gold-bronze);
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.panel-lead {
+  font-size: 8.1pt;
+  font-weight: 500;
+  color: var(--ink-body);
+  line-height: 1.32;
+  margin-bottom: 2.1mm;
+}
+
+/* ==================== ПАНЕЛЬ 1: ВНУТРІШНЯ СТУЛКА (СТАТУС, НАПРЯМИ, ДОКУМЕНТИ) ==================== */
+.trajectory-banner {
+  background: var(--navy-deep);
+  color: #ffffff;
+  border-left: 3px solid var(--gold-champagne);
+  border-radius: 1.2mm;
+  padding: 2.1mm 2.6mm;
+  margin-bottom: 2.1mm;
+}
+
+.trajectory-title {
+  font: 700 7.4pt 'Montserrat', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gold-light);
+  margin-bottom: 0.7mm;
+  display: flex;
+  align-items: center;
+  gap: 1.5mm;
+}
+
+.trajectory-text {
+  font-size: 7.8pt;
+  color: #e2e8f0;
+  line-height: 1.3;
+}
+
+.audience-grid {
+  display: grid;
+  gap: 1.7mm;
+  margin-bottom: 2.1mm;
+}
+
+.aud-card {
+  background: #ffffff;
+  border: 1px solid var(--parchment);
+  border-radius: 1.2mm;
+  padding: 1.9mm 2.4mm;
+  display: grid;
+  grid-template-columns: 6mm 1fr;
+  gap: 2.1mm;
+  align-items: start;
+}
+
+.aud-card.prime {
+  background: linear-gradient(135deg, #fffdf8 0%, #f9f3e3 100%);
+  border-color: var(--gold-champagne);
+}
+
+.aud-icon {
+  width: 6mm;
+  height: 6mm;
+  border-radius: 1mm;
+  background: var(--alabaster);
+  border: 1px solid var(--parchment);
+  color: var(--navy-royal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 0.2mm;
+}
+
+.aud-card.prime .aud-icon {
+  background: var(--navy-deep);
+  border-color: var(--gold-champagne);
+  color: var(--gold-light);
+}
+
+.aud-icon svg {
+  width: 3.7mm;
+  height: 3.7mm;
+  fill: currentColor;
+}
+
+.aud-title {
+  font: 700 8.2pt 'Montserrat', sans-serif;
+  color: var(--ink-dark);
+  margin-bottom: 0.35mm;
+  line-height: 1.18;
+}
+
+.aud-desc {
+  font-size: 7.7pt;
+  color: var(--ink-body);
+  line-height: 1.27;
+}
+
+/* Чек-лист документів за п. 2.1.2 Порядку */
+.dossier-box {
+  background: var(--alabaster);
+  border: 1px solid var(--line-warm);
+  border-top: 2px solid var(--navy-royal);
+  border-radius: 1.2mm;
+  padding: 2.1mm 2.6mm;
+  margin-bottom: 1.8mm;
+}
+
+.dossier-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.3mm;
+}
+
+.dossier-title {
+  font: 700 7.8pt 'Montserrat', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--navy-deep);
+}
+
+.dossier-tag {
+  font: 600 6.5pt 'Montserrat', sans-serif;
+  color: var(--gold-dark);
+  background: var(--gold-pale);
+  padding: 0.35mm 1.5mm;
+  border-radius: 0.8mm;
+}
+
+.dossier-list {
+  list-style: none;
+  display: grid;
+  gap: 1.15mm;
+}
+
+.dossier-list li {
+  font-size: 7.55pt;
+  color: var(--ink-dark);
+  display: flex;
+  align-items: flex-start;
+  gap: 1.6mm;
+  line-height: 1.24;
+}
+
+.dossier-list li .check-sq {
+  width: 2.8mm;
+  height: 2.8mm;
+  border: 1px solid var(--gold-bronze);
+  background: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 6pt;
+  color: var(--navy-deep);
+  font-weight: 800;
+  flex-shrink: 0;
+  margin-top: 0.35mm;
+}
+
+.quote-footer {
+  background: #ffffff;
+  border: 1px solid var(--line-warm);
+  border-left: 3px solid var(--navy-royal);
+  border-radius: 1mm;
+  padding: 1.8mm 2.3mm;
+  font-size: 7.45pt;
+  color: var(--ink-body);
+  line-height: 1.28;
+}
+
+.quote-footer b {
+  font-family: 'Montserrat', sans-serif;
+  color: var(--navy-deep);
+  text-transform: uppercase;
+  font-size: 6.9pt;
+  letter-spacing: 0.04em;
+}
+
+/* ==================== ПАНЕЛЬ 2: ЗВОРОТНА СТОРОНА (ТЕХПАСПОРТ, QR, КОНТАКТИ) ==================== */
+.panel.obsidian {
+  background: radial-gradient(circle at 50% 0%, #162b4d 0%, var(--navy-deep) 55%, var(--obsidian) 100%);
+  color: #ffffff;
+}
+
+.panel.obsidian::before {
+  content: '';
+  position: absolute;
+  inset: 3mm;
+  border: 0.7px solid rgba(212, 175, 55, 0.32);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.panel.obsidian .arch-topbar {
+  border-bottom-color: rgba(212, 175, 55, 0.25);
+}
+
+.panel.obsidian .arch-code {
+  color: var(--gold-light);
+}
+
+.panel.obsidian .arch-section-num {
+  color: #94a3b8;
+}
+
+.panel.obsidian .panel-heading {
+  color: #ffffff;
+}
+
+.panel.obsidian .panel-heading span {
+  color: var(--gold-light);
+}
+
+/* Паспорт матеріально-технічної бази та безпеки */
+.facility-card {
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(212, 175, 55, 0.28);
+  border-radius: 1.4mm;
+  padding: 2.1mm 2.5mm;
+  margin-bottom: 2.1mm;
+}
+
+.facility-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 1.1mm;
+  margin-bottom: 1.5mm;
+}
+
+.facility-head-title {
+  font: 700 7.4pt 'Montserrat', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--gold-light);
+}
+
+.facility-head-badge {
+  font: 700 6.4pt 'Montserrat', sans-serif;
+  background: rgba(16, 185, 129, 0.18);
+  border: 1px solid rgba(52, 211, 153, 0.45);
+  color: #6ee7b7;
+  padding: 0.35mm 1.5mm;
+  border-radius: 0.8mm;
+  white-space: nowrap;
+}
+
+.facility-specs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.3mm;
+}
+
+.f-spec {
+  background: rgba(6, 13, 26, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1mm;
+  padding: 1.3mm 1.7mm;
+}
+
+.f-spec-label {
+  font: 600 6.3pt 'Montserrat', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  margin-bottom: 0.25mm;
+}
+
+.f-spec-val {
+  font-size: 7.4pt;
+  font-weight: 600;
+  color: #f8fafc;
+  line-height: 1.2;
+}
+
+/* QR та Реєстр сертифікатів */
+.digital-hub {
+  display: grid;
+  grid-template-columns: 27mm 1fr;
+  gap: 2.4mm;
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.14) 0%, rgba(255, 255, 255, 0.05) 100%);
+  border: 1px solid rgba(212, 175, 55, 0.45);
+  border-radius: 1.4mm;
+  padding: 2.1mm;
+  margin-bottom: 2mm;
+  align-items: center;
+}
+
+.qr-frame {
+  background: #ffffff;
+  padding: 1.3mm;
+  border-radius: 1.2mm;
+  width: 27mm;
+  height: 27mm;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+.qr-frame img {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.hub-info-title {
+  font: 800 8.2pt 'Montserrat', sans-serif;
+  color: var(--gold-light);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.7mm;
+}
+
+.hub-info-desc {
+  font-size: 7.5pt;
+  color: #f1f5f9;
+  line-height: 1.26;
+  margin-bottom: 1.1mm;
+}
+
+.hub-url-pill {
+  display: inline-block;
+  font: 700 7.4pt 'Montserrat', sans-serif;
+  color: var(--obsidian);
+  background: var(--gold-light);
+  padding: 0.5mm 2mm;
+  border-radius: 0.8mm;
+  letter-spacing: 0.03em;
+}
+
+.registry-note {
+  background: rgba(255, 255, 255, 0.05);
+  border-left: 2.5px solid var(--gold-champagne);
+  border-radius: 0 1mm 1mm 0;
+  padding: 1.7mm 2.3mm;
+  font-size: 7.55pt;
+  color: #e2e8f0;
+  line-height: 1.28;
+  margin-bottom: 2mm;
+}
+
+.registry-note b {
+  color: var(--gold-light);
+  font-family: 'Montserrat', sans-serif;
+}
+
+/* Контактний блок */
+.contacts-luxury {
+  display: grid;
+  gap: 1.35mm;
+}
+
+.c-row {
+  display: grid;
+  grid-template-columns: 5.4mm 1fr;
+  gap: 1.9mm;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 1mm;
+  padding: 1.45mm 2mm;
+}
+
+.c-row-icon {
+  width: 5.4mm;
+  height: 5.4mm;
+  border-radius: 0.8mm;
+  background: rgba(212, 175, 55, 0.18);
+  color: var(--gold-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.c-row-icon svg {
+  width: 3.1mm;
+  height: 3.1mm;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+}
+
+.c-row-label {
+  font: 600 6.1pt 'Montserrat', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #94a3b8;
+  margin-bottom: 0.15mm;
+}
+
+.c-row-val {
+  font-size: 7.55pt;
+  font-weight: 600;
+  color: #ffffff;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.c-row-val a {
+  color: #ffffff;
+  text-decoration: none;
+}
+
+.colophon {
+  border-top: 1px solid rgba(212, 175, 55, 0.25);
+  padding-top: 1.5mm;
+  text-align: center;
+  font-size: 6.7pt;
+  color: #94a3b8;
+  line-height: 1.3;
+}
+
+/* ==================== ПАНЕЛЬ 3: ТИТУЛЬНА ОБКЛАДИНКА ==================== */
+.panel.cover-luxury {
+  background:
+    radial-gradient(ellipse at 50% 18%, rgba(212, 175, 55, 0.16) 0%, transparent 55%),
+    radial-gradient(ellipse at 50% 95%, rgba(24, 49, 89, 0.65) 0%, transparent 60%),
+    linear-gradient(170deg, #050b16 0%, #0a172c 45%, #0f2342 100%);
+  color: #ffffff;
+  padding: 8.5mm 7.2mm 7.2mm;
+  text-align: center;
+}
+
+/* Подвійна ювелірна рамка обкладинки */
+.panel.cover-luxury::before {
+  content: '';
+  position: absolute;
+  inset: 3mm;
+  border: 1px solid rgba(212, 175, 55, 0.55);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.panel.cover-luxury::after {
+  content: '';
+  position: absolute;
+  inset: 4.2mm;
+  border: 0.5px solid rgba(212, 175, 55, 0.22);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Фоновий водяний знак Тризуба */
+.cover-watermark {
+  position: absolute;
+  top: 52%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 68mm;
+  height: 95mm;
+  opacity: 0.035;
+  pointer-events: none;
+  z-index: 1;
+  color: var(--gold-champagne);
+}
+
+.cover-watermark svg {
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+}
+
+.cover-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.cover-protocol-line {
+  font: 600 6.4pt 'Montserrat', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--gold-light);
+  margin-bottom: 2.6mm;
+  display: flex;
+  align-items: center;
+  gap: 2mm;
+}
+
+.cover-protocol-line::before,
+.cover-protocol-line::after {
+  content: '';
+  width: 7mm;
+  height: 0.7px;
+  background: var(--gold-champagne);
+}
+
+.crest-medallion {
+  width: 26mm;
+  height: 26mm;
+  border-radius: 50%;
+  padding: 1.2mm;
+  background: linear-gradient(135deg, var(--gold-light) 0%, var(--gold-bronze) 100%);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.55), 0 0 0 3px rgba(212, 175, 55, 0.18);
+  margin-bottom: 2.6mm;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.crest-inner {
+  width: 100%;
+  height: 100%;
+  background: #ffffff;
+  border-radius: 50%;
+  padding: 0.8mm;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.crest-inner img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 50%;
+}
+
+.cover-inst-name {
+  font: 700 7.1pt 'Montserrat', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #f1f5f9;
+  line-height: 1.35;
+  max-width: 83mm;
+  margin: 0 auto;
+}
+
+.cover-centerpiece {
+  margin: 1.5mm 0;
+  padding: 0 1mm;
+}
+
+.cover-ornament {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2mm;
+  margin-bottom: 2.6mm;
+}
+
+.cover-ornament-line {
+  width: 16mm;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold-champagne));
+}
+.cover-ornament-line.right {
+  background: linear-gradient(90deg, var(--gold-champagne), transparent);
+}
+
+.cover-ornament-diamond {
+  width: 2.2mm;
+  height: 2.2mm;
+  background: var(--gold-light);
+  transform: rotate(45deg);
+}
+
+.cover-main-title {
+  font: 800 13.8pt 'Montserrat', sans-serif;
+  line-height: 1.22;
+  color: #ffffff;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin-bottom: 3mm;
+}
+
+.cover-main-title .gold-accent {
+  color: var(--gold-light);
+  display: block;
+  margin: 0.6mm 0;
+}
+
+.standard-plaque {
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(212, 175, 55, 0.42);
+  border-radius: 1.4mm;
+  padding: 2.5mm 2.8mm;
+  margin-bottom: 2.8mm;
+  position: relative;
+}
+
+.standard-plaque-label {
+  font: 700 6.4pt 'Montserrat', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--gold-light);
+  margin-bottom: 0.7mm;
+}
+
+.standard-plaque-title {
+  font: 700 9pt 'Montserrat', sans-serif;
+  color: #ffffff;
+  line-height: 1.26;
+  margin-bottom: 0.7mm;
+}
+
+.standard-plaque-ref {
+  font-size: 7.1pt;
+  color: #cbd5e1;
+}
+
+.cover-motto {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-style: italic;
+  font-weight: 600;
+  font-size: 12.8pt;
+  color: var(--gold-pale);
+  letter-spacing: 0.01em;
+}
+
+/* Нижня метрична панель обкладинки */
+.cover-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-top: 1px solid rgba(212, 175, 55, 0.32);
+  border-bottom: 1px solid rgba(212, 175, 55, 0.32);
+  padding: 1.9mm 0;
+  margin-bottom: 2mm;
+}
+
+.c-metric {
+  border-right: 1px solid rgba(212, 175, 55, 0.22);
+  padding: 0 1mm;
+}
+.c-metric:last-child {
+  border-right: none;
+}
+
+.c-metric-val {
+  font: 800 9pt 'Montserrat', sans-serif;
+  color: var(--gold-light);
+  line-height: 1.15;
+}
+
+.c-metric-lbl {
+  font-size: 6.4pt;
+  color: #cbd5e1;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 0.3mm;
+}
+
+.cover-bottom-bar {
+  font-size: 7.2pt;
+  color: #cbd5e1;
+  line-height: 1.32;
+}
+
+.cover-bottom-bar b {
+  color: #ffffff;
+  font-family: 'Montserrat', sans-serif;
+  letter-spacing: 0.03em;
+}
+
+/* ==================== ВНУТРІШНІЙ РОЗВОРОТ (ПАНЕЛІ 4, 5, 6) ==================== */
+
+/* ПАНЕЛЬ 4: КВАЛІФІКАЦІЙНА МАТРИЦЯ ТА СТАНДАРТ */
+.matrix-table-wrap {
+  background: #ffffff;
+  border: 1px solid var(--line-warm);
+  border-top: 2.2px solid var(--navy-deep);
+  border-radius: 1.2mm;
+  overflow: hidden;
+  margin-bottom: 2.1mm;
+}
+
+.matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 7.8pt;
+}
+
+.matrix-table th {
+  background: var(--navy-deep);
+  color: var(--gold-light);
+  font: 700 6.6pt 'Montserrat', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1.65mm 1.8mm;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.matrix-table td {
+  padding: 1.6mm 1.8mm;
+  border-bottom: 1px solid #ebe5d8;
+  color: var(--ink-dark);
+  vertical-align: middle;
+  line-height: 1.2;
+}
+
+.matrix-table tr:last-child td {
+  border-bottom: none;
+}
+
+.matrix-table tr:nth-child(even) td {
+  background: #faf7f0;
+}
+
+.nrk-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 4.6mm;
+  height: 4.6mm;
+  border-radius: 0.8mm;
+  background: var(--alabaster);
+  border: 1px solid var(--gold-bronze);
+  color: var(--navy-deep);
+  font: 800 7.4pt 'Montserrat', sans-serif;
+}
+
+.nrk-badge.hi {
+  background: var(--navy-deep);
+  border-color: var(--gold-champagne);
+  color: var(--gold-light);
+}
+
+/* 8 трудових функцій за профстандартом */
+.functions-box {
+  background: #ffffff;
+  border: 1px solid var(--line-warm);
+  border-radius: 1.2mm;
+  padding: 1.9mm 2.4mm;
+  margin-bottom: 2.1mm;
+}
+
+.sub-box-title {
+  font: 700 7.3pt 'Montserrat', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--navy-deep);
+  margin-bottom: 1.2mm;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #eee8dc;
+  padding-bottom: 0.9mm;
+  white-space: nowrap;
+}
+
+.sub-box-title span.tag {
+  font-size: 6.4pt;
+  color: var(--gold-bronze);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.func-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.95mm 1.8mm;
+}
+
+.func-item {
+  font-size: 7.3pt;
+  color: var(--ink-body);
+  display: flex;
+  align-items: baseline;
+  gap: 1.1mm;
+  line-height: 1.2;
+}
+
+.func-item b {
+  font: 700 6.7pt 'Montserrat', sans-serif;
+  color: var(--gold-bronze);
+}
+
+/* 9 галузей знань */
+.fields-box {
+  background: var(--alabaster);
+  border: 1px solid var(--line-warm);
+  border-radius: 1.2mm;
+  padding: 1.9mm 2.4mm;
+  margin-bottom: 2mm;
+}
+
+.fields-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.9mm 1.5mm;
+}
+
+.field-chip {
+  font-size: 7.05pt;
+  color: var(--ink-dark);
+  background: #ffffff;
+  border: 1px solid #e2dacb;
+  border-radius: 0.8mm;
+  padding: 0.65mm 1.3mm;
+  display: flex;
+  align-items: center;
+  gap: 1.1mm;
+  line-height: 1.16;
+}
+
+.field-chip:last-child {
+  grid-column: span 2;
+}
+
+.field-chip b {
+  font: 800 6.7pt 'Montserrat', sans-serif;
+  color: var(--navy-royal);
+  background: var(--gold-pale);
+  padding: 0.15mm 0.95mm;
+  border-radius: 0.5mm;
+  flex-shrink: 0;
+}
+
+.calc-strip {
+  background: linear-gradient(135deg, var(--navy-deep) 0%, var(--navy-royal) 100%);
+  color: #ffffff;
+  border-radius: 1.2mm;
+  padding: 2mm 2.5mm;
+  border: 1px solid var(--gold-bronze);
+}
+
+.calc-strip-title {
+  font: 700 7.6pt 'Montserrat', sans-serif;
+  color: var(--gold-light);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.35mm;
+}
+
+.calc-strip-sub {
+  font-size: 7.35pt;
+  color: #e2e8f0;
+  line-height: 1.24;
+}
+
+/* ==================== ПАНЕЛЬ 5: АЛГОРИТМ ПРОЦЕДУРИ ТА РЕГЛАМЕНТ ==================== */
+.arch-steps {
+  list-style: none;
+  display: grid;
+  gap: 1.85mm;
+  margin-bottom: 2.1mm;
+}
+
+.arch-step {
+  background: #ffffff;
+  border: 1px solid var(--line-warm);
+  border-radius: 1.2mm;
+  padding: 1.85mm 2.2mm;
+  display: grid;
+  grid-template-columns: 6.6mm 1fr;
+  gap: 2mm;
+  align-items: center;
+}
+
+.arch-step.final {
+  background: linear-gradient(135deg, #fffdf7 0%, #f9f2df 100%);
+  border-color: var(--gold-champagne);
+}
+
+.arch-step-num {
+  width: 6.6mm;
+  height: 6.6mm;
+  border-radius: 1mm;
+  background: var(--navy-deep);
+  color: var(--gold-light);
+  font: 800 7.5pt 'Montserrat', sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: 0.03em;
+}
+
+.arch-step.final .arch-step-num {
+  background: var(--gold-champagne);
+  color: var(--obsidian);
+}
+
+.arch-step-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1mm;
+  margin-bottom: 0.35mm;
+}
+
+.arch-step-title {
+  font: 700 7.8pt 'Montserrat', sans-serif;
+  color: var(--ink-dark);
+  white-space: nowrap;
+}
+
+.arch-step-term {
+  font: 700 6.2pt 'Montserrat', sans-serif;
+  color: var(--gold-dark);
+  background: var(--gold-pale);
+  padding: 0.2mm 1.2mm;
+  border-radius: 0.6mm;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.arch-step-desc {
+  font-size: 7.45pt;
+  color: var(--ink-body);
+  line-height: 1.25;
+}
+
+/* Телеметрія іспиту (КОМ) за п. 2.3 Порядку */
+.telemetry-card {
+  background: var(--navy-deep);
+  color: #ffffff;
+  border: 1px solid var(--gold-bronze);
+  border-radius: 1.4mm;
+  padding: 2.1mm 2.4mm;
+}
+
+.telemetry-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(212, 175, 55, 0.28);
+  padding-bottom: 1.1mm;
+  margin-bottom: 1.5mm;
+}
+
+.telemetry-title {
+  font: 700 7.1pt 'Montserrat', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--gold-light);
+  white-space: nowrap;
+}
+
+.telemetry-total {
+  font: 700 6.6pt 'Montserrat', sans-serif;
+  background: rgba(212, 175, 55, 0.2);
+  border: 1px solid rgba(212, 175, 55, 0.5);
+  color: #ffffff;
+  padding: 0.3mm 1.5mm;
+  border-radius: 0.8mm;
+  white-space: nowrap;
+}
+
+.telemetry-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5mm;
+  margin-bottom: 1.4mm;
+}
+
+.t-box {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 1mm;
+  padding: 1.35mm 1.7mm;
+}
+
+.t-box-head {
+  font: 700 7.2pt 'Montserrat', sans-serif;
+  color: var(--gold-light);
+  margin-bottom: 0.35mm;
+  white-space: nowrap;
+}
+
+.t-box-sub {
+  font-size: 7.05pt;
+  color: #e2e8f0;
+  line-height: 1.22;
+}
+
+.telemetry-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 6.85pt;
+  color: #cbd5e1;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 1.1mm;
+  white-space: nowrap;
+}
+
+.telemetry-footer span b {
+  color: var(--gold-light);
+}
+
+/* ==================== ПАНЕЛЬ 6: НОРМАТИВНА БАЗА ТА ГАРАНТІЇ ЦЕНТРУ ==================== */
+.normative-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.3mm;
+  margin-bottom: 1.8mm;
+}
+
+.norm-card {
+  background: #ffffff;
+  border: 1px solid var(--line-warm);
+  border-left: 2.5px solid var(--navy-deep);
+  border-radius: 1mm;
+  padding: 1.35mm 1.8mm;
+}
+
+.norm-card.gold-b {
+  border-left-color: var(--gold-champagne);
+}
+
+.norm-act {
+  font: 700 7.1pt 'Montserrat', sans-serif;
+  color: var(--navy-deep);
+  line-height: 1.18;
+  margin-bottom: 0.25mm;
+  white-space: nowrap;
+}
+
+.norm-sub {
+  font-size: 6.75pt;
+  color: var(--ink-muted);
+  line-height: 1.18;
+}
+
+/* Гарантії за Положенням та Порядком */
+.guarantees-list {
+  list-style: none;
+  display: grid;
+  gap: 1.3mm;
+  margin-bottom: 1.8mm;
+}
+
+.g-item {
+  background: #ffffff;
+  border: 1px solid var(--line-warm);
+  border-radius: 1.1mm;
+  padding: 1.4mm 2mm;
+  display: grid;
+  grid-template-columns: 4.3mm 1fr;
+  gap: 1.6mm;
+  align-items: start;
+}
+
+.g-bullet {
+  width: 4.3mm;
+  height: 4.3mm;
+  border-radius: 50%;
+  background: var(--navy-deep);
+  color: var(--gold-light);
+  font: 800 6.5pt 'Montserrat', sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.2mm;
+}
+
+.g-text {
+  font-size: 7.3pt;
+  color: var(--ink-body);
+  line-height: 1.23;
+}
+
+.g-text b {
+  color: var(--ink-dark);
+  font-family: 'Montserrat', sans-serif;
+  font-size: 7.35pt;
+}
+
+/* Сертифікат та контрактна основа (п. 1.10 Положення, п. 3.1 Порядку) */
+.cert-format-note {
+  background: #ffffff;
+  border: 1px solid var(--line-warm);
+  border-left: 3px solid var(--navy-deep);
+  border-radius: 1.1mm;
+  padding: 1.5mm 2.1mm;
+  font-size: 7.2pt;
+  color: var(--ink-dark);
+  line-height: 1.23;
+  margin-bottom: 1.5mm;
+}
+
+.cert-format-note b {
+  font-family: 'Montserrat', sans-serif;
+  color: var(--navy-deep);
+  font-size: 7.25pt;
+}
+
+.contract-note {
+  background: var(--alabaster);
+  border: 1px solid var(--line-warm);
+  border-left: 3px solid var(--gold-bronze);
+  border-radius: 1.1mm;
+  padding: 1.5mm 2.1mm;
+  font-size: 7.2pt;
+  color: var(--ink-dark);
+  line-height: 1.23;
+  margin-bottom: 1.6mm;
+}
+
+.contract-note b {
+  font-family: 'Montserrat', sans-serif;
+  color: var(--navy-deep);
+  font-size: 7.25pt;
+}
+
+.executive-cta {
+  background: linear-gradient(135deg, var(--obsidian) 0%, var(--navy-royal) 100%);
+  color: #ffffff;
+  border: 1px solid var(--gold-champagne);
+  border-radius: 1.3mm;
+  padding: 2mm 2.5mm;
+  text-align: center;
+}
+
+.executive-cta-title {
+  font: 800 8.1pt 'Montserrat', sans-serif;
+  color: var(--gold-light);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.4mm;
+}
+
+.executive-cta-sub {
+  font-size: 7.25pt;
+  color: #f1f5f9;
+  line-height: 1.23;
+}
+
+/* ==================== ДРУК ТА АДАПТИВНІСТЬ ==================== */
+@page {
+  size: 297mm 210mm;
+  margin: 0;
+}
+
+@media print {
+  body {
+    background: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .sheet-caption { display: none !important; }
+  .sheet {
+    margin: 0 !important;
+    box-shadow: none !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    overflow: hidden !important;
+  }
+  .sheet:last-of-type {
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+  .sheet::before, .sheet::after { display: none !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- ========================================================================================= -->
+<!-- АРКУШ 1 (ЗОВНІШНІЙ РОЗВОРОТ): [ Панель 1: Внутрішня стулка | Панель 2: Зворот | Панель 3: Обкладинка ] -->
+<!-- ========================================================================================= -->
+<div class="sheet-caption">
+  <span>Варіант 2 (Елітна серія) &bull; Аркуш 1 — Зовнішній бік</span>
+  <span>Внутрішня стулка (ліва) &bull; Зворотна сторона (центр) &bull; Титульна обкладинка (права)</span>
+</div>
+
+<section class="sheet">
+
+  <!-- ПАНЕЛЬ 1: МІСІЯ, ОСВІТНЯ ТРАЄКТОРІЯ ТА ДОКУМЕНТИ (внутрішня стулка) -->
+  <div class="panel editorial">
+    <div>
+      <div class="arch-topbar">
+        <span class="arch-code">ОМЦ КЗ «ЗОІППО» ЗОР</span>
+        <span class="arch-section-num">РОЗДІЛ I</span>
+      </div>
+
+      <h2 class="panel-heading">Фахова підготовка<br><span>та визнання досвіду</span></h2>
+      <p class="panel-lead">
+        Організаційно-методичний центр діє як структурний підрозділ Інституту, поєднуючи освітній потенціал ЗОІППО з офіційною процедурою кваліфікаційного оцінювання.
+      </p>
+
+      <div class="trajectory-banner">
+        <div class="trajectory-title">
+          <span>✦</span> Дві траєкторії для кандидата
+        </div>
+        <div class="trajectory-text">
+          Проходження попередньої фахової підготовки (навчання, тренінгів) на базі КЗ&nbsp;«ЗОІППО»&nbsp;ЗОР або пряме оцінювання та визнання результатів неформальної й&nbsp;інформальної освіти.
+        </div>
+      </div>
+
+      <div class="audience-grid">
+        <div class="aud-card prime">
+          <div class="aud-icon">
+            <svg viewBox="-65 10 130 205">
+              <path d="M5.985561 78.82382a104.079383 104.079383 0 0 0 14.053598 56.017033 55 55 0 0 1-13.218774 70.637179A20 20 0 0 0 0 212.5a20 20 0 0 0-6.820384-7.021968 55 55 0 0 1-13.218774-70.637179A104.079383 104.079383 0 0 0-5.98556 78.82382l-1.599642-45.260519A30.103986 30.103986 0 0 1 0 12.5a30.103986 30.103986 0 0 1 7.585202 21.063301zM5 193.624749a45 45 0 0 0 6.395675-53.75496A114.079383 114.079383 0 0 1 0 112.734179a114.079383 114.079383 0 0 1-11.395675 27.13561A45 45 0 0 0-5 193.624749V162.5H5z"/>
+              <path id="tz_elite" d="M27.779818 75.17546A62.64982 62.64982 0 0 1 60 27.5v145H0l-5-10a22.5 22.5 0 0 1 17.560976-21.95122l14.634147-3.292683a10 10 0 1 0-4.427443-19.503751zm5.998315 34.353887a20 20 0 0 1-4.387889 37.482848l-14.634146 3.292683A12.5 12.5 0 0 0 5 162.5h45V48.265462a52.64982 52.64982 0 0 0-12.283879 28.037802zM42 122.5h10v10H42z"/>
+              <use href="#tz_elite" transform="scale(-1 1)"/>
+            </svg>
+          </div>
+          <div>
+            <div class="aud-title">Ветерани війни та члени їхніх сімей</div>
+            <div class="aud-desc">Соціальна і професійна адаптація захисників України, учасників бойових дій та демобілізованих осіб (п.&nbsp;2.3.4, 3.1.15 Положення).</div>
+          </div>
+        </div>
+
+        <div class="aud-card">
+          <div class="aud-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3zm-1 14.5l-3.5-3.5 1.41-1.41L11 13.67l4.59-4.59L17 10.5l-6 6z"/></svg>
+          </div>
+          <div>
+            <div class="aud-title">Здобувачі професійної кваліфікації</div>
+            <div class="aud-desc">Присвоєння або підтвердження повної чи часткової професійної кваліфікації державного зразка <span style="white-space: nowrap;">(6–7&nbsp;рівні&nbsp;НРК).</span></div>
+          </div>
+        </div>
+
+        <div class="aud-card">
+          <div class="aud-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+          </div>
+          <div>
+            <div class="aud-title">Власники іноземних документів</div>
+            <div class="aud-desc">Офіційне визнання професійних кваліфікацій, здобутих в&nbsp;інших країнах, із видачею підтверджуючих документів (п.&nbsp;3.4.9 Положення).</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dossier-box">
+        <div class="dossier-header">
+          <span class="dossier-title">Перелік документів</span>
+          <span class="dossier-tag">п.&nbsp;2.1.2 Порядку</span>
+        </div>
+        <ul class="dossier-list">
+          <li><span class="check-sq">✓</span><span>Заява встановленого зразка (особисто або онлайн&nbsp;із&nbsp;КЕП)</span></li>
+          <li><span class="check-sq">✓</span><span>Паспорт громадянина України / ID-картка з&nbsp;витягом про проживання</span></li>
+          <li><span class="check-sq">✓</span><span>Реєстраційний номер облікової картки платника податків (РНОКПП)</span></li>
+          <li><span class="check-sq">✓</span><span>Документ державного зразка про вищу освіту з&nbsp;додатком</span></li>
+          <li><span class="check-sq">✓</span><span>Документи, що засвідчують трудові відносини та стаж (за&nbsp;наявності)</span></li>
+          <li><span class="check-sq">✓</span><span>Особиста згода на збір та обробку персональних даних</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="quote-footer">
+      <b>Місія Центру:</b> забезпечення якості надання послуг ветеранам війни та їхнім родинам і задоволення потреб держави у&nbsp;кваліфікованих фахівцях.
+    </div>
+  </div>
+
+  <!-- ПАНЕЛЬ 2: ЗВОРОТНА СТОРОНА (ТЕХПАСПОРТ, ЦИФРОВІ СЕРВІСИ, КОНТАКТИ) -->
+  <div class="panel obsidian">
+    <div>
+      <div class="arch-topbar">
+        <span class="arch-code">ІНФРАСТРУКТУРА ТА ЗВ'ЯЗОК</span>
+        <span class="arch-section-num">РОЗДІЛ V</span>
+      </div>
+
+      <h2 class="panel-heading">Безпека, сервіси <span>та контакти</span></h2>
+
+      <div class="facility-card">
+        <div class="facility-head">
+          <span class="facility-head-title">Матеріально-технічна база</span>
+          <span class="facility-head-badge">Акт ДСНС №&nbsp;1004</span>
+        </div>
+        <div class="facility-specs">
+          <div class="f-spec">
+            <div class="f-spec-label">Захищений простір</div>
+            <div class="f-spec-val">658,5&nbsp;кв.&nbsp;м (літ.&nbsp;А-4)<br>Атестоване укриття</div>
+          </div>
+          <div class="f-spec">
+            <div class="f-spec-label">Безбар'єрність</div>
+            <div class="f-spec-val">ДБН В.2.2-40:2018<br>Пандуси, інклюзія</div>
+          </div>
+          <div class="f-spec">
+            <div class="f-spec-label">Технічний комплекс</div>
+            <div class="f-spec-val">Комп'ютерні класи,<br>ліцензійне ПЗ, Wi-Fi</div>
+          </div>
+          <div class="f-spec">
+            <div class="f-spec-label">Інженерні мережі</div>
+            <div class="f-spec-val">Припливно-витяжна<br>вентиляція, захист даних</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="digital-hub">
+        <div class="qr-frame">
+          <img src="qr.svg" alt="QR-код порталу Центру">
+        </div>
+        <div>
+          <div class="hub-info-title">Цифровий портал Центру</div>
+          <div class="hub-info-desc">
+            Онлайн-подання заяви з накладанням КЕП, калькулятор відповідності та електронне тестування:
+          </div>
+          <div class="hub-url-pill">lms.ele.zp.ua</div>
+        </div>
+      </div>
+
+      <div class="registry-note">
+        <b>Перевірка в Реєстрі онлайн:</b> кожен сертифікат реєструється в&nbsp;базі кваліфікаційного центру з миттєвою верифікацією за номером.
+      </div>
+
+      <div class="contacts-luxury">
+        <div class="c-row">
+          <div class="c-row-icon">
+            <svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          </div>
+          <div>
+            <div class="c-row-label">Юридична адреса Центру</div>
+            <div class="c-row-val">69035, м.&nbsp;Запоріжжя, вул.&nbsp;Незалежної України, 57-А</div>
+          </div>
+        </div>
+
+        <div class="c-row">
+          <div class="c-row-icon">
+            <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          </div>
+          <div>
+            <div class="c-row-label">Телефони для консультацій</div>
+            <div class="c-row-val"><a href="tel:0617171772">(061) 717-17-72</a> &nbsp;&bull;&nbsp; <a href="tel:0964772017">096 477 20 17</a></div>
+          </div>
+        </div>
+
+        <div class="c-row">
+          <div class="c-row-icon">
+            <svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          </div>
+          <div>
+            <div class="c-row-label">Офіційна електронна пошта</div>
+            <div class="c-row-val"><a href="mailto:orgmetodcentr@zoippo.net.ua">orgmetodcentr@zoippo.net.ua</a></div>
+          </div>
+        </div>
+
+        <div class="c-row">
+          <div class="c-row-icon">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          </div>
+          <div>
+            <div class="c-row-label">Вебресурси Інституту та навчання</div>
+            <div class="c-row-val">zoippo.zp.ua &nbsp;&bull;&nbsp; ele.zp.ua/training/</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="colophon">
+      Організаційно-методичний центр КЗ «ЗОІППО» ЗОР<br>
+      Положення затверджено рішенням Вченої ради від 26.06.2026&nbsp;р. (протокол №&nbsp;6)
+    </div>
+  </div>
+
+  <!-- ПАНЕЛЬ 3: ТИТУЛЬНА ОБКЛАДИНКА -->
+  <div class="panel cover-luxury">
+    <div class="cover-watermark">
+      <svg viewBox="-65 10 130 205">
+        <path d="M5.985561 78.82382a104.079383 104.079383 0 0 0 14.053598 56.017033 55 55 0 0 1-13.218774 70.637179A20 20 0 0 0 0 212.5a20 20 0 0 0-6.820384-7.021968 55 55 0 0 1-13.218774-70.637179A104.079383 104.079383 0 0 0-5.98556 78.82382l-1.599642-45.260519A30.103986 30.103986 0 0 1 0 12.5a30.103986 30.103986 0 0 1 7.585202 21.063301zM5 193.624749a45 45 0 0 0 6.395675-53.75496A114.079383 114.079383 0 0 1 0 112.734179a114.079383 114.079383 0 0 1-11.395675 27.13561A45 45 0 0 0-5 193.624749V162.5H5z"/>
+        <path id="tz_wm" d="M27.779818 75.17546A62.64982 62.64982 0 0 1 60 27.5v145H0l-5-10a22.5 22.5 0 0 1 17.560976-21.95122l14.634147-3.292683a10 10 0 1 0-4.427443-19.503751zm5.998315 34.353887a20 20 0 0 1-4.387889 37.482848l-14.634146 3.292683A12.5 12.5 0 0 0 5 162.5h45V48.265462a52.64982 52.64982 0 0 0-12.283879 28.037802zM42 122.5h10v10H42z"/>
+        <use href="#tz_wm" transform="scale(-1 1)"/>
+      </svg>
+    </div>
+
+    <div class="cover-top">
+      <div class="cover-protocol-line">Офіційне видання</div>
+      <div class="crest-medallion">
+        <div class="crest-inner">
+          <img src="logo-zoippo.png" alt="КЗ «ЗОІППО» ЗОР">
+        </div>
+      </div>
+      <div class="cover-inst-name">
+        Комунальний заклад «Запорізький обласний інститут післядипломної педагогічної освіти» Запорізької обласної ради
+      </div>
+    </div>
+
+    <div class="cover-centerpiece">
+      <div class="cover-ornament">
+        <span class="cover-ornament-line"></span>
+        <span class="cover-ornament-diamond"></span>
+        <span class="cover-ornament-line right"></span>
+      </div>
+
+      <h1 class="cover-main-title">
+        Кваліфікаційний центр
+        <span class="gold-accent">сертифікації фахівців</span>
+        із супроводу ветеранів
+      </h1>
+
+      <div class="standard-plaque">
+        <div class="standard-plaque-label">Оцінювання за професійним стандартом</div>
+        <div class="standard-plaque-title">«Фахівець із супроводу ветеранів війни та демобілізованих осіб»</div>
+        <div class="standard-plaque-ref">Наказ Мінветеранів №&nbsp;835 від 10.10.2025&nbsp;р.</div>
+      </div>
+
+      <div class="cover-motto">
+        Присвоєння та підтвердження професійних кваліфікацій
+      </div>
+    </div>
+
+    <div>
+      <div class="cover-metrics">
+        <div class="c-metric">
+          <div class="c-metric-val">6–7 НРК</div>
+          <div class="c-metric-lbl">4 рівні фаху</div>
+        </div>
+        <div class="c-metric">
+          <div class="c-metric-val">8 функцій</div>
+          <div class="c-metric-lbl">за стандартом</div>
+        </div>
+        <div class="c-metric">
+          <div class="c-metric-val">До 5 днів</div>
+          <div class="c-metric-lbl">сертифікат</div>
+        </div>
+      </div>
+
+      <div class="cover-bottom-bar">
+        <b>Організаційно-методичний центр КЗ «ЗОІППО» ЗОР</b><br>
+        м.&nbsp;Запоріжжя &nbsp;&bull;&nbsp; lms.ele.zp.ua &nbsp;&bull;&nbsp; 2026
+      </div>
+    </div>
+  </div>
+
+</section>
+
+<!-- ========================================================================================= -->
+<!-- АРКУШ 2 (ВНУТРІШНІЙ РОЗВОРОТ): [ Панель 4: Матриця рівнів | Панель 5: 6 етапів | Панель 6: Нормативна база ] -->
+<!-- ========================================================================================= -->
+<div class="sheet-caption">
+  <span>Варіант 2 (Елітна серія) &bull; Аркуш 2 — Внутрішній розворот</span>
+  <span>Кваліфікаційна матриця (ліва) &bull; Регламент та процедура (центр) &bull; Правові гарантії (права)</span>
+</div>
+
+<section class="sheet">
+
+  <!-- ПАНЕЛЬ 4: КВАЛІФІКАЦІЙНА МАТРИЦЯ, 8 ФУНКЦІЙ ТА 9 ГАЛУЗЕЙ ЗНАНЬ -->
+  <div class="panel editorial">
+    <div>
+      <div class="arch-topbar">
+        <span class="arch-code">ПРОФЕСІЙНИЙ СТАНДАРТ</span>
+        <span class="arch-section-num">РОЗДІЛ II</span>
+      </div>
+
+      <h2 class="panel-heading">Вимоги <span>до кваліфікацій</span></h2>
+      <p class="panel-lead">
+        Сертифікація здійснюється відповідно до кваліфікаційних рівнів Національної рамки кваліфікацій (постанова КМУ&nbsp;№&nbsp;1341):
+      </p>
+
+      <div class="matrix-table-wrap">
+        <table class="matrix-table">
+          <thead>
+            <tr>
+              <th>Назва кваліфікації</th>
+              <th style="text-align: center;">НРК</th>
+              <th>Освіта</th>
+              <th>Стаж роботи</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><b>Фахівець із супроводу</b></td>
+              <td style="text-align: center;"><span class="nrk-badge">6</span></td>
+              <td>Бакалавр</td>
+              <td>Без вимог</td>
+            </tr>
+            <tr>
+              <td><b>Фахівець II категорії</b></td>
+              <td style="text-align: center;"><span class="nrk-badge">6</span></td>
+              <td>Бакалавр</td>
+              <td>1 рік</td>
+            </tr>
+            <tr>
+              <td><b>Фахівець I категорії</b></td>
+              <td style="text-align: center;"><span class="nrk-badge">6</span></td>
+              <td>Бакалавр</td>
+              <td><span style="white-space: nowrap;">2–3 роки</span></td>
+            </tr>
+            <tr>
+              <td><b>Провідний фахівець</b></td>
+              <td style="text-align: center;"><span class="nrk-badge hi">7</span></td>
+              <td>Магістр</td>
+              <td>Від 3 років (за інструкцією)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="functions-box">
+        <div class="sub-box-title">
+          <span>8 трудових функцій</span>
+          <span class="tag">Наказ Мінветеранів №&nbsp;835</span>
+        </div>
+        <div class="func-grid-2">
+          <div class="func-item"><b>01</b><span>Організація роботи супроводу</span></div>
+          <div class="func-item"><b>02</b><span>Ведення обліку ветеранів</span></div>
+          <div class="func-item"><b>03</b><span>Інформаційне консультування</span></div>
+          <div class="func-item"><b>04</b><span>Допомога в отриманні послуг</span></div>
+          <div class="func-item"><b>05</b><span>Взаємодія з органами влади</span></div>
+          <div class="func-item"><b>06</b><span>Психосоціальна підтримка</span></div>
+          <div class="func-item"><b>07</b><span>Супровід ветеранів і родин</span></div>
+          <div class="func-item"><b>08</b><span>Підвищення кваліфікації</span></div>
+        </div>
+      </div>
+
+      <div class="fields-box">
+        <div class="sub-box-title">
+          <span>Галузі знань вищої освіти</span>
+          <span class="tag">9 галузей</span>
+        </div>
+        <div class="fields-grid">
+          <div class="field-chip"><b>А</b><span>Освіта</span></div>
+          <div class="field-chip"><b>В</b><span>Культура, мистецтво, гуманітарні</span></div>
+          <div class="field-chip"><b>С</b><span>Соціальні науки, журналістика</span></div>
+          <div class="field-chip"><b>D</b><span>Бізнес, адміністрування, право</span></div>
+          <div class="field-chip"><b>F</b><span>Інформаційні технології</span></div>
+          <div class="field-chip"><b>G</b><span>Інженерія, виробництво, будівництво</span></div>
+          <div class="field-chip"><b>I</b><span>Охорона здоров'я та соцзабезпечення</span></div>
+          <div class="field-chip"><b>J</b><span>Транспорт та послуги</span></div>
+          <div class="field-chip"><b>К</b><span>Безпека та оборона</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="calc-strip">
+      <div class="calc-strip-title">Калькулятор відповідності на порталі</div>
+      <div class="calc-strip-sub">Перевірте відповідність освіти та стажу для обраної категорії онлайн на порталі <b>lms.ele.zp.ua</b></div>
+    </div>
+  </div>
+
+  <!-- ПАНЕЛЬ 5: АЛГОРИТМ ПРОЦЕДУРИ (6 ЕТАПІВ) ТА РЕГЛАМЕНТ ІСПИТУ -->
+  <div class="panel editorial">
+    <div>
+      <div class="arch-topbar">
+        <span class="arch-code">ПОРЯДОК ПРИСВОЄННЯ</span>
+        <span class="arch-section-num">РОЗДІЛ III</span>
+      </div>
+
+      <h2 class="panel-heading">Процедура <span>сертифікації</span></h2>
+      <p class="panel-lead">
+        Шість регламентованих етапів від подання заяви до отримання сертифіката (загальний строк процедури — до 25&nbsp;робочих днів, п.&nbsp;2.3.9 Порядку):
+      </p>
+
+      <ol class="arch-steps">
+        <li class="arch-step">
+          <div class="arch-step-num">01</div>
+          <div>
+            <div class="arch-step-head">
+              <span class="arch-step-title">Подання заяви та документів</span>
+              <span class="arch-step-term">КЕП / Очно</span>
+            </div>
+            <div class="arch-step-desc">Реєстрація заяви на порталі lms.ele.zp.ua з копіями документів про освіту та стаж.</div>
+          </div>
+        </li>
+
+        <li class="arch-step">
+          <div class="arch-step-num">02</div>
+          <div>
+            <div class="arch-step-head">
+              <span class="arch-step-title">Попередня співбесіда</span>
+              <span class="arch-step-term">До 10 роб. днів</span>
+            </div>
+            <div class="arch-step-desc">Розгляд документів і співбесіда з експертами (очно або онлайн) щодо набутих компетентностей та охорони праці.</div>
+          </div>
+        </li>
+
+        <li class="arch-step">
+          <div class="arch-step-num">03</div>
+          <div>
+            <div class="arch-step-head">
+              <span class="arch-step-title">Рішення про допуск</span>
+              <span class="arch-step-term">До 3 роб. днів</span>
+            </div>
+            <div class="arch-step-desc">Письмове повідомлення про допуск до оцінювання або рекомендація пройти додаткове навчання.</div>
+          </div>
+        </li>
+
+        <li class="arch-step">
+          <div class="arch-step-num">04</div>
+          <div>
+            <div class="arch-step-head">
+              <span class="arch-step-title">Узгодження дати, часу та оплати</span>
+              <span class="arch-step-term">Договір</span>
+            </div>
+            <div class="arch-step-desc">Підписання договору та затвердження розкладу проведення кваліфікаційного іспиту.</div>
+          </div>
+        </li>
+
+        <li class="arch-step">
+          <div class="arch-step-num">05</div>
+          <div>
+            <div class="arch-step-head">
+              <span class="arch-step-title">Оцінювання знань та умінь (КОМ)</span>
+              <span class="arch-step-term">3 оцінювачі</span>
+            </div>
+            <div class="arch-step-desc">Складання теоретичного тестування та виконання практичних задач на вебсайті Центру.</div>
+          </div>
+        </li>
+
+        <li class="arch-step final">
+          <div class="arch-step-num">06</div>
+          <div>
+            <div class="arch-step-head">
+              <span class="arch-step-title">Видача сертифіката</span>
+              <span class="arch-step-term">Протягом 5 днів</span>
+            </div>
+            <div class="arch-step-desc">Оголошення рішення комісії (до кінця наступного робочого дня), видача сертифіката та облік у&nbsp;Реєстрі.</div>
+          </div>
+        </li>
+      </ol>
+    </div>
+
+    <div class="telemetry-card">
+      <div class="telemetry-top">
+        <span class="telemetry-title">Регламент іспиту (п.&nbsp;2.3 Порядку)</span>
+        <span class="telemetry-total">150 хв (2,5 год)</span>
+      </div>
+      <div class="telemetry-grid">
+        <div class="t-box">
+          <div class="t-box-head">Теорія &bull; 90 хвилин</div>
+          <div class="t-box-sub">100 тестових питань<br>Поріг успішності: <b>&ge;&nbsp;75%</b></div>
+        </div>
+        <div class="t-box">
+          <div class="t-box-head">Практика &bull; 60 хвилин</div>
+          <div class="t-box-sub">Практичні задачі КОМ<br>Поріг успішності: <b>&ge;&nbsp;80%</b></div>
+        </div>
+      </div>
+      <div class="telemetry-footer">
+        <span>Формат: <b>Онлайн (Zoom)</b> / <b>Очно в Центрі</b></span>
+        <span>Стаж експертів: <b>&ge;&nbsp;3 років</b></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ПАНЕЛЬ 6: НОРМАТИВНА БАЗА ТА ГАРАНТІЇ ЯКОСТІ -->
+  <div class="panel editorial">
+    <div>
+      <div class="arch-topbar">
+        <span class="arch-code">НОРМАТИВНА БАЗА ТА ГАРАНТІЇ</span>
+        <span class="arch-section-num">РОЗДІЛ IV</span>
+      </div>
+
+      <h2 class="panel-heading">Правові засади <span>діяльності</span></h2>
+      <p class="panel-lead">
+        Діяльність Центру регламентована законодавством України про освіту, актами Кабінету Міністрів України та локальними документами Інституту:
+      </p>
+
+      <div class="normative-grid">
+        <div class="norm-card">
+          <div class="norm-act">Постанова КМУ №&nbsp;986</div>
+          <div class="norm-sub">від 22.09.2021&nbsp;р. &bull; Акредитація кваліфікаційних центрів</div>
+        </div>
+        <div class="norm-card">
+          <div class="norm-act">Постанова КМУ №&nbsp;956</div>
+          <div class="norm-sub">від 15.09.2021&nbsp;р. &bull; Порядок присвоєння кваліфікацій</div>
+        </div>
+        <div class="norm-card gold-b">
+          <div class="norm-act">Наказ Мінветеранів №&nbsp;835</div>
+          <div class="norm-sub">від 10.10.2025&nbsp;р. &bull; Професійний стандарт фахівця</div>
+        </div>
+        <div class="norm-card gold-b">
+          <div class="norm-act">Положення про ОМЦ</div>
+          <div class="norm-sub">Протокол Вченої ради №&nbsp;6 від 26.06.2026&nbsp;р. &bull; Порядок ЗОІППО</div>
+        </div>
+      </div>
+
+      <ul class="guarantees-list">
+        <li class="g-item">
+          <div class="g-bullet">I</div>
+          <div class="g-text">
+            <b>Акредитований центр:</b> діємо на підставі акредитації Національного агентства кваліфікацій та забезпечуємо відкритість процедур (п.&nbsp;1.11, 2.2.5 Положення).
+          </div>
+        </li>
+        <li class="g-item">
+          <div class="g-bullet">II</div>
+          <div class="g-text">
+            <b>Неупередженість і рівні можливості:</b> запобігання недоброчесності, відсутність привілеїв чи обмежень та заборона конфлікту інтересів у комісії (п.&nbsp;3.4.1 Положення).
+          </div>
+        </li>
+        <li class="g-item">
+          <div class="g-bullet">III</div>
+          <div class="g-text">
+            <b>Навчально-методична підтримка:</b> під час підготовки здобувачам доступний комплект нормативної документації в системі Інституту <b>ele.zp.ua/training/</b>.
+          </div>
+        </li>
+        <li class="g-item">
+          <div class="g-bullet">IV</div>
+          <div class="g-text">
+            <b>Захист прав здобувача:</b> конфіденційність персональних даних, право на апеляцію протягом місяця та видача дубліката сертифіката (п.&nbsp;3.4, 4.1–4.3 Порядку).
+          </div>
+        </li>
+      </ul>
+
+      <div class="cert-format-note">
+        <b>Реквізити сертифіката (п.&nbsp;3.1 Порядку):</b> реєстраційний номер за формою <b>СС&nbsp;ХХХХХХХХ/УУУУУУ-ZZ</b> (ЄДРПОУ, порядковий номер, рік), рівень НРК, зазначення повної або часткової кваліфікації.
+      </div>
+
+      <div class="contract-note">
+        <b>Фінансово-договірні умови (п.&nbsp;1.10 Положення):</b> надання послуг здійснюється на контрактній основі за рахунок коштів фізичних або юридичних осіб.
+      </div>
+    </div>
+
+    <div class="executive-cta">
+      <div class="executive-cta-title">Почніть процедуру сертифікації</div>
+      <div class="executive-cta-sub">
+        Оформіть онлайн-заяву з КЕП на порталі <b>lms.ele.zp.ua</b> або зверніться за консультацією до Організаційно-методичного центру КЗ&nbsp;«ЗОІППО»&nbsp;ЗОР
+      </div>
+    </div>
+  </div>
+
+</section>
+
+</body>
+</html>
