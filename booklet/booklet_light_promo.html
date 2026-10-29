@@ -1,0 +1,1187 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Кваліфікаційний центр КЗ «ЗОІППО» ЗОР — Промо-буклет (2 панелі)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink-primary: #0f1f38;
+  --ink-secondary: #334155;
+  --ink-muted: #64748b;
+  --brand-navy: #162c4e;
+  --brand-blue: #255799;
+  --brand-sky: #4b83c8;
+  --accent-amber: #c2882b;
+  --accent-amber-soft: #fdf8ee;
+  --accent-amber-border: #f1dfb8;
+  --surface-pure: #ffffff;
+  --surface-soft: #f8fafd;
+  --surface-mist: #f0f5fb;
+  --border-hairline: #e2e8f0;
+  --border-blue-soft: #d5e3f4;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: var(--ink-secondary);
+  background: #cbd5e1;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  font-family: 'Montserrat', sans-serif;
+  color: var(--ink-primary);
+  letter-spacing: -0.02em;
+}
+
+/* ==================== РОЗВОРОТ НА 2 З 3 ПАНЕЛЕЙ (198мм × 210мм) ==================== */
+.sheet-caption {
+  width: 198mm;
+  margin: 10mm auto -5mm;
+  font: 600 9pt 'Montserrat', sans-serif;
+  color: #1e293b;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sheet {
+  width: 198mm;
+  height: 210mm;
+  margin: 8mm auto;
+  display: grid;
+  grid-template-columns: repeat(2, 99mm);
+  background: var(--surface-pure);
+  box-shadow: 0 16px 40px rgba(15, 31, 56, 0.14);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Лінія фальцювання посередині (між 1-ю та 2-ю половинкою) */
+.sheet::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 99mm;
+  border-left: 1px solid #eef2f6;
+  z-index: 20;
+  pointer-events: none;
+}
+
+/* ==================== БАЗОВА ПАНЕЛЬ (99мм × 210мм) ==================== */
+.panel {
+  width: 99mm;
+  height: 210mm;
+  padding: 9mm 8mm 8mm;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  background: var(--surface-pure);
+}
+
+.panel.soft-bg {
+  background: var(--surface-soft);
+}
+
+/* Мінімалістичний верхній індекс панелі */
+.min-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 3.2mm;
+  padding-bottom: 2mm;
+  border-bottom: 1px solid var(--border-hairline);
+}
+
+.min-tag {
+  font: 600 6.8pt 'Montserrat', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--brand-blue);
+  display: inline-flex;
+  align-items: center;
+  gap: 1.6mm;
+}
+
+.min-tag::before {
+  content: '';
+  width: 4mm;
+  height: 1.5px;
+  background: var(--accent-amber);
+  display: inline-block;
+}
+
+.min-num {
+  font: 500 7pt 'Montserrat', sans-serif;
+  color: #94a3b8;
+  letter-spacing: 0.08em;
+}
+
+.min-title {
+  font-size: 13.2pt;
+  font-weight: 700;
+  line-height: 1.18;
+  color: var(--ink-primary);
+  margin-bottom: 2mm;
+}
+
+.min-title span {
+  font-weight: 500;
+  color: var(--brand-blue);
+}
+
+.min-lead {
+  font-size: 8.2pt;
+  font-weight: 400;
+  color: var(--ink-secondary);
+  line-height: 1.4;
+  margin-bottom: 3.2mm;
+}
+
+/* ==================== ЗВОРОТНА СТОРОНА (ПЕРЕВАГИ, QR, КОНТАКТИ) ==================== */
+.spec-grid-light {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2mm;
+  margin-bottom: 3.4mm;
+}
+
+.spec-tile {
+  background: var(--surface-pure);
+  border: 1px solid var(--border-hairline);
+  border-radius: 1.8mm;
+  padding: 2.1mm 2.4mm;
+}
+
+.spec-tile-lbl {
+  font: 600 6.3pt 'Montserrat', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted);
+  margin-bottom: 0.4mm;
+}
+
+.spec-tile-val {
+  font-size: 7.6pt;
+  font-weight: 600;
+  color: var(--ink-primary);
+  line-height: 1.26;
+}
+
+.spec-tile-val span {
+  color: var(--brand-blue);
+}
+
+/* Світлий повітряний QR-блок */
+.qr-card-light {
+  background: var(--surface-pure);
+  border: 1px solid var(--border-blue-soft);
+  border-radius: 2.4mm;
+  padding: 2.8mm;
+  display: grid;
+  grid-template-columns: 27mm 1fr;
+  gap: 2.8mm;
+  align-items: center;
+  margin-bottom: 3mm;
+  box-shadow: 0 4px 16px rgba(37, 87, 153, 0.05);
+}
+
+.qr-box-clean {
+  width: 27mm;
+  height: 27mm;
+  padding: 1mm;
+  background: #ffffff;
+  border: 1px solid var(--border-hairline);
+  border-radius: 1.5mm;
+}
+
+.qr-box-clean img {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.qr-info-title {
+  font: 700 8.3pt 'Montserrat', sans-serif;
+  color: var(--ink-primary);
+  margin-bottom: 0.7mm;
+}
+
+.qr-info-desc {
+  font-size: 7.5pt;
+  color: var(--ink-secondary);
+  line-height: 1.32;
+  margin-bottom: 1.4mm;
+}
+
+.qr-link-tag {
+  display: inline-block;
+  font: 700 7.4pt 'Montserrat', sans-serif;
+  color: var(--brand-blue);
+  background: var(--surface-mist);
+  padding: 0.6mm 2.2mm;
+  border-radius: 99px;
+}
+
+.verify-strip-light {
+  background: var(--accent-amber-soft);
+  border: 1px solid var(--accent-amber-border);
+  border-radius: 1.8mm;
+  padding: 2.2mm 2.6mm;
+  font-size: 7.6pt;
+  color: var(--ink-primary);
+  line-height: 1.34;
+  margin-bottom: 3mm;
+}
+
+.verify-strip-light b {
+  color: #926014;
+  font-family: 'Montserrat', sans-serif;
+}
+
+.contact-list-light {
+  display: grid;
+  gap: 1.8mm;
+}
+
+.cl-item {
+  display: grid;
+  grid-template-columns: 5.8mm 1fr;
+  gap: 2.2mm;
+  align-items: center;
+  background: var(--surface-pure);
+  border: 1px solid var(--border-hairline);
+  border-radius: 1.6mm;
+  padding: 1.6mm 2.2mm;
+}
+
+.cl-icon {
+  width: 5.8mm;
+  height: 5.8mm;
+  border-radius: 1.2mm;
+  background: var(--surface-mist);
+  color: var(--brand-blue);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cl-icon svg {
+  width: 3.2mm;
+  height: 3.2mm;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+}
+
+.cl-label {
+  font: 600 6.1pt 'Montserrat', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ink-muted);
+}
+
+.cl-val {
+  font-size: 7.7pt;
+  font-weight: 600;
+  color: var(--ink-primary);
+  white-space: nowrap;
+}
+
+.cl-val a {
+  color: var(--ink-primary);
+  text-decoration: none;
+}
+
+.min-footer-note {
+  border-top: 1px solid var(--border-hairline);
+  padding-top: 2.2mm;
+  font-size: 7.4pt;
+  color: var(--ink-muted);
+  line-height: 1.35;
+}
+
+.min-footer-note b {
+  color: var(--ink-primary);
+  font-weight: 600;
+}
+
+/* ==================== ТИТУЛЬНА ОБКЛАДИНКА (СВІТЛИЙ МІНІМАЛІЗМ) ==================== */
+.panel.cover-light {
+  background:
+    radial-gradient(circle at 85% 12%, rgba(118, 166, 230, 0.16) 0%, transparent 48%),
+    radial-gradient(circle at 12% 88%, rgba(194, 136, 43, 0.10) 0%, transparent 48%),
+    linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+  text-align: center;
+  padding: 10mm 8mm 8.5mm;
+}
+
+.panel.cover-light::before {
+  content: '';
+  position: absolute;
+  inset: 4.2mm;
+  border: 1px solid var(--border-blue-soft);
+  border-radius: 2mm;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.cover-light-watermark {
+  position: absolute;
+  top: 52%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 64mm;
+  height: 90mm;
+  opacity: 0.03;
+  color: var(--brand-blue);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.cover-light-watermark svg {
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+}
+
+.cover-light > *:not(.cover-light-watermark) {
+  position: relative;
+  z-index: 2;
+}
+
+.cover-top-min {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.cover-logo-clean {
+  width: 25mm;
+  height: 25mm;
+  border-radius: 50%;
+  background: #ffffff;
+  padding: 1mm;
+  border: 1px solid var(--border-blue-soft);
+  box-shadow: 0 8px 24px rgba(22, 44, 78, 0.08);
+  margin-bottom: 3.2mm;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cover-logo-clean img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 50%;
+}
+
+.cover-inst-min {
+  font: 600 7pt 'Montserrat', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-secondary);
+  line-height: 1.38;
+  max-width: 81mm;
+}
+
+.cover-hero-min {
+  margin: 2mm 0;
+}
+
+.cover-divider-min {
+  width: 12mm;
+  height: 2px;
+  background: var(--accent-amber);
+  margin: 0 auto 4mm;
+  border-radius: 2px;
+}
+
+.cover-title-min {
+  font: 800 14.2pt 'Montserrat', sans-serif;
+  line-height: 1.22;
+  color: var(--ink-primary);
+  margin-bottom: 4mm;
+  letter-spacing: -0.01em;
+}
+
+.cover-title-min span {
+  color: var(--brand-blue);
+  display: block;
+  margin: 0.5mm 0;
+}
+
+.cover-std-box-min {
+  background: var(--surface-mist);
+  border: 1px solid var(--border-blue-soft);
+  border-radius: 2.2mm;
+  padding: 3mm 3.2mm;
+  margin-bottom: 3.8mm;
+}
+
+.cover-std-eyebrow {
+  font: 700 6.4pt 'Montserrat', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--brand-blue);
+  margin-bottom: 0.8mm;
+}
+
+.cover-std-name {
+  font: 700 8.8pt 'Montserrat', sans-serif;
+  color: var(--ink-primary);
+  line-height: 1.28;
+  margin-bottom: 0.7mm;
+}
+
+.cover-std-order {
+  font-size: 7.2pt;
+  color: var(--ink-muted);
+}
+
+.cover-tagline-min {
+  font-size: 8.3pt;
+  font-weight: 500;
+  color: var(--ink-secondary);
+  line-height: 1.38;
+  max-width: 80mm;
+  margin: 0 auto;
+}
+
+.cover-kpis-min {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2mm;
+  margin-bottom: 3mm;
+}
+
+.kpi-pill {
+  background: #ffffff;
+  border: 1px solid var(--border-hairline);
+  border-radius: 1.6mm;
+  padding: 1.8mm 1mm;
+}
+
+.kpi-pill-val {
+  font: 800 8.5pt 'Montserrat', sans-serif;
+  color: var(--brand-blue);
+  line-height: 1.15;
+}
+
+.kpi-pill-lbl {
+  font-size: 6.2pt;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 0.3mm;
+}
+
+.cover-foot-min {
+  border-top: 1px solid var(--border-hairline);
+  padding-top: 2.2mm;
+  font-size: 7.2pt;
+  color: var(--ink-muted);
+}
+
+.cover-foot-min b {
+  color: var(--ink-primary);
+  font-weight: 600;
+}
+
+/* ==================== ВНУТРІШНІЙ РОЗВОРОТ (ПАНЕЛІ 1 І 2 ВСЕРЕДИНІ) ==================== */
+.traj-pill-card {
+  background: var(--surface-mist);
+  border-radius: 2.2mm;
+  padding: 2.6mm 3mm;
+  margin-bottom: 3.2mm;
+  border-left: 2.5px solid var(--brand-blue);
+}
+
+.traj-pill-label {
+  font: 700 7.1pt 'Montserrat', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--brand-blue);
+  margin-bottom: 0.6mm;
+}
+
+.traj-pill-text {
+  font-size: 7.8pt;
+  color: var(--ink-primary);
+  line-height: 1.35;
+}
+
+.min-cards {
+  display: grid;
+  gap: 2.2mm;
+  margin-bottom: 3.2mm;
+}
+
+.m-card {
+  background: var(--surface-pure);
+  border: 1px solid var(--border-hairline);
+  border-radius: 2mm;
+  padding: 2.3mm 2.6mm;
+  display: grid;
+  grid-template-columns: 6.4mm 1fr;
+  gap: 2.4mm;
+  align-items: start;
+}
+
+.m-card.amber {
+  background: var(--accent-amber-soft);
+  border-color: var(--accent-amber-border);
+}
+
+.m-icon {
+  width: 6.4mm;
+  height: 6.4mm;
+  border-radius: 1.4mm;
+  background: var(--surface-mist);
+  color: var(--brand-blue);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.m-card.amber .m-icon {
+  background: #ffffff;
+  color: var(--accent-amber);
+  box-shadow: 0 1px 3px rgba(194, 136, 43, 0.12);
+}
+
+.m-icon svg {
+  width: 3.8mm;
+  height: 3.8mm;
+  fill: currentColor;
+}
+
+.m-card-title {
+  font: 700 8.2pt 'Montserrat', sans-serif;
+  color: var(--ink-primary);
+  margin-bottom: 0.4mm;
+  line-height: 1.22;
+}
+
+.m-card-desc {
+  font-size: 7.6pt;
+  color: var(--ink-secondary);
+  line-height: 1.33;
+}
+
+/* Блок переваг професії */
+.value-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.8mm;
+  margin-bottom: 2.8mm;
+}
+
+.value-pill {
+  background: var(--surface-soft);
+  border: 1px solid var(--border-hairline);
+  border-radius: 1.8mm;
+  padding: 2mm 2.3mm;
+}
+
+.value-pill-top {
+  font: 700 7.6pt 'Montserrat', sans-serif;
+  color: var(--brand-blue);
+  margin-bottom: 0.3mm;
+}
+
+.value-pill-sub {
+  font-size: 7.2pt;
+  color: var(--ink-secondary);
+  line-height: 1.24;
+}
+
+.min-calc-box {
+  background: var(--surface-mist);
+  border: 1px solid var(--border-blue-soft);
+  border-radius: 1.8mm;
+  padding: 2.2mm 2.6mm;
+}
+
+.min-calc-title {
+  font: 700 7.6pt 'Montserrat', sans-serif;
+  color: var(--brand-blue);
+  margin-bottom: 0.3mm;
+}
+
+.min-calc-text {
+  font-size: 7.4pt;
+  color: var(--ink-primary);
+  line-height: 1.28;
+}
+
+/* ПАНЕЛЬ 2 ВСЕРЕДИНІ: 4 ПРОСТІ КРОКИ ТА ПЕРЕВАГИ ЦЕНТРУ */
+.min-timeline {
+  list-style: none;
+  display: grid;
+  gap: 2.1mm;
+  margin-bottom: 3mm;
+}
+
+.min-step {
+  background: #ffffff;
+  border: 1px solid var(--border-hairline);
+  border-radius: 1.8mm;
+  padding: 2.1mm 2.4mm;
+  display: grid;
+  grid-template-columns: 6.4mm 1fr;
+  gap: 2.2mm;
+  align-items: center;
+}
+
+.min-step.done {
+  background: var(--accent-amber-soft);
+  border-color: var(--accent-amber-border);
+}
+
+.min-step-idx {
+  width: 6.4mm;
+  height: 6.4mm;
+  border-radius: 50%;
+  background: var(--surface-mist);
+  color: var(--brand-blue);
+  font: 700 7.6pt 'Montserrat', sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.min-step.done .min-step-idx {
+  background: var(--accent-amber);
+  color: #ffffff;
+}
+
+.min-step-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1mm;
+  margin-bottom: 0.4mm;
+}
+
+.min-step-name {
+  font: 700 8pt 'Montserrat', sans-serif;
+  color: var(--ink-primary);
+  white-space: nowrap;
+}
+
+.min-step-badge {
+  font: 600 6.2pt 'Montserrat', sans-serif;
+  color: var(--ink-muted);
+  background: var(--surface-soft);
+  border: 1px solid var(--border-hairline);
+  padding: 0.2mm 1.4mm;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+
+.min-step.done .min-step-badge {
+  background: #ffffff;
+  color: #926014;
+  border-color: var(--accent-amber-border);
+}
+
+.min-step-sub {
+  font-size: 7.45pt;
+  color: var(--ink-secondary);
+  line-height: 1.28;
+}
+
+.why-box {
+  background: #ffffff;
+  border: 1px solid var(--border-blue-soft);
+  border-radius: 2mm;
+  padding: 2.4mm 2.6mm;
+  margin-bottom: 2.6mm;
+}
+
+.why-box-head {
+  font: 700 7.3pt 'Montserrat', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-primary);
+  margin-bottom: 1.6mm;
+  padding-bottom: 1mm;
+  border-bottom: 1px solid var(--border-hairline);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.why-box-head .why-badge {
+  color: var(--brand-blue);
+  font-size: 6.5pt;
+}
+
+.min-principles {
+  list-style: none;
+  display: grid;
+  gap: 1.6mm;
+}
+
+.min-p-item {
+  display: grid;
+  grid-template-columns: 4.4mm 1fr;
+  gap: 1.8mm;
+  align-items: start;
+}
+
+.min-p-check {
+  width: 4.4mm;
+  height: 4.4mm;
+  border-radius: 50%;
+  background: var(--surface-mist);
+  color: var(--brand-blue);
+  font: 700 6.6pt 'Montserrat', sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.2mm;
+}
+
+.min-p-body {
+  font-size: 7.4pt;
+  color: var(--ink-secondary);
+  line-height: 1.28;
+}
+
+.min-p-body b {
+  color: var(--ink-primary);
+  font-weight: 600;
+}
+
+.min-cta-banner {
+  background: var(--brand-navy);
+  color: #ffffff;
+  border-radius: 2mm;
+  padding: 2.6mm 3mm;
+  text-align: center;
+}
+
+.min-cta-head {
+  font: 700 8.4pt 'Montserrat', sans-serif;
+  color: #ffffff;
+  margin-bottom: 0.4mm;
+}
+
+.min-cta-sub {
+  font-size: 7.4pt;
+  color: #cbd5e1;
+  line-height: 1.28;
+}
+
+.min-cta-sub b {
+  color: #ffffff;
+}
+
+/* ==================== ДРУК ==================== */
+@page {
+  size: 198mm 210mm;
+  margin: 0;
+}
+
+@media print {
+  body {
+    background: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .sheet-caption { display: none !important; }
+  .sheet {
+    margin: 0 !important;
+    box-shadow: none !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    overflow: hidden !important;
+  }
+  .sheet:last-of-type {
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+  .sheet::before { display: none !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- ========================================================================================= -->
+<!-- СТОРІНКА 1 (ЗОВНІШНІЙ РОЗВОРОТ): [ Ліва: Зворотна сторона | Права: Титульна обкладинка ] -->
+<!-- ========================================================================================= -->
+<div class="sheet-caption">
+  <span>Промо-буклет (2 панелі, 198×210 мм) &bull; Сторінка 1 — Зовнішній бік</span>
+  <span>Зворотна сторона (ліва) &bull; Титульна обкладинка (права)</span>
+</div>
+
+<section class="sheet">
+
+  <!-- ЛІВА ПАНЕЛЬ: ЗВОРОТНА СТОРОНА (КОМФОРТ, QR-КОД, КОНТАКТИ) -->
+  <div class="panel soft-bg">
+    <div>
+      <div class="min-topbar">
+        <span class="min-tag">Комфорт та зв'язок</span>
+        <span class="min-num">03</span>
+      </div>
+
+      <h2 class="min-title">Зробіть перший крок<br><span>уже сьогодні</span></h2>
+
+      <div class="spec-grid-light">
+        <div class="spec-tile">
+          <div class="spec-tile-lbl">Зручний формат</div>
+          <div class="spec-tile-val"><span>Онлайн у Zoom</span><br>або очно в м.&nbsp;Запоріжжя</div>
+        </div>
+        <div class="spec-tile">
+          <div class="spec-tile-lbl">Повна безбар'єрність</div>
+          <div class="spec-tile-val"><span>Інклюзивний простір</span><br>Пандуси та доступність</div>
+        </div>
+        <div class="spec-tile">
+          <div class="spec-tile-lbl">Безпечні умови</div>
+          <div class="spec-tile-val">Сертифіковане укриття<br><span>658,5&nbsp;кв.&nbsp;м</span> в Інституті</div>
+        </div>
+        <div class="spec-tile">
+          <div class="spec-tile-lbl">Цифрова екосистема</div>
+          <div class="spec-tile-val">Онлайн-кабінет, тренажер<br>і комп'ютерні класи</div>
+        </div>
+      </div>
+
+      <div class="qr-card-light">
+        <div class="qr-box-clean">
+          <img src="qr.svg" alt="QR-код порталу Центру">
+        </div>
+        <div>
+          <div class="qr-info-title">Онлайн-портал Центру</div>
+          <div class="qr-info-desc">
+            Скануйте QR-код: перевірте свій диплом у калькуляторі, пройдіть пробний тест і подайте заяву онлайн:
+          </div>
+          <span class="qr-link-tag">lms.ele.zp.ua</span>
+        </div>
+      </div>
+
+      <div class="verify-strip-light">
+        <b>100% офіційна верифікація:</b> кожен виданий сертифікат миттєво перевіряється роботодавцями в електронному Реєстрі за унікальним номером.
+      </div>
+
+      <div class="contact-list-light">
+        <div class="cl-item">
+          <div class="cl-icon">
+            <svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          </div>
+          <div>
+            <div class="cl-label">Чекаємо на вас за адресою</div>
+            <div class="cl-val">69035, м.&nbsp;Запоріжжя, вул.&nbsp;Незалежної України, 57-А</div>
+          </div>
+        </div>
+
+        <div class="cl-item">
+          <div class="cl-icon">
+            <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          </div>
+          <div>
+            <div class="cl-label">Гаряча лінія консультацій</div>
+            <div class="cl-val"><a href="tel:0617171772">(061) 717-17-72</a> &nbsp;&bull;&nbsp; <a href="tel:0964772017">096 477 20 17</a></div>
+          </div>
+        </div>
+
+        <div class="cl-item">
+          <div class="cl-icon">
+            <svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          </div>
+          <div>
+            <div class="cl-label">Електронна пошта для звернень</div>
+            <div class="cl-val"><a href="mailto:orgmetodcentr@zoippo.net.ua">orgmetodcentr@zoippo.net.ua</a></div>
+          </div>
+        </div>
+
+        <div class="cl-item">
+          <div class="cl-icon">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          </div>
+          <div>
+            <div class="cl-label">Освітні ресурси та база підготовки</div>
+            <div class="cl-val">zoippo.zp.ua &nbsp;&bull;&nbsp; ele.zp.ua/training/</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="min-footer-note" style="text-align: center;">
+      <b>Акредитований Кваліфікаційний центр КЗ&nbsp;«ЗОІППО»&nbsp;ЗОР</b><br>
+      Державна якість підготовки та сертифікації фахівців
+    </div>
+  </div>
+
+  <!-- ПРАВА ПАНЕЛЬ: ТИТУЛЬНА ОБКЛАДИНКА -->
+  <div class="panel cover-light">
+    <div class="cover-light-watermark">
+      <svg viewBox="-65 10 130 205">
+        <path d="M5.985561 78.82382a104.079383 104.079383 0 0 0 14.053598 56.017033 55 55 0 0 1-13.218774 70.637179A20 20 0 0 0 0 212.5a20 20 0 0 0-6.820384-7.021968 55 55 0 0 1-13.218774-70.637179A104.079383 104.079383 0 0 0-5.98556 78.82382l-1.599642-45.260519A30.103986 30.103986 0 0 1 0 12.5a30.103986 30.103986 0 0 1 7.585202 21.063301zM5 193.624749a45 45 0 0 0 6.395675-53.75496A114.079383 114.079383 0 0 1 0 112.734179a114.079383 114.079383 0 0 1-11.395675 27.13561A45 45 0 0 0-5 193.624749V162.5H5z"/>
+        <path id="tz_cov_min" d="M27.779818 75.17546A62.64982 62.64982 0 0 1 60 27.5v145H0l-5-10a22.5 22.5 0 0 1 17.560976-21.95122l14.634147-3.292683a10 10 0 1 0-4.427443-19.503751zm5.998315 34.353887a20 20 0 0 1-4.387889 37.482848l-14.634146 3.292683A12.5 12.5 0 0 0 5 162.5h45V48.265462a52.64982 52.64982 0 0 0-12.283879 28.037802zM42 122.5h10v10H42z"/>
+        <use href="#tz_cov_min" transform="scale(-1 1)"/>
+      </svg>
+    </div>
+
+    <div class="cover-top-min">
+      <div class="cover-logo-clean">
+        <img src="logo-zoippo.png" alt="КЗ «ЗОІППО» ЗОР">
+      </div>
+      <div class="cover-inst-min">
+        Комунальний заклад «Запорізький обласний інститут післядипломної педагогічної освіти» Запорізької обласної ради
+      </div>
+    </div>
+
+    <div class="cover-hero-min">
+      <div class="cover-divider-min"></div>
+
+      <h1 class="cover-title-min">
+        Кваліфікаційний центр
+        <span>сертифікації фахівців</span>
+        із супроводу ветеранів
+      </h1>
+
+      <div class="cover-std-box-min">
+        <div class="cover-std-eyebrow">Професія державного значення</div>
+        <div class="cover-std-name">«Фахівець із супроводу ветеранів війни та демобілізованих осіб»</div>
+        <div class="cover-std-order">Професійний стандарт &bull; Наказ Мінветеранів №&nbsp;835</div>
+      </div>
+
+      <div class="cover-tagline-min">
+        Перетворіть свій досвід, освіту та бажання допомагати на офіційний фах із державним сертифікатом
+      </div>
+    </div>
+
+    <div>
+      <div class="cover-kpis-min">
+        <div class="kpi-pill">
+          <div class="kpi-pill-val">Zoom / Очно</div>
+          <div class="kpi-pill-lbl">зручний формат</div>
+        </div>
+        <div class="kpi-pill">
+          <div class="kpi-pill-val">Під ключ</div>
+          <div class="kpi-pill-lbl">навчання + іспит</div>
+        </div>
+        <div class="kpi-pill">
+          <div class="kpi-pill-val">5 днів</div>
+          <div class="kpi-pill-lbl">видача сертифіката</div>
+        </div>
+      </div>
+
+      <div class="cover-foot-min">
+        <b>Організаційно-методичний центр КЗ «ЗОІППО» ЗОР</b><br>
+        м.&nbsp;Запоріжжя &nbsp;&bull;&nbsp; lms.ele.zp.ua &nbsp;&bull;&nbsp; 2026
+      </div>
+    </div>
+  </div>
+
+</section>
+
+<!-- ========================================================================================= -->
+<!-- СТОРІНКА 2 (ВНУТРІШНІЙ РОЗВОРОТ): [ Ліва: Професія та для кого | Права: Шлях і переваги Центру ] -->
+<!-- ========================================================================================= -->
+<div class="sheet-caption">
+  <span>Промо-буклет (2 панелі, 198×210 мм) &bull; Сторінка 2 — Внутрішній розворот</span>
+  <span>Цінність професії та можливості (ліва) &bull; 4 прості кроки та переваги Центру (права)</span>
+</div>
+
+<section class="sheet">
+
+  <!-- ЛІВА ВНУТРІШНЯ ПАНЕЛЬ: ЧОМУ ЦЕ ВАЖЛИВО, ДЛЯ КОГО ТА ВИГОДИ -->
+  <div class="panel">
+    <div>
+      <div class="min-topbar">
+        <span class="min-tag">Нові можливості</span>
+        <span class="min-num">01</span>
+      </div>
+
+      <h2 class="min-title">Станьте опорою для тих,<br><span>хто захистив Україну</span></h2>
+      <p class="min-lead">
+        Фахівець із супроводу ветеранів — це нова престижна професія у громадах, ветеранських просторах, ЦНАПах і держустановах. Це робота зі справжнім змістом, високим попитом і державною підтримкою.
+      </p>
+
+      <div class="traj-pill-card">
+        <div class="traj-pill-label">Повний супровід в одному Центрі</div>
+        <div class="traj-pill-text">
+          Потрібна підготовка перед іспитом? Пройдіть практичні тренінги на базі нашого Інституту — або одразу підтвердьте власний досвід та отримайте державний сертифікат.
+        </div>
+      </div>
+
+      <div class="min-cards">
+        <div class="m-card amber">
+          <div class="m-icon">
+            <svg viewBox="-65 10 130 205">
+              <path d="M5.985561 78.82382a104.079383 104.079383 0 0 0 14.053598 56.017033 55 55 0 0 1-13.218774 70.637179A20 20 0 0 0 0 212.5a20 20 0 0 0-6.820384-7.021968 55 55 0 0 1-13.218774-70.637179A104.079383 104.079383 0 0 0-5.98556 78.82382l-1.599642-45.260519A30.103986 30.103986 0 0 1 0 12.5a30.103986 30.103986 0 0 1 7.585202 21.063301zM5 193.624749a45 45 0 0 0 6.395675-53.75496A114.079383 114.079383 0 0 1 0 112.734179a114.079383 114.079383 0 0 1-11.395675 27.13561A45 45 0 0 0-5 193.624749V162.5H5z"/>
+              <path id="tz_min" d="M27.779818 75.17546A62.64982 62.64982 0 0 1 60 27.5v145H0l-5-10a22.5 22.5 0 0 1 17.560976-21.95122l14.634147-3.292683a10 10 0 1 0-4.427443-19.503751zm5.998315 34.353887a20 20 0 0 1-4.387889 37.482848l-14.634146 3.292683A12.5 12.5 0 0 0 5 162.5h45V48.265462a52.64982 52.64982 0 0 0-12.283879 28.037802zM42 122.5h10v10H42z"/>
+              <use href="#tz_min" transform="scale(-1 1)"/>
+            </svg>
+          </div>
+          <div>
+            <div class="m-card-title">Для ветеранів та членів їхніх родин</div>
+            <div class="m-card-desc">Реалізуйте свій життєвий і бойовий досвід за принципом «рівний — рівному». Допомагайте побратимам адаптуватися у мирному житті, маючи офіційний фах.</div>
+          </div>
+        </div>
+
+        <div class="m-card">
+          <div class="m-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3zm-1 14.5l-3.5-3.5 1.41-1.41L11 13.67l4.59-4.59L17 10.5l-6 6z"/></svg>
+          </div>
+          <div>
+            <div class="m-card-title">Для освітян, психологів, юристів і соцпрацівників</div>
+            <div class="m-card-desc">Маєте диплом бакалавра чи магістра? Здобудьте державну кваліфікацію (6–7&nbsp;рівні НРК) або підтвердьте іноземний диплом для роботи за новим стандартом.</div>
+          </div>
+        </div>
+
+        <div class="m-card">
+          <div class="m-icon">
+            <svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+          </div>
+          <div>
+            <div class="m-card-title">Для громад та керівників установ</div>
+            <div class="m-card-desc">Швидка офіційна сертифікація штатних фахівців за прямим договором для розбудови ветеранської політики у вашій громаді.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="value-grid">
+        <div class="value-pill">
+          <div class="value-pill-top">Старт без стажу</div>
+          <div class="value-pill-sub">Достатньо диплома бакалавра (9&nbsp;галузей знань)</div>
+        </div>
+        <div class="value-pill">
+          <div class="value-pill-top">Кар'єрне зростання</div>
+          <div class="value-pill-sub">4 категорії — від фахівця до провідного спеціаліста</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="min-calc-box">
+      <div class="min-calc-title">Дізнайтеся свою категорію за 1 хвилину!</div>
+      <div class="min-calc-text">Скористайтеся безкоштовним онлайн-калькулятором відповідності диплома та стажу на порталі <b>lms.ele.zp.ua</b></div>
+    </div>
+  </div>
+
+  <!-- ПРАВА ВНУТРІШНЯ ПАНЕЛЬ: 4 ПРОСТІ КРОКИ ТА ПЕРЕВАГИ ЦЕНТРУ -->
+  <div class="panel soft-bg">
+    <div>
+      <div class="min-topbar">
+        <span class="min-tag">Легкий шлях до фаху</span>
+        <span class="min-num">02</span>
+      </div>
+
+      <h2 class="min-title">Чотири прості кроки<br><span>до сертифіката</span></h2>
+      <p class="min-lead">
+        Ми прибрали зайву бюрократію та перевели ключові процеси в онлайн, щоб ваш шлях до нової професії був швидким і комфортним:
+      </p>
+
+      <ol class="min-timeline">
+        <li class="min-step">
+          <div class="min-step-idx">1</div>
+          <div>
+            <div class="min-step-row">
+              <span class="min-step-name">Подайте заявку онлайн</span>
+              <span class="min-step-badge">За 10 хвилин</span>
+            </div>
+            <div class="min-step-sub">Заповніть анкету на порталі <b>lms.ele.zp.ua</b> із електронним підписом (КЕП) або завітайте до Центру особисто.</div>
+          </div>
+        </li>
+
+        <li class="min-step">
+          <div class="min-step-idx">2</div>
+          <div>
+            <div class="min-step-row">
+              <span class="min-step-name">Отримайте консультацію та доступ</span>
+              <span class="min-step-badge">Підтримка</span>
+            </div>
+            <div class="min-step-sub">Наші експерти допоможуть з документами, відкриють базу навчальних матеріалів і тренувальне тестування.</div>
+          </div>
+        </li>
+
+        <li class="min-step">
+          <div class="min-step-idx">3</div>
+          <div>
+            <div class="min-step-row">
+              <span class="min-step-name">Складіть кваліфікаційний іспит</span>
+              <span class="min-step-badge">Zoom або Очно</span>
+            </div>
+            <div class="min-step-sub">Онлайн-тестування та розбір практичних ситуацій у доброзичливій атмосфері в зручний для вас день.</div>
+          </div>
+        </li>
+
+        <li class="min-step done">
+          <div class="min-step-idx">4</div>
+          <div>
+            <div class="min-step-row">
+              <span class="min-step-name">Отримайте державний сертифікат</span>
+              <span class="min-step-badge">За 5 днів</span>
+            </div>
+            <div class="min-step-sub">Офіційний документ державного зразка із внесенням у Реєстр, що відкриває двері до працевлаштування.</div>
+          </div>
+        </li>
+      </ol>
+
+      <div class="why-box">
+        <div class="why-box-head">
+          <span>Чому обирають саме нас</span>
+          <span class="why-badge">КЗ «ЗОІППО» ЗОР</span>
+        </div>
+        <ul class="min-principles">
+          <li class="min-p-item">
+            <div class="min-p-check">✓</div>
+            <div class="min-p-body">
+              <b>Державна акредитація:</b> діємо офіційно за стандартами Національного агентства кваліфікацій та Мінветеранів.
+            </div>
+          </li>
+          <li class="min-p-item">
+            <div class="min-p-check">✓</div>
+            <div class="min-p-body">
+              <b>Готуємо до успішного складання:</b> відкритий доступ до нормативної бази та тренажера на <b>ele.zp.ua/training/</b>.
+            </div>
+          </li>
+          <li class="min-p-item">
+            <div class="min-p-check">✓</div>
+            <div class="min-p-body">
+              <b>Людяність та повага:</b> індивідуальний підхід, рівні можливості та супровід методиста на кожному етапі.
+            </div>
+          </li>
+          <li class="min-p-item">
+            <div class="min-p-check">✓</div>
+            <div class="min-p-body">
+              <b>Гнучкі умови оплати:</b> можливість сертифікації за кошти фізичних осіб, громад або роботодавців.
+            </div>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="min-cta-banner">
+      <div class="min-cta-head">Готові здобути затребувану професію?</div>
+      <div class="min-cta-sub">
+        Реєструйтеся на <b>lms.ele.zp.ua</b> або телефонуйте <b>096&nbsp;477&nbsp;20&nbsp;17</b> — ми допоможемо на кожному кроці!
+      </div>
+    </div>
+  </div>
+
+</section>
+
+</body>
+</html>
