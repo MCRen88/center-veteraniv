@@ -6,7 +6,7 @@ services:
     command: postgres -c config_file=/etc/postgresql/postgresql.conf
     restart: always
     ports:
-      - ${DB_PORT:-54472}:5432
+      - 127.0.0.1:${DB_PORT:-54472}:5432
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
@@ -18,7 +18,7 @@ services:
     container_name: supabase-studio-lms
     restart: always
     ports:
-      - ${STUDIO_PORT:-54473}:3000
+      - 127.0.0.1:${STUDIO_PORT:-54473}:3000
     environment:
       STUDIO_PG_META_URL: http://meta:8080
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -34,7 +34,7 @@ services:
     container_name: supabase-kong-lms
     restart: always
     ports:
-      - ${KONG_PORT:-54471}:8000
+      - 127.0.0.1:${KONG_PORT:-54471}:8000
     environment:
       KONG_DATABASE: "off"
       KONG_DECLARATIVE_CONFIG: /var/lib/kong/kong.yml
