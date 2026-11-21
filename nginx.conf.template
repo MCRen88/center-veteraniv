@@ -1,62 +1,93 @@
 # =========================================================================
-# 🌐 Nginx Server Configuration Template for LMS Portal (lms.ele.zp.ua)
+# Nginx site configuration for LMS Portal (lms.ele.zp.ua)
 # =========================================================================
-# Copy this configuration to your Nginx configuration folder (e.g. /etc/nginx/sites-available/lms.conf)
-# and link it to /etc/nginx/sites-enabled/lms.conf
+# Install:
+#   sudo cp nginx.conf.template /etc/nginx/sites-available/lms.conf
+#   sudo ln -sf /etc/nginx/sites-available/lms.conf /etc/nginx/sites-enabled/lms.conf
+#   sudo install -D -m 644 nginx-security-headers.conf /etc/nginx/snippets/lms-security-headers.conf
+#   sudo nginx -t && sudo systemctl reload nginx
+#
+# Upstreams (docker-compose.yml, all bound to 127.0.0.1):
+#   Kong  KONG_PORT=54330 -> /rest/v1 (PostgREST), /auth/v1 (GoTrue)
+#   api   API_PORT=54474  -> /api/admin, /api/otp, /api/health
+# The stack has no storage, functions or realtime services, so those paths are not proxied.
+# =========================================================================
 
-# =========================================================================
-# OPTION A: Deployment on a CUSTOM SUBDOMAIN sharing standard ports 80/443
-# (Recommended: Nginx virtual hosts will handle routing automatically without conflicts)
-# =========================================================================
+# Rate-limit zones (http context: this file is included from http {} via sites-enabled).
+limit_req_zone $binary_remote_addr zone=lms_otp:10m   rate=6r/m;
+limit_req_zone $binary_remote_addr zone=lms_auth:10m  rate=30r/m;
+limit_req_zone $binary_remote_addr zone=lms_admin:10m rate=60r/m;
 
-# HTTP Redirect to HTTPS
+# HTTP -> HTTPS
 server {
     listen 80;
-    server_name lms.ele.zp.ua; # <-- Replace with your subdomain
+    server_name lms.ele.zp.ua;
     return 301 https://$host$request_uri;
 }
 
-# Rate-limit zones (http context: this file is included from http {} via sites-enabled)
-limit_req_zone $binary_remote_addr zone=lms_otp:10m rate=6r/m;
-limit_req_zone $binary_remote_addr zone=lms_tts:10m rate=60r/m;
-
-# Main HTTPS Server
 server {
-    listen 443 ssl http2;
-    server_name lms.ele.zp.ua; # <-- Replace with your subdomain
+    listen 443 ssl;
+    http2 on;
+    server_name lms.ele.zp.ua;
 
-    root /opt/lms-portal/dist; # <-- Path to your built frontend files
+    root /opt/lms-portal/dist;
     index index.html;
 
-    # SSL Certificates (Update paths to your certbot certificates)
-    ssl_certificate /etc/letsencrypt/live/rating.ele.zp.ua/fullchain.pem; # <-- Replace with your cert path
-    ssl_certificate_key /etc/letsencrypt/live/rating.ele.zp.ua/privkey.pem; # <-- Replace with your cert key path
+    ssl_certificate /etc/letsencrypt/live/lms.ele.zp.ua/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/lms.ele.zp.ua/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers HIGH:!aNULL:!MD5;
 
-    # Security headers. add_header in a location replaces these, so locations that
-    # add their own headers include this file again (see the static assets block).
+    server_tokens off;
+    limit_req_status 429;
+
+    # Security headers. add_header in a location replaces the server-level ones,
+    # so every location with its own add_header includes this file again.
     include /etc/nginx/snippets/lms-security-headers.conf;
 
+    # Frontend (single page application)
     location / {
-        # Serve static assets first, fallback to index.html for React Router routing
         try_files $uri $uri/ /index.html;
     }
 
-    # Proxy REST API to local Kong port 54330 (avoids conflict with rating's 54321)
-    # Applications carry scanned documents (up to 30 MB, base64-encoded), hence the body size.
+    # index.html must not be cached: it points to the current hashed bundle
+    # (after a key rotation the old bundle carries an invalid anon key).
+    location = /index.html {
+        add_header Cache-Control "no-cache";
+        include /etc/nginx/snippets/lms-security-headers.conf;
+    }
+
+    # PostgREST via Kong. Applications carry scanned documents
+    # (up to 30 MB, base64-encoded), hence the body size.
     location ^~ /rest/v1/ {
         proxy_pass http://127.0.0.1:54330/rest/v1/;
         proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         client_max_body_size 50M;
     }
 
-    # Server-side api (docker service "api", API_PORT): admin user management and email codes
+    # GoTrue via Kong. Rate-limited against password guessing.
+    location ^~ /auth/v1/ {
+        limit_req zone=lms_auth burst=20 nodelay;
+        proxy_pass http://127.0.0.1:54330/auth/v1/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Server-side api service: admin user management (admin JWT required).
     location ^~ /api/admin/ {
+        limit_req zone=lms_admin burst=30 nodelay;
         proxy_pass http://127.0.0.1:54474;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     }
+
+    # Server-side api service: email verification codes for applications.
+    # The api service also limits codes per email and per IP (X-Real-IP).
     location ^~ /api/otp/ {
         limit_req zone=lms_otp burst=5 nodelay;
         proxy_pass http://127.0.0.1:54474;
@@ -64,23 +95,18 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
     }
 
-    # Proxy Google Translate TTS to bypass CORS/referer blocks.
-    # Rate-limited per client so the server cannot be used as a free TTS relay.
-    location ^~ /api/tts {
-        limit_req zone=lms_tts burst=20 nodelay;
-        proxy_pass https://translate.google.com/translate_tts;
-        proxy_set_header Referer "https://translate.google.com/";
-        proxy_set_header User-Agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
-        proxy_ssl_server_name on;
-    }
-
-    # Proxy Auth API to local Kong port 54330
-    location ^~ /auth/v1/ {
-        proxy_pass http://127.0.0.1:54330/auth/v1/;
+    location = /api/health {
+        proxy_pass http://127.0.0.1:54474;
         proxy_set_header Host $host;
+        access_log off;
     }
 
-    # Static Assets Caching
+    # Any other /api/ path: 404 instead of the SPA fallback.
+    location ^~ /api/ {
+        return 404;
+    }
+
+    # Static assets: hashed file names, safe to cache.
     location ~* \.(?:ico|css|js|gif|jpe?g|png|woff2?|ttf|svg|webp)$ {
         expires 30d;
         add_header Cache-Control "public, immutable";
@@ -88,102 +114,10 @@ server {
         access_log off;
     }
 
-    # Compression Settings
     gzip on;
     gzip_types text/plain text/css application/json application/javascript text/xml application/xml+rss image/svg+xml;
     gzip_min_length 256;
 
-    # Separate Log Files for LMS Portal
     access_log /var/log/nginx/lms_access.log;
     error_log /var/log/nginx/lms_error.log;
 }
-
-
-# =========================================================================
-# OPTION B: Deployment on NON-STANDARD PORTS (e.g. 8085 / 8443)
-# NOTE: outdated copy. If you use it, copy the location blocks from Option A
-# (api proxies, rate limits, body size, security headers snippet).
-# (Use this if you do NOT want to expose port 80/443 on the domain name)
-# =========================================================================
-#
-# # HTTP Redirect to HTTPS on port 8443
-# server {
-#     listen 8085;
-#     server_name rating.ele.zp.ua; # <-- Replace with server IP or domain
-#     return 301 https://$host:8443$request_uri;
-# }
-#
-# # Main HTTPS Server on Port 8443
-# server {
-#     listen 8443 ssl http2;
-#     server_name rating.ele.zp.ua; # <-- Replace with server IP or domain
-# 
-#     root /opt/lms-portal/dist;
-#     index index.html;
-# 
-#     ssl_certificate /etc/letsencrypt/live/rating.ele.zp.ua/fullchain.pem;
-#     ssl_certificate_key /etc/letsencrypt/live/rating.ele.zp.ua/privkey.pem;
-#     ssl_protocols TLSv1.2 TLSv1.3;
-#     ssl_ciphers HIGH:!aNULL:!MD5;
-# 
-#     location / {
-#         try_files $uri $uri/ /index.html;
-#     }
-# 
-#     location ^~ /rest/v1/ {
-#         proxy_pass http://127.0.0.1:54330/rest/v1/;
-#         proxy_set_header Host $host;
-#     }
-# 
-#     # Proxy Google Translate TTS to bypass CORS/referer blocks
-#     location ^~ /api/tts {
-#         proxy_pass https://translate.google.com/translate_tts;
-#         proxy_set_header Referer "https://translate.google.com/";
-#         proxy_set_header User-Agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
-#         proxy_ssl_server_name on;
-#     }
-# 
-#     location ^~ /auth/v1/ {
-#         proxy_pass http://127.0.0.1:54330/auth/v1/;
-#         proxy_set_header Host $host;
-#     }
-# 
-#     location ^~ /storage/v1/ {
-#         proxy_pass http://127.0.0.1:54330/storage/v1/;
-#         proxy_set_header Host $host;
-#         proxy_set_header X-Real-IP $remote_addr;
-#         client_max_body_size 50M;
-#     }
-# 
-#     location ^~ /functions/v1/ {
-#         proxy_pass http://127.0.0.1:54330/functions/v1/;
-#         proxy_set_header Host $host;
-#         proxy_set_header X-Real-IP $remote_addr;
-#         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-#         proxy_set_header X-Forwarded-Proto $scheme;
-#     }
-# 
-#     location ^~ /realtime/v1/ {
-#         proxy_pass http://127.0.0.1:54330/realtime/v1/;
-#         proxy_http_version 1.1;
-#         proxy_set_header Upgrade $http_upgrade;
-#         proxy_set_header Connection "upgrade";
-#         proxy_set_header Host $host;
-#         proxy_set_header X-Real-IP $remote_addr;
-#     }
-# 
-#     location ~* \.(?:ico|css|js|gif|jpe?g|png|woff2?|ttf|svg|webp)$ {
-#         expires 30d;
-#         add_header Cache-Control "public, immutable";
-#         access_log off;
-#     }
-#     add_header X-Content-Type-Options "nosniff";
-#     add_header X-Frame-Options "SAMEORIGIN";
-#     add_header X-XSS-Protection "1; mode=block";
-#     gzip on;
-#     gzip_types text/plain text/css application/json application/javascript text/xml application/xml+rss image/svg+xml;
-#     gzip_min_length 256;
-# 
-#     access_log /var/log/nginx/lms_access.log;
-#     error_log /var/log/nginx/lms_error.log;
-# }

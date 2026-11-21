@@ -72,8 +72,8 @@ It backs up `.env` and a database dump to `~/lms-portal-backups` (`BACKUP_DIR`),
 `VITE_SUPABASE_SERVICE_KEY`, sets `OTP_SECRET`, rotates `JWT_SECRET` / `ANON_KEY` /
 `SERVICE_ROLE_KEY` once (`scripts/upgrade-env.mjs`; `--rotate-keys` / `--no-rotate` override),
 installs the nginx headers snippet and runs `./deploy_prod.sh`. After a rotation all users sign in
-again. Before running, add `SMTP_USER` / `SMTP_PASS` to `.env` and the `/api/admin/`,
-`/api/otp/` locations from `nginx.conf.template` to the site config.
+again. Before running, add `SMTP_USER` / `SMTP_PASS` to `.env` and install `nginx.conf.template`
+as the site config (it proxies `/api/admin/`, `/api/otp/`, `/api/health` to the api service).
 
 Create users from the server: `node scripts/create-user.js <email> "<full name>" [user|teacher|admin]`
 (password from `USER_PASSWORD`, otherwise a random one is printed once).

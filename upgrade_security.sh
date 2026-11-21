@@ -90,6 +90,8 @@ if [ "$NGINX_CHECK" -eq 1 ]; then
   if NGINX_CONF="$(sudo nginx -T 2>/dev/null)"; then
     grep -q 'location \^~ /api/otp/' <<< "$NGINX_CONF" && ok "nginx: є location /api/otp/" \
       || fail "nginx: немає location /api/otp/ та /api/admin/ (скопіюйте з nginx.conf.template)"
+    grep -q 'location = /api/health' <<< "$NGINX_CONF" && ok "nginx: є location /api/health" \
+      || fail "nginx: немає location = /api/health (скопіюйте з nginx.conf.template)"
     grep -q 'lms-security-headers.conf' <<< "$NGINX_CONF" && ok "nginx: підключено lms-security-headers.conf" \
       || fail "nginx: не підключено snippets/lms-security-headers.conf (див. nginx.conf.template)"
   else
@@ -166,7 +168,8 @@ else
   echo "  ❌ api сервіс не відповідає: docker logs supabase-api-lms"
   POST_ERRORS=$((POST_ERRORS + 1))
 fi
-if curl -fsS --max-time 10 "$SITE_URL/api/health" > /dev/null; then
+# Check the body: without the location the SPA fallback answers 200 with index.html.
+if curl -fsS --max-time 10 "$SITE_URL/api/health" | grep -q '"ok":true'; then
   echo "  ✅ $SITE_URL/api/health доступний через nginx"
 else
   echo "  ❌ $SITE_URL/api/health недоступний: перевірте location /api/ у nginx"
