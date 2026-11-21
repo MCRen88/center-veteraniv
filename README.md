@@ -61,9 +61,19 @@ For admin actions and email codes in development, run the api service as well
    `scripts/check-rls.sh`, builds the frontend and checks the bundle.
 
 **Upgrading a server deployed before migration 011:** the old frontend bundle contained the
-service_role key, so treat it as leaked. Generate a new `JWT_SECRET`, `ANON_KEY` and
-`SERVICE_ROLE_KEY` (`node generate-prod-keys.js`), update `.env`, restart the stack, rebuild the
-frontend, and sign all users in again.
+service_role key, so treat it as leaked. Run the one-time upgrade on the server:
+
+```bash
+./upgrade_security.sh --check   # preflight only: tools, clean tree, SMTP, KONG_PORT, SITE_URL, nginx
+./upgrade_security.sh           # backup .env + DB dump, fix .env, rotate keys, deploy, verify
+```
+
+It backs up `.env` and a database dump to `~/lms-portal-backups` (`BACKUP_DIR`), removes
+`VITE_SUPABASE_SERVICE_KEY`, sets `OTP_SECRET`, rotates `JWT_SECRET` / `ANON_KEY` /
+`SERVICE_ROLE_KEY` once (`scripts/upgrade-env.mjs`; `--rotate-keys` / `--no-rotate` override),
+installs the nginx headers snippet and runs `./deploy_prod.sh`. After a rotation all users sign in
+again. Before running, add `SMTP_USER` / `SMTP_PASS` to `.env` and the `/api/admin/`,
+`/api/otp/` locations from `nginx.conf.template` to the site config.
 
 Create users from the server: `node scripts/create-user.js <email> "<full name>" [user|teacher|admin]`
 (password from `USER_PASSWORD`, otherwise a random one is printed once).

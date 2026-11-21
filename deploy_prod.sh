@@ -14,7 +14,10 @@ echo "==========================================="
 
 # 1. Pull latest code changes
 echo "📥 [1/4] Отримання останніх змін з репозиторію Git..."
-git pull
+# upgrade_security.sh pulls before it backs up and edits .env.
+if [ "${SKIP_PULL:-0}" != "1" ]; then
+  git pull --ff-only
+fi
 
 # 2. Apply database migrations
 echo "🗄️ [2/4] Застосування нових міграцій бази даних..."
@@ -24,8 +27,16 @@ echo "🗄️ [2/4] Застосування нових міграцій баз�
 # Visit logs hold personal data: keep 180 days.
 docker exec -i supabase-db-lms psql -U postgres -d postgres -tAc "SELECT 'Видалено старих записів візитів: ' || public.purge_old_visits(180);"
 
-# Rebuild and (re)start the api service if its code changed.
-docker compose up -d --build api
+# Recreate every service whose config or .env values changed (ports, keys,
+# GOTRUE_DISABLE_SIGNUP) and rebuild the api service.
+docker compose up -d --build
+
+# Wait for the gateway before the access checks.
+KONG_PORT=$(grep -E '^KONG_PORT=' .env | tail -1 | cut -d= -f2- || true)
+for _ in $(seq 1 30); do
+  curl -s -o /dev/null "http://127.0.0.1:${KONG_PORT:-54471}/rest/v1/" && break
+  sleep 2
+done
 
 # Access rules must hold after every deploy.
 ./scripts/check-rls.sh
@@ -63,6 +74,7 @@ fi
 # Restarting nginx or reloading configuration
 echo "🔄 Перезапуск конфігурації Nginx..."
 if command -v systemctl &> /dev/null; then
+    sudo nginx -t
     sudo systemctl reload nginx
     echo "✅ Конфігурацію Nginx успішно оновлено!"
 else
