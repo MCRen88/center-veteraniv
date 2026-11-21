@@ -12,7 +12,12 @@ applications, exams, and the public certificate registry.
 | api service | `api/server.js` | The only holder of `SERVICE_ROLE_KEY` and SMTP credentials. Admin user management (`/api/admin/*`) and email verification codes (`/api/otp/*`). |
 | nginx | `nginx.conf.template`, `nginx-security-headers.conf` | Public entry point: static files, `/rest/v1`, `/auth/v1`, `/api/*`. |
 
-### Security rules (enforced in the database, migrations `011_security.sql`, `012_hide_answers.sql`)
+### Security rules (enforced in the database, migrations `011_security.sql`, `012_hide_answers.sql`, `013_enable_rls.sql`)
+
+- Row level security is enabled on every table in `public` (`013_enable_rls.sql`; older
+  deploys never applied `002_rls.sql`). Profiles: own row or staff can read, only admins can
+  change. Registry: public read, admin writes. Applications: admins only.
+  `scripts/check-rls.sh` fails if any table in `public` has RLS disabled.
 
 - Exam results are scored by a trigger on `test_scores` from the `questions` table; a candidate
   needs `test_permission`, which is revoked in the same transaction.
@@ -54,6 +59,11 @@ For admin actions and email codes in development, run the api service as well
 3. `./deploy_prod.sh` — pulls, applies **pending** migrations only (tracked in
    `public.app_migrations`), purges old visit logs, rebuilds the api service, runs
    `scripts/check-rls.sh`, builds the frontend and checks the bundle.
+
+**Upgrading a server deployed before migration 011:** the old frontend bundle contained the
+service_role key, so treat it as leaked. Generate a new `JWT_SECRET`, `ANON_KEY` and
+`SERVICE_ROLE_KEY` (`node generate-prod-keys.js`), update `.env`, restart the stack, rebuild the
+frontend, and sign all users in again.
 
 Create users from the server: `node scripts/create-user.js <email> "<full name>" [user|teacher|admin]`
 (password from `USER_PASSWORD`, otherwise a random one is printed once).

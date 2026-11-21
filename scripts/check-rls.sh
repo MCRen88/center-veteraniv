@@ -10,7 +10,9 @@ env_get() {
 }
 
 ANON_KEY="${ANON_KEY:-$(env_get ANON_KEY)}"
-API_URL="${API_URL:-http://127.0.0.1:$(env_get KONG_PORT)}"
+KONG_PORT="$(env_get KONG_PORT)"
+API_URL="${API_URL:-http://127.0.0.1:${KONG_PORT:-54471}}"
+DB_CONTAINER="${DB_CONTAINER:-supabase-db-lms}"
 if [ -z "$ANON_KEY" ]; then echo "❌ ANON_KEY не знайдено (.env)"; exit 1; fi
 
 FAILED=0
@@ -37,5 +39,21 @@ expect "гість не додає кейси"                  '401|403' '' -X 
 expect "гість не пише заяву напряму"           '401|403' '' -X POST "$API_URL/rest/v1/applications" -d '{"lname":"x"}'
 expect "заява без підтвердженого email відхиляється" '400|401|403' '' -X POST "$API_URL/rest/v1/rpc/submit_application" -d '{"p":{"lname":"x","fname":"y","birthdate":"2000-01-01","phone":"1","email":"rls-check@example.invalid"}}'
 expect "самореєстрація вимкнена"              '400|403|422' '' -X POST "$API_URL/auth/v1/signup" -d '{"email":"rls-check@example.invalid","password":"Rls-check-123456"}'
+
+# HTTP checks above pass trivially on empty tables, so also check the catalog:
+# every table in public must have row level security enabled.
+if NO_RLS=$(docker exec "$DB_CONTAINER" psql -U postgres -d postgres -tAc \
+    "SELECT string_agg(c.relname, ', ') FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+     WHERE n.nspname = 'public' AND c.relkind = 'r' AND NOT c.relrowsecurity" 2>/dev/null); then
+  if [ -z "$NO_RLS" ]; then
+    echo "✅ RLS увімкнено на всіх таблицях public"
+  else
+    echo "❌ RLS вимкнено на таблицях: $NO_RLS"
+    FAILED=1
+  fi
+else
+  echo "⚠️ Не вдалося перевірити RLS у контейнері $DB_CONTAINER"
+  FAILED=1
+fi
 
 exit $FAILED
