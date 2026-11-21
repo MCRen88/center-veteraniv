@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
 import forge from 'node-forge';
+import { escapeHtml } from '../utils/escapeHtml';
 
 export const Application: React.FC = () => {
-  const { state, submitApplication: submitAppDb } = useAppContext();
+  const { state, submitApplication: submitAppDb, sendVerificationEmail, verifyEmailCode } = useAppContext();
   const navigate = useNavigate();
 
   const [step, setStep] = useState(1);
@@ -85,6 +86,21 @@ export const Application: React.FC = () => {
     if (!files || files.length === 0) return;
 
     const fileArray = Array.from(files);
+    const MAX_FILE_MB = 8;
+    const MAX_TOTAL_MB = 30;
+    const tooBig = fileArray.find(f => f.size > MAX_FILE_MB * 1024 * 1024);
+    if (tooBig) {
+      alert(`Файл «${tooBig.name}» більший за ${MAX_FILE_MB} МБ. Зменште розмір (напр., стисніть скан) і спробуйте ще раз.`);
+      e.target.value = '';
+      return;
+    }
+    const currentBytes = Object.values(uploadedDocs).flat().reduce((sum, d) => sum + (d.dataUrl ? d.dataUrl.length * 0.75 : 0), 0);
+    const addedBytes = fileArray.reduce((sum, f) => sum + f.size, 0);
+    if (currentBytes + addedBytes > MAX_TOTAL_MB * 1024 * 1024) {
+      alert(`Загальний розмір документів не може перевищувати ${MAX_TOTAL_MB} МБ.`);
+      e.target.value = '';
+      return;
+    }
     
     const readDocAsync = (file: File): Promise<UploadedDocItem> => {
       return new Promise((resolve) => {
@@ -104,13 +120,19 @@ export const Application: React.FC = () => {
           });
         };
         reader.onerror = () => {
-          resolve(itemBase);
+          // Without content the admin would see a file that cannot be opened.
+          resolve({ ...itemBase, dataUrl: undefined });
         };
         reader.readAsDataURL(file);
       });
     };
 
-    const newItems = await Promise.all(fileArray.map(readDocAsync));
+    const readItems = await Promise.all(fileArray.map(readDocAsync));
+    const unreadable = readItems.filter(item => !item.dataUrl);
+    if (unreadable.length > 0) {
+      alert(`Не вдалося прочитати файл(и): ${unreadable.map(i => i.name).join(', ')}. Спробуйте завантажити ще раз.`);
+    }
+    const newItems = readItems.filter(item => item.dataUrl);
 
     setUploadedDocs(prev => ({
       ...prev,
@@ -157,7 +179,7 @@ export const Application: React.FC = () => {
       <html lang="uk">
       <head>
         <meta charset="UTF-8">
-        <title>Заява про присвоєння та/або підтвердження професійної кваліфікації — ${fullName}</title>
+        <title>Заява про присвоєння та/або підтвердження професійної кваліфікації — ${escapeHtml(fullName)}</title>
         <style>
           @page {
             size: A4 portrait;
@@ -315,28 +337,28 @@ export const Application: React.FC = () => {
 
         <div class="app-recipient-block">
           <strong>Керівнику Кваліфікаційного центру</strong><br/>
-          <strong>від:</strong> ${fullName}<br/>
-          <strong>Дата народження:</strong> ${birthdateFormatted}<br/>
-          <strong>Паспорт / ID:</strong> ${formData.passport}<br/>
-          <strong>Телефон:</strong> ${formData.phone}<br/>
-          <strong>E-mail:</strong> ${formData.email}
+          <strong>від:</strong> ${escapeHtml(fullName)}<br/>
+          <strong>Дата народження:</strong> ${escapeHtml(birthdateFormatted)}<br/>
+          <strong>Паспорт / ID:</strong> ${escapeHtml(formData.passport)}<br/>
+          <strong>Телефон:</strong> ${escapeHtml(formData.phone)}<br/>
+          <strong>E-mail:</strong> ${escapeHtml(formData.email)}
         </div>
 
         <div class="doc-title">
           <h1>З А Я В А</h1>
           <p>про присвоєння та/або підтвердження професійної кваліфікації</p>
-          <div style="font-size: 10.5pt; margin-top: 4px; font-weight: bold;">Реєстраційний № ${appNumber} від ${today}</div>
+          <div style="font-size: 10.5pt; margin-top: 4px; font-weight: bold;">Реєстраційний № ${escapeHtml(appNumber)} від ${escapeHtml(today)}</div>
         </div>
 
         <div class="body-text">
-          Прошу допустити мене до проходження процедури присвоєння та/або підтвердження професійної кваліфікації <strong>«Фахівець із супроводу ветеранів війни та демобілізованих осіб»</strong> (рівень кваліфікації: <strong>${formData.level}</strong>) відповідно до вимог професійного стандарту.
+          Прошу допустити мене до проходження процедури присвоєння та/або підтвердження професійної кваліфікації <strong>«Фахівець із супроводу ветеранів війни та демобілізованих осіб»</strong> (рівень кваліфікації: <strong>${escapeHtml(formData.level)}</strong>) відповідно до вимог професійного стандарту.
         </div>
 
         <div style="margin-top: 8px; font-size: 11.5pt;">
           <strong>Відомості про здобувача:</strong>
           <ul class="details-list">
-            <li>Рівень вищої освіти: <strong>${formData.education}</strong></li>
-            <li>Стаж роботи: <strong>${formData.experience} р.</strong></li>
+            <li>Рівень вищої освіти: <strong>${escapeHtml(formData.education)}</strong></li>
+            <li>Стаж роботи: <strong>${escapeHtml(formData.experience)} р.</strong></li>
             <li>Згода на збір та обробку персональних даних: <strong>Надано згідно з вимогами Закону України «Про захист персональних даних»</strong></li>
           </ul>
         </div>
@@ -348,7 +370,7 @@ export const Application: React.FC = () => {
             <li><span class="check-box">☑</span> Копія документа про вищу освіту з додатком</li>
             <li><span class="check-box">☑</span> Документи, що підтверджують досвід та стаж роботи</li>
             ${hasOtherDocs ? `<li><span class="check-box">☑</span> Інші додаткові документи</li>` : ''}
-            <li><span class="check-box">☑</span> Згода на збір та обробку персональних даних від ${today}</li>
+            <li><span class="check-box">☑</span> Згода на збір та обробку персональних даних від ${escapeHtml(today)}</li>
           </ul>
         </div>
 
@@ -359,28 +381,28 @@ export const Application: React.FC = () => {
         <div class="stamp-container">
           <div class="kep-stamp">
             <div class="kep-stamp-header">
-              <span>🛡️</span> КВАЛІФІКОВАНИЙ ЕЛЕКТРОННИЙ ПІДПИС
+              <span>🛡️</span> ВІДОМОСТІ ПРО ЕЛЕКТРОННИЙ КЛЮЧ ЗАЯВНИКА
             </div>
             <table class="kep-table">
               <tr>
                 <td class="kep-label">Підписувач:</td>
-                <td class="kep-val">${signerName}</td>
+                <td class="kep-val">${escapeHtml(signerName)}</td>
               </tr>
               <tr>
                 <td class="kep-label">РНОКПП (ДРФО):</td>
-                <td class="kep-val">${signerDrfo}</td>
+                <td class="kep-val">${escapeHtml(signerDrfo)}</td>
               </tr>
               <tr>
                 <td class="kep-label">АЦСК (Надавач):</td>
-                <td class="kep-val">${signerIssuer}</td>
+                <td class="kep-val">${escapeHtml(signerIssuer)}</td>
               </tr>
               <tr>
                 <td class="kep-label">Мітка часу:</td>
-                <td class="kep-val">${signTime}</td>
+                <td class="kep-val">${escapeHtml(signTime)}</td>
               </tr>
               <tr>
                 <td class="kep-label">Статус:</td>
-                <td class="kep-val" style="color: #16a34a;">Дійсний (перевірено в реєстрі)</td>
+                <td class="kep-val">Чинність сертифіката порталом не перевірялась</td>
               </tr>
             </table>
           </div>
@@ -400,14 +422,57 @@ export const Application: React.FC = () => {
   const [kepPassword, setKepPassword] = useState('');
   const [kepFileName, setKepFileName] = useState('');
   const [kepFileBytes, setKepFileBytes] = useState<ArrayBuffer | null>(null);
-  const [kepInfo, setKepInfo] = useState<{ name: string; drfo: string; issuer: string } | null>(null);
+  const [kepInfo, setKepInfo] = useState<{ name: string; drfo: string; issuer: string; verification: 'signed' | 'password_verified' | 'unverified' } | null>(null);
+
+  // Email confirmation: the code is generated, mailed and checked by the api service.
+  const [emailCodeSent, setEmailCodeSent] = useState(false);
+  const [emailCode, setEmailCode] = useState('');
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [emailMessage, setEmailMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const handleSendEmailCode = async () => {
+    setEmailBusy(true);
+    const res = await sendVerificationEmail(formData.email, `${formData.fname} ${formData.lname}`.trim());
+    setEmailBusy(false);
+    setEmailCodeSent(res.success || emailCodeSent);
+    setEmailMessage({ ok: res.success, text: res.message });
+  };
+
+  const handleVerifyEmailCode = async () => {
+    setEmailBusy(true);
+    const res = await verifyEmailCode(formData.email, emailCode.trim());
+    setEmailBusy(false);
+    setEmailVerified(res.success);
+    setEmailMessage({ ok: res.success, text: res.message });
+  };
   const [kepError, setKepError] = useState<string | null>(null);
 
   const [isSigned, setIsSigned] = useState(false);
-  const [signatureDetails, setSignatureDetails] = useState<any>(null);
+  const [signatureDetails, setSignatureDetails] = useState<{
+    type: string;
+    standard: string;
+    signerName: string;
+    signerDrfo: string;
+    issuer: string;
+    serialNumber: string;
+    timestamp: string;
+    signature: string;
+    certificate: string;
+    signedData: string;
+    status: 'signed' | 'password_verified' | 'unverified';
+    ocspStatus: string;
+  } | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
+    if (name === 'email') {
+      // A confirmation is valid only for the address it was sent to.
+      setEmailVerified(false);
+      setEmailCodeSent(false);
+      setEmailCode('');
+      setEmailMessage(null);
+    }
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
@@ -443,6 +508,17 @@ export const Application: React.FC = () => {
   };
 
   // Helper to verify Sun Java KeyStore (JKS) password via SHA-1 MAC and parse X.509 certs
+  // node-forge returns UTF8String attributes as raw bytes; Ukrainian names need decoding.
+  const certAttrText = (attr: { value?: unknown; valueTagClass?: number }): string | undefined => {
+    if (typeof attr.value !== 'string') return undefined;
+    if (attr.valueTagClass !== forge.asn1.Type.UTF8) return attr.value;
+    try {
+      return forge.util.decodeUtf8(attr.value);
+    } catch {
+      return attr.value;
+    }
+  };
+
   const verifyJksKeystore = (buffer: ArrayBuffer, password: string): { isJks: boolean; certificates: forge.pki.Certificate[] } => {
     const bytes = new Uint8Array(buffer);
     if (bytes.length < 28) {
@@ -528,7 +604,9 @@ export const Application: React.FC = () => {
               const certAsn1 = forge.asn1.fromDer(certBinary);
               const cert = forge.pki.certificateFromAsn1(certAsn1);
               certificates.push(cert);
-            } catch {}
+            } catch {
+              // Not every keystore entry carries a parsable X.509 certificate; skip it.
+            }
           }
         } else if (tag === 2) { // TrustedCertEntry
           const typeLen = view.getInt16(offset);
@@ -544,10 +622,14 @@ export const Application: React.FC = () => {
             const certAsn1 = forge.asn1.fromDer(certBinary);
             const cert = forge.pki.certificateFromAsn1(certAsn1);
             certificates.push(cert);
-          } catch {}
+          } catch {
+            // Skip an unparsable trusted certificate entry.
+          }
         }
       }
-    } catch {}
+    } catch {
+      // A truncated keystore still yields the certificates read so far.
+    }
 
     return { isJks: true, certificates };
   };
@@ -576,7 +658,11 @@ export const Application: React.FC = () => {
         }
         
         let cn = `${formData.lname} ${formData.fname} ${formData.mname || ''}`.trim();
-        let drfo = formData.passport.replace(/[^0-9]/g, '') || `3${Math.floor(Math.random() * 900000000) + 100000000}`;
+        let drfo = formData.passport.replace(/[^0-9]/g, '');
+        // What the portal really checked: 'signed' (RSA signature made with the PKCS#12 key),
+        // 'password_verified' (JKS keystore password matched) or 'unverified'.
+        let verification: 'signed' | 'password_verified' | 'unverified' = 'unverified';
+        let certSerial = '';
         let organization = '';
         let certPem = '';
         let signatureBase64 = '';
@@ -608,20 +694,21 @@ export const Application: React.FC = () => {
           if (jksResult.certificates.length > 0) {
             const cert = jksResult.certificates[0];
             for (const attr of cert.subject.attributes) {
-              const val = attr.value;
+              const val = certAttrText(attr);
               if (typeof val === 'string') {
                 if (attr.name === 'commonName') cn = val;
                 else if (attr.name === 'serialNumber') drfo = val.replace(/[^0-9]/g, '') || drfo;
                 else if (attr.name === 'organizationName') organization = val;
               }
             }
+            certSerial = cert.serialNumber || '';
             try {
               certPem = forge.pki.certificateToPem(cert);
-            } catch {}
+            } catch {
+              // The PEM copy is informational only.
+            }
           }
-          const md = forge.md.sha256.create();
-          md.update(dataToSign + kepPassword + kepFileName + binary, 'utf8');
-          signatureBase64 = forge.util.encode64(md.digest().getBytes());
+          verification = 'password_verified';
         } 
         // 2. PKCS#12 / PFX Validation
         else if (isPfxFile || (bytes[0] === 0x30 && !isDstuDat && !isZs2)) {
@@ -643,7 +730,7 @@ export const Application: React.FC = () => {
               const privateKey = keyBag.key;
               
               for (const attr of cert.subject.attributes) {
-                const val = attr.value;
+                const val = certAttrText(attr);
                 if (typeof val === 'string') {
                   if (attr.name === 'commonName') cn = val;
                   else if (attr.name === 'serialNumber') drfo = val.replace(/[^0-9]/g, '');
@@ -656,27 +743,21 @@ export const Application: React.FC = () => {
               const signatureBytes = privateKey.sign(md);
               signatureBase64 = forge.util.encode64(signatureBytes);
               certPem = forge.pki.certificateToPem(cert);
-            } else {
-              const md = forge.md.sha256.create();
-              md.update(dataToSign + kepPassword + kepFileName + binary, 'utf8');
-              signatureBase64 = forge.util.encode64(md.digest().getBytes());
+              certSerial = cert.serialNumber || '';
+              verification = 'signed';
             }
-          } catch (p12Error: any) {
-            const msg = p12Error?.message?.toLowerCase() || '';
+          } catch (p12Error) {
+            const msg = p12Error instanceof Error ? p12Error.message.toLowerCase() : '';
             if (msg.includes('mac') || msg.includes('password') || msg.includes('decrypt') || isPfxFile) {
-              throw new Error('Невірний пароль захисту особистого ключа PKCS#12 (.pfx / .p12). Будь ласка, перевірте правильність пароля та спробуйте знову.');
+              throw new Error('Невірний пароль захисту особистого ключа PKCS#12 (.pfx / .p12). Будь ласка, перевірте правильність пароля та спробуйте знову.', { cause: p12Error });
             }
             throw p12Error;
           }
         } 
         // 3. Other formats (DSTU 4145: Key-6.dat, .zs2)
         else {
-          if (kepPassword.length < 3) {
-            throw new Error('Невірний пароль. Пароль захисту особистого ключа не може бути коротшим за 3 символи.');
-          }
-          const md = forge.md.sha256.create();
-          md.update(dataToSign + kepPassword + kepFileName + binary, 'utf8');
-          signatureBase64 = forge.util.encode64(md.digest().getBytes());
+          // DSTU 4145 keys (Key-6.dat, .zs2) cannot be opened in the browser without the IIT library.
+          verification = 'unverified';
         }
 
         let detectedType = 'Кваліфікований електронний підпис (КЕП)';
@@ -704,7 +785,6 @@ export const Application: React.FC = () => {
           ? 'КНЕДП ТОВ «Центр сертифікації ключів «Україна» (M.E.Doc)'
           : (kepAcsp || organization || 'Акредитований надавач електронних довірчих послуг');
 
-        const serialNum = `UA-${Date.now().toString(16).toUpperCase()}-${Math.floor(Math.random() * 90000 + 10000)}`;
 
         const details = {
           type: detectedType,
@@ -712,13 +792,13 @@ export const Application: React.FC = () => {
           signerName: cn,
           signerDrfo: drfo,
           issuer: detectedIssuer,
-          serialNumber: serialNum,
+          serialNumber: certSerial,
           timestamp: new Date().toLocaleString('uk-UA'),
           signature: signatureBase64,
           certificate: certPem,
           signedData: dataToSign,
-          status: 'valid',
-          ocspStatus: 'Чинний (перевірено у Довірчому списку України - TSL)'
+          status: verification,
+          ocspStatus: 'Чинність сертифіката (TSL / OCSP) порталом не перевірялась'
         };
         
         setKepState('success');
@@ -726,15 +806,16 @@ export const Application: React.FC = () => {
         setFormData(prev => ({ ...prev, consent: true }));
         setKepInfo({
           name: cn,
-          drfo: drfo,
-          issuer: detectedIssuer
+          drfo: drfo || '—',
+          issuer: detectedIssuer,
+          verification
         });
         setSignatureDetails(details);
         setKepError(null);
-      } catch (err: any) {
+      } catch (err) {
         setKepState('idle');
         setIsSigned(false);
-        const errorMsg = err?.message || 'Помилка зчитування або перевірки особистого ключа. Будь ласка, перевірте пароль.';
+        const errorMsg = (err instanceof Error && err.message) || 'Помилка зчитування або перевірки особистого ключа. Будь ласка, перевірте пароль.';
         setKepError(errorMsg);
       }
     }, 600);
@@ -750,21 +831,20 @@ export const Application: React.FC = () => {
       return;
     }
 
+    if (!emailVerified) {
+      alert("Підтвердіть email кодом з листа перед відправкою заяви.");
+      return;
+    }
+
     setIsSubmitting(true);
 
-    const year = new Date().getFullYear();
-    const randomId = Math.floor(Math.random() * 9000) + 1000;
-    const generatedAppNumber = `ЗЯ-${year}-${randomId}`;
-    
-    setAppNumber(generatedAppNumber);
-    
-    // Save to applications table in database (certificate is issued only after passing the test)
-    const successDb = await submitAppDb({
-      app_number: generatedAppNumber,
+    // The database assigns the application number (certificate is issued only after passing the test)
+    const assignedNumber = await submitAppDb({
       lname: formData.lname,
       fname: formData.fname,
       mname: formData.mname,
       birthdate: formData.birthdate,
+      passport: formData.passport,
       phone: formData.phone,
       email: formData.email,
       level: formData.level,
@@ -776,7 +856,8 @@ export const Application: React.FC = () => {
       }
     });
 
-    if (successDb) {
+    if (assignedNumber) {
+      setAppNumber(assignedNumber);
       setSuccess(true);
     }
     setIsSubmitting(false);
@@ -1500,7 +1581,44 @@ export const Application: React.FC = () => {
                       </p>
                     </div>
 
+                    <div style={{ padding: '20px', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#fff', marginBottom: '20px' }}>
+                      <h4 style={{ fontSize: '16px', marginBottom: '10px' }}>1. Підтвердження email</h4>
+                      {emailVerified ? (
+                        <div style={{ color: '#14532d', fontWeight: 600 }}>✓ Email {formData.email} підтверджено</div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                          <p style={{ margin: 0, fontSize: '14px' }}>
+                            Ми надішлемо одноразовий код на <strong>{formData.email || 'вказану пошту'}</strong>. Код дійсний 10 хвилин.
+                          </p>
+                          <button type="button" className="btn btn-outline" style={{ alignSelf: 'flex-start' }} onClick={handleSendEmailCode} disabled={emailBusy || !formData.email}>
+                            {emailCodeSent ? 'Надіслати код ще раз' : 'Надіслати код'}
+                          </button>
+                          {emailCodeSent && (
+                            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                autoComplete="one-time-code"
+                                className="form-control"
+                                style={{ maxWidth: '180px' }}
+                                placeholder="Код з листа"
+                                value={emailCode}
+                                onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                              />
+                              <button type="button" className="btn btn-primary" onClick={handleVerifyEmailCode} disabled={emailBusy || emailCode.length !== 6}>
+                                Підтвердити
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {emailMessage && !emailVerified && (
+                        <div role="status" style={{ marginTop: '10px', fontSize: '13.5px', color: emailMessage.ok ? '#166534' : '#991b1b' }}>{emailMessage.text}</div>
+                      )}
+                    </div>
+
                     <div style={{ padding: '20px', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#fff' }}>
+                      <h4 style={{ fontSize: '16px', marginBottom: '10px' }}>2. Електронний ключ заявника</h4>
                       {kepState !== 'success' && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                           <div className="form-group">
@@ -1620,7 +1738,9 @@ export const Application: React.FC = () => {
                         <div className="sign-success-badge">
                           <div style={{ fontSize: '28px', color: '#2cbd72' }}>✓</div>
                           <div style={{ flexGrow: 1 }}>
-                            <div style={{ fontWeight: 'bold', color: '#14532d', fontSize: '15px' }}>Кваліфікований електронний підпис (КЕП) накладено</div>
+                            <div style={{ fontWeight: 'bold', color: '#14532d', fontSize: '15px' }}>
+                              {kepInfo.verification === 'signed' ? 'Заяву підписано ключем заявника' : kepInfo.verification === 'password_verified' ? 'Пароль ключа підтверджено' : 'Файл ключа додано до заяви'}
+                            </div>
                             <table className="sign-info-table">
                               <tbody>
                                 <tr>
@@ -1637,11 +1757,11 @@ export const Application: React.FC = () => {
                                 </tr>
                                 <tr>
                                   <td>Статус сертифіката:</td>
-                                  <td style={{ color: '#2cbd72' }}>Дійсний (перевірено в реальному часі)</td>
+                                  <td>Чинність сертифіката порталом не перевірялась</td>
                                 </tr>
                                 <tr>
-                                  <td>Тип підпису:</td>
-                                  <td>Кваліфікований електронний підпис (КЕП)</td>
+                                  <td>Перевірка порталом:</td>
+                                  <td>{kepInfo.verification === 'signed' ? 'Створено підпис RSA (PKCS#12)' : kepInfo.verification === 'password_verified' ? 'Пароль сховища JKS вірний, підпис не створювався' : 'Ключ формату ДСТУ 4145 порталом не відкривався'}</td>
                                 </tr>
                               </tbody>
                             </table>
@@ -1680,7 +1800,7 @@ export const Application: React.FC = () => {
                   {step < 5 ? (
                     <button className="btn btn-primary" onClick={nextStep}>Далі</button>
                   ) : (
-                    <button className="btn btn-primary" onClick={submitApplication} disabled={isSubmitting || !isSigned}>
+                    <button className="btn btn-primary" onClick={submitApplication} disabled={isSubmitting || !isSigned || !emailVerified}>
                       {isSubmitting ? 'Реєстрація заяви...' : 'Відправити підписану заяву'}
                     </button>
                   )}

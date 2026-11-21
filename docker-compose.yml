@@ -58,7 +58,8 @@ services:
       GOTRUE_JWT_SECRET: ${JWT_SECRET}
       GOTRUE_JWT_EXP: 3600
       GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
-      GOTRUE_DISABLE_SIGNUP: "false"
+      # Accounts are created by admins through the api service only.
+      GOTRUE_DISABLE_SIGNUP: "true"
 
   rest:
     image: postgrest/postgrest:v11.2.0
@@ -82,3 +83,23 @@ services:
       PG_META_DB_NAME: postgres
       PG_META_DB_USER: postgres
       PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
+
+  # Server-side api: admin user management and email verification codes.
+  # Holds SERVICE_ROLE_KEY and the SMTP password; nginx proxies /api/admin and /api/otp here.
+  api:
+    build: ./api
+    container_name: supabase-api-lms
+    restart: always
+    ports:
+      - 127.0.0.1:${API_PORT:-54474}:8787
+    environment:
+      SUPABASE_URL: http://kong:8000
+      SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      OTP_SECRET: ${OTP_SECRET}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Кваліфікаційний центр КЗ «ЗОІППО» ЗОР}
+    depends_on:
+      - kong

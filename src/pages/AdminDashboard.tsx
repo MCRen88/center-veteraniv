@@ -1,7 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAppContext, type Role, type Question, type Case, type RegistryItem, type Application } from '../context/AppContext';
+import { useAppContext, type Role, type Question, type Case, type RegistryItem, type Application, type User, type TestScore } from '../context/AppContext';
+import type { SignatureDetails, UploadedDocument } from '../lib/database.types';
+import type { QuestionResult } from '../utils/testAnalytics';
+import { generatePassword } from '../utils/password';
 import forge from 'node-forge';
+import {
+  type DocumentItem,
+  getDocumentDataUrl,
+  downloadDocument,
+  openPdfPreview,
+  printCertificate,
+  printOfficialApplication,
+  printDiagnosticReport
+} from './admin/printDocuments';
+import { VisitsTab } from './admin/VisitsTab';
+import { AnalyticsTab } from './admin/AnalyticsTab';
+import { getBehaviorProfile } from '../utils/testAnalytics';
+import { supabase } from '../lib/supabase';
 
 
 export const AdminDashboard: React.FC = () => {
@@ -23,10 +39,10 @@ export const AdminDashboard: React.FC = () => {
     addRegistryItem,
     updateRegistryItem,
     deleteRegistryItem,
-    fetchVisitsData
+    fetchVisitsData,
+    loadApplicationDetails
   } = useAppContext();
   const navigate = useNavigate();
-  console.log('AdminDashboard: state.cases length =', state.cases ? state.cases.length : 'undefined');
   const [activeTab, setActiveTab] = useState<'users' | 'visits' | 'applications' | 'tests' | 'registry' | 'analytics'>('users');
   const [testsSubTab, setTestsSubTab] = useState<'questions' | 'cases'>('questions');
 
@@ -119,17 +135,18 @@ export const AdminDashboard: React.FC = () => {
   };
   
   // Selected user for details modal
-  const [selectedUser, setSelectedUser] = useState<any | null>(null);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
   // User Analytics view state
   const [viewingUserAnalyticsId, setViewingUserAnalyticsId] = useState<string | null>(null);
   const [selectedAttemptId, setSelectedAttemptId] = useState<string | null>(null);
 
   // Selected application for details modal
-  const [selectedApp, setSelectedApp] = useState<any | null>(null);
+  const [selectedApp, setSelectedApp] = useState<Application | null>(null);
 
   // Selected test score for analysis modal
-  const [selectedScore, setSelectedScore] = useState<any | null>(null);
+  const [selectedScore, setSelectedScore] = useState<TestScore | null>(null);
+  const selectedProfile = getBehaviorProfile(selectedScore?.details);
 
   const formatTime = (seconds: number) => {
     if (!seconds && seconds !== 0) return '-';
@@ -189,7 +206,7 @@ export const AdminDashboard: React.FC = () => {
       catName: q.catName,
       question: q.question,
       options: [...q.options],
-      correct: q.correct,
+      correct: q.correct ?? 0,
       explanation: q.explanation || ''
     });
     setIsQuestionModalOpen(true);
@@ -231,14 +248,14 @@ export const AdminDashboard: React.FC = () => {
     setEditingQuestion(null);
   };
 
-  const handleApproveApp = async (app: any) => {
+  const handleApproveApp = async (app: Application) => {
     if (confirm(`Схвалити заяву ${app.app_number}?`)) {
       await updateApplicationStatus(app.id, 'approved');
       if (confirm(`Заяву схвалено! Бажаєте перейти до створення користувача для ${app.fname} ${app.lname}?`)) {
         setNewUser({
           name: `${app.lname} ${app.fname} ${app.mname || ''}`.trim(),
           email: app.email,
-          password: Math.random().toString(36).slice(-8),
+          password: generatePassword(),
           role: 'user'
         });
         setActiveTab('users');
@@ -288,7 +305,7 @@ export const AdminDashboard: React.FC = () => {
   const [roleFilter, setRoleFilter] = useState<string>('all');
 
   // Edit Modal State
-  const [editingUser, setEditingUser] = useState<any | null>(null);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editForm, setEditForm] = useState({
     name: '',
     email: '',
@@ -313,38 +330,34 @@ export const AdminDashboard: React.FC = () => {
   });
 
   // Visits & Online Monitoring States
-  const [visitsSearchTerm, setVisitsSearchTerm] = useState('');
-  const [visitsRoleFilter, setVisitsRoleFilter] = useState('all');
-  const [visitsPeriodFilter, setVisitsPeriodFilter] = useState('7days');
-  const [visitsActionFilter, setVisitsActionFilter] = useState('all');
-  const [visitsPage, setVisitsPage] = useState(1);
-  const [visitsPerPage, setVisitsPerPage] = useState(20);
-  const [onlineFilter, setOnlineFilter] = useState<'all' | 'users' | 'guests'>('all');
   const [autoRefreshOnline, setAutoRefreshOnline] = useState(true);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(new Date());
-  const [isRefreshingVisits, setIsRefreshingVisits] = useState(false);
 
   const handleRefreshVisits = async () => {
-    setIsRefreshingVisits(true);
     await fetchVisitsData();
     setLastRefreshedAt(new Date());
-    setIsRefreshingVisits(false);
   };
+
+  // Render-time clock for "online" / "time ago" labels, refreshed with the polling below.
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   useEffect(() => {
     fetchVisitsData();
     const interval = setInterval(() => {
+      setNowMs(Date.now());
       if (autoRefreshOnline && document.visibilityState === 'visible') {
         fetchVisitsData();
         setLastRefreshedAt(new Date());
       }
     }, 15000);
     return () => clearInterval(interval);
+    // fetchVisitsData is recreated on every provider render; the interval must not restart for that.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoRefreshOnline]);
 
   const timeAgo = (dateStr?: string | null) => {
     if (!dateStr) return 'Невідомо';
-    const diffSec = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+    const diffSec = Math.floor((nowMs - new Date(dateStr).getTime()) / 1000);
     if (diffSec < 15) return 'Щойно';
     if (diffSec < 60) return `${diffSec} сек тому`;
     const diffMin = Math.floor(diffSec / 60);
@@ -356,236 +369,52 @@ export const AdminDashboard: React.FC = () => {
     return new Date(dateStr).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
-  const formatSessionDuration = (startStr?: string | null, lastSeenStr?: string | null) => {
-    if (!startStr) return '-';
-    const start = new Date(startStr).getTime();
-    const end = lastSeenStr ? new Date(lastSeenStr).getTime() : Date.now();
-    const diffSec = Math.max(0, Math.floor((end - start) / 1000));
-    const m = Math.floor(diffSec / 60);
-    const s = diffSec % 60;
-    if (m === 0) return `${s} с`;
-    return `${m} хв ${s} с`;
-  };
-
-  const exportVisitsToCsv = (items: any[]) => {
-    const headers = ['ID', 'Час події', 'ПІБ', 'Email', 'Роль', 'Подія', 'Сторінка', 'Браузер', 'ОС', 'Пристрій', 'Останній контакт'];
-    const rows = items.map(v => [
-      v.id || '',
-      v.created_at ? new Date(v.created_at).toLocaleString('uk-UA') : '',
-      `"${(v.user_name || 'Гість').replace(/"/g, '""')}"`,
-      `"${(v.user_email || '').replace(/"/g, '""')}"`,
-      v.user_role || 'guest',
-      v.action || 'visit',
-      `"${(v.path || '').replace(/"/g, '""')}"`,
-      `"${(v.browser || '').replace(/"/g, '""')}"`,
-      `"${(v.os || '').replace(/"/g, '""')}"`,
-      v.device_type || 'Desktop',
-      v.last_seen_at ? new Date(v.last_seen_at).toLocaleString('uk-UA') : ''
-    ]);
-    
-    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `lms_visits_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   // Document preview & download states
-  const [previewDoc, setPreviewDoc] = useState<{ name: string; dataUrl?: string; type?: string; category?: string; size?: string } | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<DocumentItem | null>(null);
 
-  const getDocumentDataUrl = (item: { name: string; dataUrl?: string; type?: string; category?: string; size?: string }): string => {
-    if (item.dataUrl && item.dataUrl.startsWith('data:')) {
-      return item.dataUrl;
-    }
+  const MISSING_FILE = 'Вміст файлу відсутній: заявник його не завантажив або файл не вдалося прочитати.';
 
-    try {
-      const canvas = document.createElement('canvas');
-      canvas.width = 1200;
-      canvas.height = 1600;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return '';
-
-      // Білий фон
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // Рамка документа
-      ctx.strokeStyle = '#0f3460';
-      ctx.lineWidth = 8;
-      ctx.strokeRect(30, 30, canvas.width - 60, canvas.height - 60);
-
-      ctx.strokeStyle = '#e2e8f0';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(40, 40, canvas.width - 80, canvas.height - 80);
-
-      // Шапка
-      ctx.fillStyle = '#0f3460';
-      ctx.font = 'bold 36px Arial, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('КВАЛІФІКАЦІЙНИЙ ЦЕНТР', canvas.width / 2, 110);
-
-      ctx.fillStyle = '#475569';
-      ctx.font = '24px Arial, sans-serif';
-      ctx.fillText('КЗ «Запорізький обласний інститут післядипломної педагогічної освіти» ЗОР', canvas.width / 2, 155);
-      ctx.font = '20px Arial, sans-serif';
-      ctx.fillText('Центр оцінювання і визнання результатів навчання', canvas.width / 2, 195);
-
-      // Розділювальна лінія
-      ctx.beginPath();
-      ctx.moveTo(80, 230);
-      ctx.lineTo(canvas.width - 80, 230);
-      ctx.strokeStyle = '#0f3460';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-
-      // Заголовок документа
-      ctx.fillStyle = '#1e293b';
-      ctx.font = 'bold 36px Arial, sans-serif';
-      ctx.fillText('ЕЛЕКТРОННА СКАН-КОПІЯ ДОКУМЕНТА', canvas.width / 2, 310);
-
-      ctx.fillStyle = '#16a34a';
-      ctx.font = 'bold 22px Arial, sans-serif';
-      ctx.fillText('✓ ЗАСВІДЧЕНО КВАЛІФІКОВАНИМ ЕЛЕКТРОННИМ ПІДПИСОМ (КЕП)', canvas.width / 2, 360);
-
-      // Картка з інформацією про файл
-      ctx.fillStyle = '#f8fafc';
-      ctx.fillRect(100, 420, canvas.width - 200, 500);
-      ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(100, 420, canvas.width - 200, 500);
-
-      ctx.textAlign = 'left';
-      ctx.fillStyle = '#64748b';
-      ctx.font = '24px Arial, sans-serif';
-      ctx.fillText('Назва файлу:', 140, 480);
-      ctx.fillStyle = '#0f3460';
-      ctx.font = 'bold 28px Arial, sans-serif';
-      ctx.fillText(item.name || 'document.jpg', 400, 480);
-
-      ctx.fillStyle = '#64748b';
-      ctx.font = '24px Arial, sans-serif';
-      ctx.fillText('Категорія:', 140, 550);
-      ctx.fillStyle = '#1e293b';
-      ctx.font = 'bold 26px Arial, sans-serif';
-      ctx.fillText(item.category || 'Документ здобувача', 400, 550);
-
-      ctx.fillStyle = '#64748b';
-      ctx.font = '24px Arial, sans-serif';
-      ctx.fillText('Розмір файлу:', 140, 620);
-      ctx.fillStyle = '#1e293b';
-      ctx.font = 'bold 26px Arial, sans-serif';
-      ctx.fillText(item.size || 'Електронний документ', 400, 620);
-
-      const fullName = selectedApp ? `${selectedApp.lname} ${selectedApp.fname} ${selectedApp.mname || ''}`.trim() : 'Здобувач';
-      ctx.fillStyle = '#64748b';
-      ctx.font = '24px Arial, sans-serif';
-      ctx.fillText('Здобувач (ПІБ):', 140, 690);
-      ctx.fillStyle = '#1e293b';
-      ctx.font = 'bold 26px Arial, sans-serif';
-      ctx.fillText(fullName, 400, 690);
-
-      ctx.fillStyle = '#64748b';
-      ctx.font = '24px Arial, sans-serif';
-      ctx.fillText('Заява №:', 140, 760);
-      ctx.fillStyle = '#0f3460';
-      ctx.font = 'bold 26px Arial, sans-serif';
-      ctx.fillText(selectedApp?.app_number || 'ЗЯ-2026', 400, 760);
-
-      ctx.fillStyle = '#64748b';
-      ctx.font = '24px Arial, sans-serif';
-      ctx.fillText('Дата подачі:', 140, 830);
-      ctx.fillStyle = '#1e293b';
-      ctx.font = 'bold 26px Arial, sans-serif';
-      const dateStr = selectedApp?.created_at ? new Date(selectedApp.created_at).toLocaleString('uk-UA') : new Date().toLocaleDateString('uk-UA');
-      ctx.fillText(dateStr, 400, 830);
-
-      // Штамп КЕП
-      ctx.fillStyle = '#f0fdf4';
-      ctx.fillRect(100, 970, canvas.width - 200, 320);
-      ctx.strokeStyle = '#16a34a';
-      ctx.lineWidth = 3;
-      ctx.strokeRect(100, 970, canvas.width - 200, 320);
-
-      ctx.fillStyle = '#166534';
-      ctx.font = 'bold 26px Arial, sans-serif';
-      ctx.fillText('🛡️ КВАЛІФІКОВАНИЙ ЕЛЕКТРОННИЙ ПІДПИС НАКЛАДЕНО', 140, 1030);
-
-      ctx.fillStyle = '#374151';
-      ctx.font = '22px Arial, sans-serif';
-      ctx.fillText(`Підписувач: ${fullName}`, 140, 1085);
-      ctx.fillText(`РНОКПП (ДРФО): ${selectedApp?.passport ? selectedApp.passport : '001234567'}`, 140, 1135);
-      ctx.fillText(`Кваліфікований надавач: АЦСК АТ КБ «ПРИВАТБАНК»`, 140, 1185);
-      ctx.fillText(`Статус сертифіката: Чинний, підтверджено сервером кваліфікаційного центру`, 140, 1235);
-
-      // Нижній футер
-      ctx.fillStyle = '#94a3b8';
-      ctx.font = '18px Arial, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('Документ має повну юридичну силу згідно Закону України «Про електронні довірчі послуги»', canvas.width / 2, 1470);
-      ctx.fillText('Кваліфікаційний центр КЗ «ЗОІППО» ЗОР • orgmetodcentr@zoippo.net.ua', canvas.width / 2, 1505);
-
-      return canvas.toDataURL('image/jpeg', 0.95);
-    } catch {
-      return '';
-    }
+  const handleDownloadDoc = (item: DocumentItem) => {
+    if (!downloadDocument(item)) alert(MISSING_FILE);
   };
 
-  const handleDownloadDoc = (item: { name: string; dataUrl?: string; type?: string; category?: string; size?: string }) => {
-    const dataUrl = getDocumentDataUrl(item);
-    if (dataUrl && dataUrl.startsWith('data:')) {
-      const fileName = item.name.toLowerCase().endsWith('.jpg') || item.name.toLowerCase().endsWith('.jpeg') || item.name.toLowerCase().endsWith('.png') || item.name.toLowerCase().endsWith('.pdf')
-        ? item.name
-        : `${item.name}.jpg`;
-
-      const link = document.createElement('a');
-      link.href = dataUrl;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-  };
-
-  const handlePreviewDoc = (item: { name: string; dataUrl?: string; type?: string; category?: string; size?: string }) => {
+  const handlePreviewDoc = (item: DocumentItem) => {
     const effectiveDataUrl = getDocumentDataUrl(item);
+    if (!effectiveDataUrl) {
+      alert(MISSING_FILE);
+      return;
+    }
     const updatedItem = {
       ...item,
       dataUrl: effectiveDataUrl
     };
 
     if (effectiveDataUrl && effectiveDataUrl.startsWith('data:application/pdf')) {
-      const pdfWindow = window.open('');
-      if (pdfWindow) {
-        pdfWindow.document.write(`
-          <html><head><title>${item.name}</title></head>
-          <body style="margin:0;padding:0;background:#333;">
-            <iframe src="${effectiveDataUrl}" style="width:100vw;height:100vh;border:none;"></iframe>
-          </body></html>
-        `);
+      if (openPdfPreview(item.name, effectiveDataUrl)) {
         return;
       }
     }
     setPreviewDoc(updatedItem);
   };
 
-  const generateCertNumber = () => {
-    const year = new Date().getFullYear();
-    const randomId = Math.floor(Math.random() * 9000) + 1000;
-    return `СС 02136146/${String(randomId).padStart(6, '0')}-${year.toString().slice(-2)}`;
+  // Numbers come from a database sequence, so two certificates never share one.
+  const generateCertNumber = async (): Promise<string> => {
+    const { data, error } = await supabase.rpc('next_certificate_number');
+    if (error || typeof data !== 'string') {
+      alert('Не вдалося отримати номер сертифіката: ' + (error?.message || 'невідома помилка'));
+      return '';
+    }
+    return data;
   };
 
-  const startAddCert = (defaultName?: string | React.MouseEvent) => {
+  const startAddCert = async (defaultName?: string | React.MouseEvent) => {
     const name = typeof defaultName === 'string' ? defaultName : '';
     setEditingCert(null);
     setCertModalMode('create');
     setCertForm({
       name,
       title: 'Фахівець із супроводу ветеранів війни та демобілізованих осіб',
-      cert: generateCertNumber(),
+      cert: await generateCertNumber(),
       date: new Date().toLocaleDateString('uk-UA')
     });
     setIsCertModalOpen(true);
@@ -603,13 +432,13 @@ export const AdminDashboard: React.FC = () => {
     setIsCertModalOpen(true);
   };
 
-  const startReissueCert = (item: RegistryItem) => {
+  const startReissueCert = async (item: RegistryItem) => {
     setEditingCert(item);
     setCertModalMode('reissue');
     setCertForm({
       name: item.name,
       title: item.title,
-      cert: generateCertNumber(),
+      cert: await generateCertNumber(),
       date: new Date().toLocaleDateString('uk-UA')
     });
     setIsCertModalOpen(true);
@@ -664,210 +493,7 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const handlePrintCert = (item: RegistryItem) => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      alert("Не вдалося відкрити вікно друку. Будь ласка, дозвольте спливаючі вікна для цього сайту.");
-      return;
-    }
-
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html lang="uk">
-      <head>
-        <meta charset="UTF-8">
-        <title>Сертифікат — ${item.name} (${item.cert})</title>
-        <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-        <style>
-          @page {
-            size: A4 landscape;
-            margin: 10mm;
-          }
-          body {
-            font-family: 'Roboto', sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 95vh;
-            margin: 0;
-            background: #f8fafc;
-            padding: 20px;
-          }
-          .cert-border {
-            background: #fff;
-            border: 12px double #0f3460;
-            border-radius: 8px;
-            padding: 40px 60px;
-            text-align: center;
-            width: 900px;
-            position: relative;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-          }
-          .cert-watermark {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            opacity: 0.04;
-            font-size: 160px;
-            color: #0f3460;
-            font-family: 'Comfortaa', cursive;
-            z-index: 0;
-            pointer-events: none;
-            font-weight: bold;
-          }
-          .cert-header {
-            position: relative;
-            z-index: 1;
-            border-bottom: 2px solid #e2e8f0;
-            padding-bottom: 15px;
-            margin-bottom: 25px;
-          }
-          .inst-title {
-            font-size: 12pt;
-            font-weight: 700;
-            color: #1e293b;
-            text-transform: uppercase;
-            line-height: 1.3;
-          }
-          .inst-sub {
-            font-size: 10pt;
-            color: #64748b;
-            margin-top: 4px;
-          }
-          .cert-title {
-            font-family: 'Comfortaa', cursive;
-            font-size: 38px;
-            font-weight: 700;
-            color: #0f3460;
-            letter-spacing: 4px;
-            margin: 15px 0 5px 0;
-            position: relative;
-            z-index: 1;
-          }
-          .cert-subtitle {
-            font-size: 14pt;
-            color: #475569;
-            font-style: italic;
-            margin-bottom: 25px;
-            position: relative;
-            z-index: 1;
-          }
-          .cert-name {
-            font-family: 'Comfortaa', cursive;
-            font-size: 32px;
-            font-weight: 700;
-            color: #1e3a8a;
-            margin: 20px 0;
-            padding: 8px 20px;
-            border-bottom: 2px solid #2563eb;
-            display: inline-block;
-            position: relative;
-            z-index: 1;
-          }
-          .cert-body {
-            font-size: 13pt;
-            line-height: 1.6;
-            color: #334155;
-            margin-bottom: 35px;
-            position: relative;
-            z-index: 1;
-          }
-          .cert-meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-            border-top: 1px solid #e2e8f0;
-            padding-top: 20px;
-            position: relative;
-            z-index: 1;
-            font-size: 11pt;
-          }
-          .cert-stamp {
-            border: 2px dashed #0f3460;
-            border-radius: 50%;
-            width: 90px;
-            height: 90px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 9pt;
-            color: #0f3460;
-            font-weight: bold;
-            text-align: center;
-            opacity: 0.7;
-          }
-          .print-btn-bar {
-            position: fixed;
-            top: 15px;
-            right: 15px;
-            z-index: 999;
-          }
-          .btn-print {
-            background: #2563eb;
-            color: #fff;
-            border: none;
-            padding: 10px 22px;
-            font-size: 14px;
-            font-weight: bold;
-            border-radius: 6px;
-            cursor: pointer;
-            box-shadow: 0 4px 12px rgba(37,99,235,0.3);
-          }
-          @media print {
-            .print-btn-bar { display: none; }
-            body { padding: 0; background: #fff; }
-            .cert-border { box-shadow: none; border-color: #000; }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="print-btn-bar">
-          <button class="btn-print" onclick="window.print()">🖨️ Роздрукувати / Зберегти як PDF</button>
-        </div>
-
-        <div class="cert-border">
-          <div class="cert-watermark">ЗОІППО</div>
-          <div class="cert-header">
-            <div class="inst-title">Комунальний заклад «Запорізький обласний інститут післядипломної педагогічної освіти»<br/>Запорізької обласної ради</div>
-            <div class="inst-sub">Кваліфікаційний центр оцінювання і визнання результатів навчання</div>
-          </div>
-
-          <div class="cert-title">СЕРТИФІКАТ</div>
-          <div class="cert-subtitle">про присвоєння / підтвердження професійної кваліфікації</div>
-
-          <div class="cert-body">
-            Цим засвідчується, що
-            <div><span class="cert-name">${item.name}</span></div>
-            успішно пройшов(ла) процедуру кваліфікаційного оцінювання та підтвердив(ла) професійну кваліфікацію:
-            <div style="font-weight: 700; font-size: 15pt; color: #0f3460; margin-top: 8px;">
-              «${item.title}»
-            </div>
-          </div>
-
-          <div class="cert-meta">
-            <div style="text-align: left;">
-              <div><strong>Реєстраційний номер:</strong> <span style="font-family: monospace; font-size: 12pt;">${item.cert}</span></div>
-              <div style="margin-top: 4px;"><strong>Дата видачі:</strong> ${item.date}</div>
-              <div style="margin-top: 4px; font-size: 9.5pt; color: #64748b;">Внесено до Єдиного реєстру кваліфікованих фахівців</div>
-            </div>
-
-            <div class="cert-stamp">
-              М. П.<br/>Кваліфікаційний<br/>центр
-            </div>
-
-            <div style="text-align: right;">
-              <div><strong>Голова кваліфікаційної комісії</strong></div>
-              <div style="margin-top: 25px; border-top: 1px solid #475569; width: 180px; display: inline-block; font-size: 9.5pt; color: #64748b; padding-top: 2px;">(підпис, ініціали та прізвище)</div>
-            </div>
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
-
-    printWindow.document.open();
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
+    printCertificate(item);
   };
 
   const currentUser = state.currentUser;
@@ -907,7 +533,7 @@ export const AdminDashboard: React.FC = () => {
     alert("Користувача створено успішно!");
   };
 
-  const startEdit = (user: any) => {
+  const startEdit = (user: User) => {
     setEditingUser(user);
     setEditForm({
       name: user.name,
@@ -930,415 +556,6 @@ export const AdminDashboard: React.FC = () => {
     });
     setEditingUser(null);
     alert("Дані користувача успішно оновлено!");
-  };
-
-  const printOfficialApplication = (app: any) => {
-    if (!app) return;
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-
-    const fullName = `${app.lname} ${app.fname} ${app.mname || ''}`.trim();
-    const appDate = app.created_at ? new Date(app.created_at).toLocaleDateString('uk-UA') : new Date().toLocaleDateString('uk-UA');
-    const birthDate = app.birthdate ? new Date(app.birthdate).toLocaleDateString('uk-UA') : '—';
-    
-    let sig: any = null;
-    if (app.signature_details) {
-      if (typeof app.signature_details === 'string') {
-        try { sig = JSON.parse(app.signature_details); } catch(e) {}
-      } else {
-        sig = app.signature_details;
-      }
-    }
-
-    const signerName = sig?.certificateDetails?.subject?.CN || sig?.signerName || fullName;
-    const signerDrfo = sig?.certificateDetails?.subject?.serialNumber || sig?.signerDrfo || '—';
-    const signerIssuer = sig?.certificateDetails?.issuer?.CN || sig?.issuer || 'Акредитований надавач електронних довірчих послуг';
-    const signTime = sig?.timestamp || appDate;
-
-    const uploadedDocs = sig?.uploaded_documents || {};
-    const hasOtherDocs = uploadedDocs.other && uploadedDocs.other.length > 0;
-
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html lang="uk">
-      <head>
-        <meta charset="UTF-8">
-        <title>Заява про присвоєння та/або підтвердження професійної кваліфікації — ${fullName}</title>
-        <style>
-          @page {
-            size: A4 portrait;
-            margin: 0;
-          }
-          body {
-            font-family: 'Times New Roman', Times, serif;
-            font-size: 12.5pt;
-            line-height: 1.35;
-            color: #000;
-            background: #fff;
-            margin: 0;
-            padding: 12mm 15mm 12mm 20mm;
-            box-sizing: border-box;
-          }
-          .top-center-header {
-            text-align: center;
-            font-size: 11pt;
-            line-height: 1.35;
-            border-bottom: 1.5px solid #0f3460;
-            padding-bottom: 8px;
-            margin-bottom: 15px;
-          }
-          .top-center-header strong {
-            font-size: 12.5pt;
-            letter-spacing: 0.5px;
-          }
-          .app-recipient-block {
-            width: 320px;
-            margin-left: auto;
-            font-size: 11pt;
-            line-height: 1.35;
-            margin-bottom: 15px;
-          }
-          .doc-title {
-            text-align: center;
-            margin: 15px 0 10px;
-          }
-          .doc-title h1 {
-            font-size: 15pt;
-            font-weight: bold;
-            letter-spacing: 2px;
-            margin: 0 0 4px 0;
-          }
-          .doc-title p {
-            font-size: 11pt;
-            font-style: italic;
-            margin: 0;
-          }
-          .body-text {
-            text-align: justify;
-            text-indent: 30px;
-            margin-bottom: 10px;
-            font-size: 12pt;
-            line-height: 1.4;
-          }
-          .details-list {
-            margin: 6px 0 10px 0;
-            padding-left: 25px;
-            font-size: 11.5pt;
-          }
-          .details-list li {
-            margin-bottom: 3px;
-          }
-          .doc-checklist {
-            list-style: none;
-            padding-left: 5px;
-            margin: 6px 0 10px 0;
-            font-size: 11.5pt;
-          }
-          .doc-checklist li {
-            margin-bottom: 4px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-          }
-          .check-box {
-            font-size: 13pt;
-            font-weight: bold;
-            color: #0f3460;
-          }
-          .stamp-container {
-            margin-top: 15px;
-            display: flex;
-            justify-content: flex-end;
-          }
-          .kep-stamp {
-            border: 2px solid #0f3460;
-            border-radius: 6px;
-            padding: 8px 12px;
-            background: #f8fafc;
-            width: 280px;
-            font-size: 9pt;
-            line-height: 1.25;
-          }
-          .kep-stamp-header {
-            font-weight: bold;
-            color: #0f3460;
-            border-bottom: 1px solid #cbd5e1;
-            padding-bottom: 3px;
-            margin-bottom: 4px;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-          }
-          .kep-table {
-            width: 100%;
-            border-collapse: collapse;
-          }
-          .kep-table td {
-            padding: 1px 0;
-            vertical-align: top;
-          }
-          .kep-label {
-            color: #64748b;
-            width: 90px;
-          }
-          .kep-val {
-            font-weight: bold;
-            color: #1e293b;
-          }
-          .print-btn-bar {
-            position: fixed;
-            top: 15px;
-            right: 15px;
-            z-index: 999;
-          }
-          .btn-print {
-            background: #2563eb;
-            color: #fff;
-            border: none;
-            padding: 10px 20px;
-            font-size: 14px;
-            font-weight: bold;
-            border-radius: 6px;
-            cursor: pointer;
-            box-shadow: 0 4px 12px rgba(37,99,235,0.3);
-          }
-          @media print {
-            .print-btn-bar { display: none; }
-            body { padding: 12mm 15mm 12mm 20mm; }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="print-btn-bar">
-          <button class="btn-print" onclick="window.print()">🖨️ Роздрукувати / Зберегти як PDF</button>
-        </div>
-
-        <div class="top-center-header">
-          <strong>КВАЛІФІКАЦІЙНИЙ ЦЕНТР</strong><br/>
-          КЗ «Запорізький обласний інститут післядипломної педагогічної освіти» ЗОР<br/>
-          <span style="font-size: 9.5pt; color: #444;">вул. Незалежної України, 57-А, м. Запоріжжя, 69035</span>
-        </div>
-
-        <div class="app-recipient-block">
-          <strong>Керівнику Кваліфікаційного центру</strong><br/>
-          <strong>від:</strong> ${fullName}<br/>
-          <strong>Дата народження:</strong> ${birthDate}<br/>
-          <strong>Паспорт / ID:</strong> ${app.passport || 'Вказано при реєстрації'}<br/>
-          <strong>Телефон:</strong> ${app.phone}<br/>
-          <strong>E-mail:</strong> ${app.email}
-        </div>
-
-        <div class="doc-title">
-          <h1>З А Я В А</h1>
-          <p>про присвоєння та/або підтвердження професійної кваліфікації</p>
-          <div style="font-size: 10.5pt; margin-top: 4px; font-weight: bold;">Реєстраційний № ${app.app_number} від ${appDate}</div>
-        </div>
-
-        <div class="body-text">
-          Прошу допустити мене до проходження процедури присвоєння та/або підтвердження професійної кваліфікації <strong>«Фахівець із супроводу ветеранів війни та демобілізованих осіб»</strong> (рівень кваліфікації: <strong>${app.level}</strong>) відповідно до вимог професійного стандарту.
-        </div>
-
-        <div style="margin-top: 8px; font-size: 11.5pt;">
-          <strong>Відомості про здобувача:</strong>
-          <ul class="details-list">
-            <li>Рівень вищої освіти: <strong>${app.education}</strong></li>
-            <li>Стаж роботи: <strong>${app.experience} р.</strong></li>
-            <li>Згода на збір та обробку персональних даних: <strong>Надано згідно з вимогами Закону України «Про захист персональних даних»</strong></li>
-          </ul>
-        </div>
-
-        <div style="margin-top: 8px; font-size: 11.5pt;">
-          <strong>До заяви додано документи в електронній формі:</strong>
-          <ul class="doc-checklist">
-            <li><span class="check-box">☑</span> Копія паспорта громадянина України / ID-картки</li>
-            <li><span class="check-box">☑</span> Копія документа про вищу освіту з додатком</li>
-            <li><span class="check-box">☑</span> Документи, що підтверджують досвід та стаж роботи</li>
-            ${hasOtherDocs ? `<li><span class="check-box">☑</span> Інші додаткові документи</li>` : ''}
-            <li><span class="check-box">☑</span> Згода на збір та обробку персональних даних від ${appDate}</li>
-          </ul>
-        </div>
-
-        <div class="body-text" style="font-size: 11pt; margin-top: 10px;">
-          Засвідчую вірність внесених відомостей та відповідність доданих електронних копій оригіналам документів. Мені відомо про відповідальність за надання недостовірних даних.
-        </div>
-
-        <div class="stamp-container">
-          <div class="kep-stamp">
-            <div class="kep-stamp-header">
-              <span>🛡️</span> КВАЛІФІКОВАНИЙ ЕЛЕКТРОННИЙ ПІДПИС
-            </div>
-            <table class="kep-table">
-              <tr>
-                <td class="kep-label">Підписувач:</td>
-                <td class="kep-val">${signerName}</td>
-              </tr>
-              <tr>
-                <td class="kep-label">РНОКПП (ДРФО):</td>
-                <td class="kep-val">${signerDrfo}</td>
-              </tr>
-              <tr>
-                <td class="kep-label">АЦСК (Надавач):</td>
-                <td class="kep-val">${signerIssuer}</td>
-              </tr>
-              <tr>
-                <td class="kep-label">Мітка часу:</td>
-                <td class="kep-val">${signTime}</td>
-              </tr>
-              <tr>
-                <td class="kep-label">Статус:</td>
-                <td class="kep-val" style="color: #16a34a;">Дійсний (перевірено в реєстрі)</td>
-              </tr>
-            </table>
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
-
-    printWindow.document.open();
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-  };
-
-  const printDiagnosticReport = (user: any, score: any) => {
-    if (!user || !score) return;
-    const percentage = Math.round((score.score / score.total) * 100);
-    const date = new Date(score.created_at).toLocaleString('uk-UA');
-    const details = score.details;
-    const behavior = details?.behaviorProfile;
-
-    const reportWindow = window.open('', '_blank');
-    if (reportWindow) {
-      reportWindow.document.write(`
-        <html><head><title>Діагностичний звіт: ${user.name}</title>
-        <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-        <style>
-          body { font-family: 'Roboto', sans-serif; padding: 40px; color: #2c3e50; line-height: 1.5; background: #fff; }
-          .header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid #34495e; padding-bottom: 20px; }
-          .title { font-family: 'Comfortaa', sans-serif; font-size: 26px; color: #2c3e50; font-weight: bold; margin-bottom: 10px; }
-          .subtitle { font-size: 16px; color: #7f8c8d; text-transform: uppercase; letter-spacing: 1px; }
-          .meta-section { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; background: #f8f9fa; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; }
-          .meta-item { font-size: 14px; }
-          .meta-item strong { color: #2c3e50; }
-          .section-title { font-family: 'Comfortaa', sans-serif; font-size: 20px; color: #2c3e50; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin: 30px 0 15px; }
-          .badge { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; color: #fff; }
-          .badge.passed { background-color: #2ecc71; }
-          .badge.failed { background-color: #e74c3c; }
-          .table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
-          .table th, .table td { padding: 10px; text-align: left; border-bottom: 1px solid #e2e8f0; }
-          .table th { background-color: #f8f9fa; color: #2c3e50; font-weight: bold; }
-          .portrait-box { background: #fafdff; border-left: 5px solid #3498db; padding: 20px; border-radius: 4px; margin-bottom: 25px; }
-          .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-          .bullet-list { padding-left: 20px; margin: 0; }
-          .bullet-list li { margin-bottom: 5px; }
-          @media print {
-            body { padding: 0; }
-            .no-print { display: none; }
-          }
-        </style>
-        </head><body>
-          <div class="header">
-            <div class="title">ДІАГНОСТИЧНИЙ ЗВІТ КАНДИДАТА</div>
-            <div class="subtitle">Результати оцінювання професійних знань</div>
-          </div>
-          
-          <div class="meta-section">
-            <div class="meta-item">
-              <strong>Кандидат:</strong> ${user.name}<br/>
-              <strong>Email:</strong> ${user.email}<br/>
-              <strong>ID:</strong> ${user.id}
-            </div>
-            <div class="meta-item">
-              <strong>Дата тестування:</strong> ${date}<br/>
-              <strong>Режим:</strong> ${score.mode === 'exam' ? '🎯 Екзамен' : '📝 Тренування'}<br/>
-              <strong>Оцінка:</strong> ${score.score} з ${score.total} (${percentage}%) &nbsp;
-              <span class="badge ${score.passed ? 'passed' : 'failed'}">${score.passed ? 'Складено' : 'Не складено'}</span>
-            </div>
-          </div>
-
-          <div class="section-title">🧠 Психометричний портрет та поведінковий профіль</div>
-          ${behavior ? `
-            <div class="portrait-box">
-              <p><strong>Манера відповідей:</strong> ${behavior.style} | <strong>Впевненість:</strong> ${behavior.confidence} | <strong>Темп:</strong> ${behavior.speedCategory}</p>
-              <p style="margin-top: 10px;">${behavior.description}</p>
-            </div>
-            <div class="grid-2">
-              <div>
-                <strong style="color: #27ae60;">✓ Сильні сторони:</strong>
-                <ul class="bullet-list" style="margin-top: 8px;">
-                  ${behavior.strengths?.map((s: string) => `<li>${s}</li>`).join('') || '<li>Немає даних</li>'}
-                </ul>
-              </div>
-              <div>
-                <strong style="color: #c0392b;">✗ Зони ризику / Слабкості:</strong>
-                <ul class="bullet-list" style="margin-top: 8px;">
-                  ${behavior.weaknesses?.map((w: string) => `<li>${w}</li>`).join('') || '<li>Немає даних</li>'}
-                </ul>
-              </div>
-            </div>
-            <div style="margin-top: 20px; background: #f0f7ff; padding: 15px; border-radius: 6px; border-left: 4px solid #3498db;">
-              <strong>🔮 Прогноз професійної успішності:</strong>
-              <p style="margin: 5px 0 0; font-size: 13px;">${behavior.forecast}</p>
-            </div>
-            <div style="margin-top: 15px; background: #f4fbf7; padding: 15px; border-radius: 6px; border-left: 4px solid #2ecc71;">
-              <strong>💡 Рекомендації для кандидата:</strong>
-              <p style="margin: 5px 0 0; font-size: 13px;">${behavior.recommendations}</p>
-            </div>
-          ` : `
-            <p class="text-muted">Дані психометричного аналізу відсутні для цієї спроби.</p>
-          `}
-
-          <div class="section-title">📊 Аналіз успішності за трудовими функціями</div>
-          <table class="table">
-            <thead>
-              <tr>
-                <th>Код</th>
-                <th>Трудова функція</th>
-                <th style="text-align: center;">Результат</th>
-                <th style="text-align: center;">Успішність (%)</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${(() => {
-                const catStats: { [key: string]: { correct: number; total: number; name: string } } = {};
-                if (details && details.questions) {
-                  details.questions.forEach((q: any) => {
-                    const catId = q.catId || q.catName?.split('.')[0] || 'Інше';
-                    const catName = q.catName || 'Інша категорія';
-                    if (!catStats[catId]) {
-                      catStats[catId] = { correct: 0, total: 0, name: catName };
-                    }
-                    catStats[catId].total++;
-                    if (q.selected === q.correct) {
-                      catStats[catId].correct++;
-                    }
-                  });
-                }
-                const sortedKeys = Object.keys(catStats).sort();
-                if (sortedKeys.length === 0) return '<tr><td colspan="4" style="text-align:center;">Немає даних</td></tr>';
-                return sortedKeys.map(k => {
-                  const stat = catStats[k];
-                  const rate = Math.round((stat.correct / stat.total) * 100);
-                  return `
-                    <tr>
-                      <td style="font-weight: bold; width: 40px;">${k}</td>
-                      <td>${stat.name}</td>
-                      <td style="text-align: center; width: 80px;">${stat.correct} з ${stat.total}</td>
-                      <td style="text-align: center; font-weight: bold; width: 120px; color: ${rate >= 75 ? '#27ae60' : rate >= 60 ? '#d35400' : '#c0392b'}">${rate}%</td>
-                    </tr>
-                  `;
-                }).join('');
-              })()}
-            </tbody>
-          </table>
-
-          <div style="margin-top: 40px; text-align: center; font-size: 11px; color: #7f8c8d;" class="no-print">
-            <button onclick="window.print()" style="padding: 10px 20px; font-size: 14px; background: #3498db; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-bottom: 20px;">Надрукувати звіт</button>
-          </div>
-        </body></html>
-      `);
-      reportWindow.document.close();
-    }
   };
 
   const renderUserAnalytics = () => {
@@ -1396,7 +613,7 @@ export const AdminDashboard: React.FC = () => {
     // Compute labor functions stats for selected attempt
     const catStats: { [key: string]: { correct: number; total: number; name: string } } = {};
     if (selectedAttempt && selectedAttempt.details && selectedAttempt.details.questions) {
-      selectedAttempt.details.questions.forEach((q: any) => {
+      selectedAttempt.details.questions.forEach((q: QuestionResult) => {
         const catId = q.catId || q.catName?.split('.')[0] || 'Інше';
         const catName = q.catName || 'Інша категорія';
         if (!catStats[catId]) {
@@ -1638,7 +855,7 @@ export const AdminDashboard: React.FC = () => {
     );
   };
 
-  const sortedAttemptStats = (catStats: any, sortedCatKeys: string[]) => {
+  const sortedAttemptStats = (catStats: Record<string, { correct: number; total: number; name: string }>, sortedCatKeys: string[]) => {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
         {sortedCatKeys.map(k => {
@@ -1847,8 +1064,8 @@ export const AdminDashboard: React.FC = () => {
                   </thead>
                   <tbody>
                     {filteredUsers.map(u => {
-                      const isOnline = u.lastSeenAt && (Date.now() - new Date(u.lastSeenAt).getTime() <= 120000);
-                      const isAway = u.lastSeenAt && !isOnline && (Date.now() - new Date(u.lastSeenAt).getTime() <= 300000);
+                      const isOnline = u.lastSeenAt && (nowMs - new Date(u.lastSeenAt).getTime() <= 120000);
+                      const isAway = u.lastSeenAt && !isOnline && (nowMs - new Date(u.lastSeenAt).getTime() <= 300000);
 
                       return (
                         <tr key={u.id}>
@@ -2012,936 +1229,21 @@ export const AdminDashboard: React.FC = () => {
       )}
 
         {activeTab === 'visits' && (
-          <div>
-            {/* Top Header & Live Presence Banner */}
-            <div style={{
-              background: 'linear-gradient(135deg, #1e3a8a 0%, #0f2b5c 100%)',
-              color: '#fff',
-              padding: '22px 26px',
-              borderRadius: '12px',
-              marginBottom: '25px',
-              boxShadow: '0 8px 24px rgba(30, 58, 138, 0.2)',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: '18px'
-            }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-                  <span style={{ 
-                    width: '12px', 
-                    height: '12px', 
-                    borderRadius: '50%', 
-                    background: '#2ecc71', 
-                    boxShadow: '0 0 12px #2ecc71',
-                    display: 'inline-block'
-                  }}></span>
-                  <h3 style={{ color: '#fff', margin: 0, fontSize: '22px', fontFamily: 'Comfortaa, cursive' }}>
-                    Моніторинг відвідуваності та Онлайн
-                  </h3>
-                </div>
-                <p style={{ margin: 0, opacity: 0.85, fontSize: '13.5px' }}>
-                  Відстеження активності кандидатів, викладачів, адміністраторів та гостей у реальному часі.
-                </p>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                <div style={{ 
-                  background: 'rgba(255, 255, 255, 0.12)', 
-                  padding: '6px 14px', 
-                  borderRadius: '20px', 
-                  fontSize: '12.5px',
-                  backdropFilter: 'blur(4px)'
-                }}>
-                  Оновлено: <strong>{lastRefreshedAt.toLocaleTimeString('uk-UA')}</strong>
-                </div>
-
-                <button 
-                  className="btn btn-outline" 
-                  onClick={handleRefreshVisits}
-                  disabled={isRefreshingVisits}
-                  style={{ 
-                    color: '#fff', 
-                    borderColor: '#fff', 
-                    padding: '6px 14px', 
-                    fontSize: '12.5px',
-                    borderRadius: '20px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    background: 'rgba(255,255,255,0.08)',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <span>{isRefreshingVisits ? '⏳' : '🔄'}</span>
-                  <span>{isRefreshingVisits ? 'Оновлення...' : 'Оновити'}</span>
-                </button>
-
-                <label style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '6px', 
-                  fontSize: '12.5px', 
-                  cursor: 'pointer',
-                  userSelect: 'none',
-                  background: 'rgba(255,255,255,0.1)',
-                  padding: '6px 12px',
-                  borderRadius: '20px'
-                }}>
-                  <input 
-                    type="checkbox" 
-                    checked={autoRefreshOnline} 
-                    onChange={e => setAutoRefreshOnline(e.target.checked)} 
-                    style={{ cursor: 'pointer' }}
-                  />
-                  <span>Автооновлення (15с)</span>
-                </label>
-              </div>
-            </div>
-
-            {/* KPI Cards */}
-            {(() => {
-              const onlineNow = (state.onlineUsers || []).filter(u => u.isOnline);
-              const onlineAway = (state.onlineUsers || []).filter(u => u.isAway);
-              const onlineRegistered = onlineNow.filter(u => u.role !== 'guest');
-              const onlineGuests = onlineNow.filter(u => u.role === 'guest');
-
-              // Unique today
-              const todayStart = new Date();
-              todayStart.setHours(0, 0, 0, 0);
-              const todayVisits = (state.visits || []).filter(v => v.created_at && new Date(v.created_at).getTime() >= todayStart.getTime());
-              const uniqueTodaySet = new Set(todayVisits.map(v => v.user_id || v.session_id));
-              const uniqueToday = uniqueTodaySet.size;
-
-              // Total 7 days
-              const now = Date.now();
-              const visits7Days = (state.visits || []).filter(v => v.created_at && (now - new Date(v.created_at).getTime()) <= 7 * 86400000);
-              const total7Days = visits7Days.length;
-
-              // Total all time
-              const totalAllTime = (state.visits || []).length;
-
-              return (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '18px', marginBottom: '25px' }}>
-                  <div className="card" style={{ 
-                    textAlign: 'center', 
-                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', 
-                    color: '#fff', 
-                    borderRadius: '12px',
-                    padding: '20px',
-                    boxShadow: '0 4px 15px rgba(16, 185, 129, 0.25)' 
-                  }}>
-                    <div style={{ fontSize: '30px', marginBottom: '6px' }}>🟢</div>
-                    <h3 style={{ fontSize: '30px', margin: '0 0 4px', color: '#fff', fontWeight: 'bold' }}>{onlineNow.length}</h3>
-                    <p style={{ margin: '0 0 6px', fontSize: '13.5px', fontWeight: '600' }}>Користувачів онлайн</p>
-                    <span style={{ fontSize: '11.5px', opacity: 0.95, background: 'rgba(255,255,255,0.2)', padding: '2px 8px', borderRadius: '10px' }}>
-                      {onlineRegistered.length} авт. + {onlineGuests.length} гостей {onlineAway.length > 0 ? `(${onlineAway.length} відійшли)` : ''}
-                    </span>
-                  </div>
-
-                  <div className="card" style={{ 
-                    textAlign: 'center', 
-                    background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', 
-                    color: '#fff', 
-                    borderRadius: '12px',
-                    padding: '20px',
-                    boxShadow: '0 4px 15px rgba(59, 130, 246, 0.25)' 
-                  }}>
-                    <div style={{ fontSize: '30px', marginBottom: '6px' }}>👥</div>
-                    <h3 style={{ fontSize: '30px', margin: '0 0 4px', color: '#fff', fontWeight: 'bold' }}>{uniqueToday}</h3>
-                    <p style={{ margin: '0 0 6px', fontSize: '13.5px', fontWeight: '600' }}>Унікальних за сьогодні</p>
-                    <span style={{ fontSize: '11.5px', opacity: 0.95, background: 'rgba(255,255,255,0.2)', padding: '2px 8px', borderRadius: '10px' }}>
-                      {todayVisits.length} сесій / переглядів
-                    </span>
-                  </div>
-
-                  <div className="card" style={{ 
-                    textAlign: 'center', 
-                    background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)', 
-                    color: '#fff', 
-                    borderRadius: '12px',
-                    padding: '20px',
-                    boxShadow: '0 4px 15px rgba(139, 92, 246, 0.25)' 
-                  }}>
-                    <div style={{ fontSize: '30px', marginBottom: '6px' }}>📈</div>
-                    <h3 style={{ fontSize: '30px', margin: '0 0 4px', color: '#fff', fontWeight: 'bold' }}>{total7Days}</h3>
-                    <p style={{ margin: '0 0 6px', fontSize: '13.5px', fontWeight: '600' }}>Візитів за 7 днів</p>
-                    <span style={{ fontSize: '11.5px', opacity: 0.95, background: 'rgba(255,255,255,0.2)', padding: '2px 8px', borderRadius: '10px' }}>
-                      Всього в журналі: {totalAllTime}
-                    </span>
-                  </div>
-
-                  <div className="card" style={{ 
-                    textAlign: 'center', 
-                    background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', 
-                    color: '#fff', 
-                    borderRadius: '12px',
-                    padding: '20px',
-                    boxShadow: '0 4px 15px rgba(245, 158, 11, 0.25)' 
-                  }}>
-                    <div style={{ fontSize: '30px', marginBottom: '6px' }}>🎯</div>
-                    <h3 style={{ fontSize: '30px', margin: '0 0 4px', color: '#fff', fontWeight: 'bold' }}>
-                      {(state.users || []).filter(u => u.role === 'user').length}
-                    </h3>
-                    <p style={{ margin: '0 0 6px', fontSize: '13.5px', fontWeight: '600' }}>Здобувачів у базі</p>
-                    <span style={{ fontSize: '11.5px', opacity: 0.95, background: 'rgba(255,255,255,0.2)', padding: '2px 8px', borderRadius: '10px' }}>
-                      {(state.users || []).filter(u => u.testPermission).length} з допуском до тесту
-                    </span>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Online Users Live Monitor */}
-            <div className="card mb-4" style={{ borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '10px' }}>
-                <div>
-                  <h4 style={{ margin: '0 0 4px', fontSize: '18px', color: 'var(--dark-blue)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span>🟢</span> Користувачі онлайн в теперішній час
-                  </h4>
-                  <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-muted)' }}>
-                    Особи, які активні на платформі прямо зараз (пінг за останні 5 хвилин).
-                  </p>
-                </div>
-
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button 
-                    className={`btn btn-sm ${onlineFilter === 'all' ? 'btn-primary' : 'btn-outline'}`}
-                    style={{ padding: '5px 14px', fontSize: '12px', borderRadius: '16px' }}
-                    onClick={() => setOnlineFilter('all')}
-                  >
-                    Всі ({(state.onlineUsers || []).length})
-                  </button>
-                  <button 
-                    className={`btn btn-sm ${onlineFilter === 'users' ? 'btn-primary' : 'btn-outline'}`}
-                    style={{ padding: '5px 14px', fontSize: '12px', borderRadius: '16px' }}
-                    onClick={() => setOnlineFilter('users')}
-                  >
-                    Зареєстровані ({(state.onlineUsers || []).filter(u => u.role !== 'guest').length})
-                  </button>
-                  <button 
-                    className={`btn btn-sm ${onlineFilter === 'guests' ? 'btn-primary' : 'btn-outline'}`}
-                    style={{ padding: '5px 14px', fontSize: '12px', borderRadius: '16px' }}
-                    onClick={() => setOnlineFilter('guests')}
-                  >
-                    Гості ({(state.onlineUsers || []).filter(u => u.role === 'guest').length})
-                  </button>
-                </div>
-              </div>
-
-              {(() => {
-                const list = (state.onlineUsers || []).filter(u => {
-                  if (onlineFilter === 'users') return u.role !== 'guest';
-                  if (onlineFilter === 'guests') return u.role === 'guest';
-                  return true;
-                });
-
-                if (list.length === 0) {
-                  return (
-                    <div style={{ textAlign: 'center', padding: '35px 20px', background: '#f8fafc', borderRadius: '8px' }}>
-                      <span style={{ fontSize: '36px', display: 'block', marginBottom: '8px' }}>😴</span>
-                      <h5 style={{ margin: '0 0 4px', color: '#64748b' }}>Наразі немає активних користувачів</h5>
-                      <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>Користувачі з'являться тут автоматично при вході або переході по сайту</p>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
-                    {list.map(u => {
-                      const roleColor = u.role === 'admin' ? '#ef4444' : u.role === 'teacher' ? '#a855f7' : u.role === 'user' ? '#3b82f6' : '#64748b';
-                      const roleLabel = u.role === 'admin' ? 'Адміністратор' : u.role === 'teacher' ? 'Викладач' : u.role === 'user' ? 'Кандидат' : 'Гість';
-                      
-                      return (
-                        <div 
-                          key={u.id}
-                          style={{
-                            background: '#fff',
-                            border: u.isOnline ? '1.5px solid #86efac' : '1.5px solid #fed7aa',
-                            borderRadius: '10px',
-                            padding: '16px',
-                            boxShadow: u.isOnline ? '0 4px 12px rgba(34, 197, 94, 0.08)' : '0 2px 8px rgba(0,0,0,0.04)',
-                            position: 'relative'
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                            <div style={{
-                              width: '42px',
-                              height: '42px',
-                              borderRadius: '50%',
-                              background: roleColor,
-                              color: '#fff',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: '16px',
-                              fontWeight: 'bold',
-                              flexShrink: 0,
-                              position: 'relative'
-                            }}>
-                              {u.name.slice(0, 1).toUpperCase()}
-                              <span style={{
-                                position: 'absolute',
-                                bottom: '-1px',
-                                right: '-1px',
-                                width: '12px',
-                                height: '12px',
-                                borderRadius: '50%',
-                                background: u.isOnline ? '#22c55e' : '#f59e0b',
-                                border: '2px solid #fff',
-                                boxShadow: u.isOnline ? '0 0 6px #22c55e' : 'none'
-                              }} />
-                            </div>
-
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                <h5 style={{ margin: 0, fontSize: '14.5px', fontWeight: 'bold', color: 'var(--text-dark)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {u.name}
-                                </h5>
-                                <span style={{
-                                  background: `${roleColor}15`,
-                                  color: roleColor,
-                                  fontSize: '11px',
-                                  fontWeight: 'bold',
-                                  padding: '2px 7px',
-                                  borderRadius: '10px',
-                                  border: `1px solid ${roleColor}30`
-                                }}>
-                                  {roleLabel}
-                                </span>
-                              </div>
-                              {u.email && u.role !== 'guest' && (
-                                <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {u.email}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-
-                          <div style={{ 
-                            background: '#f8fafc', 
-                            borderRadius: '8px', 
-                            padding: '10px 12px', 
-                            fontSize: '12.5px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '6px'
-                          }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <span style={{ color: '#64748b' }}>Поточний розділ:</span>
-                              <span style={{ 
-                                fontWeight: 'bold', 
-                                color: 'var(--dark-blue)', 
-                                background: '#e2e8f0', 
-                                padding: '2px 8px', 
-                                borderRadius: '6px',
-                                fontSize: '11.5px',
-                                maxWidth: '180px',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap'
-                              }}>
-                                {u.currentPage}
-                              </span>
-                            </div>
-
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <span style={{ color: '#64748b' }}>Пристрій:</span>
-                              <span style={{ fontWeight: '500', color: '#334155' }}>
-                                {u.currentDevice || 'Десктоп'}
-                              </span>
-                            </div>
-
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px dashed #e2e8f0', paddingTop: '6px' }}>
-                              <span style={{ color: '#64748b' }}>Остання дія:</span>
-                              <span style={{ color: u.isOnline ? '#16a34a' : '#d97706', fontWeight: 'bold' }}>
-                                {timeAgo(u.lastSeenAt)}
-                              </span>
-                            </div>
-                          </div>
-
-                          {u.role !== 'guest' && (
-                            <div style={{ marginTop: '10px', textAlign: 'right' }}>
-                              <button 
-                                style={{
-                                  background: 'transparent',
-                                  border: 'none',
-                                  color: 'var(--blue)',
-                                  fontSize: '12px',
-                                  cursor: 'pointer',
-                                  fontWeight: 'bold',
-                                  padding: 0
-                                }}
-                                onClick={() => {
-                                  setViewingUserAnalyticsId(u.id);
-                                  setActiveTab('users');
-                                }}
-                              >
-                                👤 Відкрити профіль та аналітику →
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
-            </div>
-
-            {/* Attendance Analytics & Charts */}
-            <div className="grid-2 mb-4" style={{ gap: '20px' }}>
-              {/* Daily visit activity chart (last 7 days) */}
-              <div className="card">
-                <h4 className="mb-3" style={{ fontSize: '16px', color: 'var(--dark-blue)' }}>
-                  📊 Динаміка відвідувань за останні 7 днів
-                </h4>
-                {(() => {
-                  const days: { label: string; dateStr: string; count: number }[] = [];
-                  for (let i = 6; i >= 0; i--) {
-                    const d = new Date();
-                    d.setDate(d.getDate() - i);
-                    const dStr = d.toISOString().slice(0, 10);
-                    const label = d.toLocaleDateString('uk-UA', { weekday: 'short', day: 'numeric', month: 'short' });
-                    
-                    const count = (state.visits || []).filter(v => v.created_at && v.created_at.slice(0, 10) === dStr).length;
-                    days.push({ label, dateStr: dStr, count });
-                  }
-
-                  const maxCount = Math.max(...days.map(d => d.count), 1);
-
-                  return (
-                    <div>
-                      <div style={{ 
-                        display: 'flex', 
-                        alignItems: 'flex-end', 
-                        justifyContent: 'space-between', 
-                        height: '180px', 
-                        padding: '10px 0 5px',
-                        borderBottom: '2px solid #e2e8f0',
-                        gap: '8px'
-                      }}>
-                        {days.map((d, i) => {
-                          const heightPct = Math.max(8, Math.round((d.count / maxCount) * 100));
-                          const isToday = i === days.length - 1;
-                          return (
-                            <div key={d.dateStr} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'flex-end' }}>
-                              <span style={{ fontSize: '11px', fontWeight: 'bold', color: isToday ? '#2563eb' : '#64748b', marginBottom: '4px' }}>
-                                {d.count}
-                              </span>
-                              <div style={{
-                                width: '100%',
-                                maxWidth: '38px',
-                                height: `${heightPct}%`,
-                                background: isToday 
-                                  ? 'linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%)' 
-                                  : 'linear-gradient(180deg, #93c5fd 0%, #60a5fa 100%)',
-                                borderRadius: '6px 6px 0 0',
-                                transition: 'height 0.3s ease',
-                                boxShadow: isToday ? '0 2px 8px rgba(37, 99, 235, 0.3)' : 'none'
-                              }} title={`${d.label}: ${d.count} візитів`} />
-                              <span style={{ fontSize: '11px', color: isToday ? '#1d4ed8' : '#64748b', fontWeight: isToday ? 'bold' : 'normal', marginTop: '6px', whiteSpace: 'nowrap' }}>
-                                {d.label.split(',')[0]}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '12px', color: '#64748b' }}>
-                        <span>Всього за 7 днів: <strong>{days.reduce((a, b) => a + b.count, 0)} візитів</strong></span>
-                        <span>Середньодобово: <strong>{Math.round(days.reduce((a, b) => a + b.count, 0) / 7)} / день</strong></span>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-
-              {/* Popular Pages & Sections */}
-              <div className="card">
-                <h4 className="mb-3" style={{ fontSize: '16px', color: 'var(--dark-blue)' }}>
-                  🔥 Популярні розділи платформи
-                </h4>
-                {(() => {
-                  const pageCounts: { [key: string]: { count: number; name: string } } = {};
-                  (state.visits || []).forEach(v => {
-                    const p = v.path || '/';
-                    const name = v.page_title || p;
-                    if (!pageCounts[p]) {
-                      pageCounts[p] = { count: 0, name };
-                    }
-                    pageCounts[p].count += 1;
-                  });
-
-                  const sortedPages = Object.entries(pageCounts)
-                    .map(([path, data]) => ({ path, name: data.name, count: data.count }))
-                    .sort((a, b) => b.count - a.count)
-                    .slice(0, 5);
-
-                  const totalPageVisits = sortedPages.reduce((acc, p) => acc + p.count, 0) || 1;
-
-                  if (sortedPages.length === 0) {
-                    return <p className="text-muted">Дані щодо переглядів сторінок ще накопичуються.</p>;
-                  }
-
-                  return (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                      {sortedPages.map((item, idx) => {
-                        const pct = Math.round((item.count / totalPageVisits) * 100);
-                        const colors = ['#2563eb', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
-                        const color = colors[idx % colors.length];
-
-                        return (
-                          <div key={item.path}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' }}>
-                              <span style={{ fontWeight: '600', color: 'var(--text-dark)' }}>
-                                {item.name} <span style={{ color: '#94a3b8', fontSize: '11.5px' }}>({item.path})</span>
-                              </span>
-                              <span style={{ fontWeight: 'bold', color }}>
-                                {item.count} ({pct}%)
-                              </span>
-                            </div>
-                            <div style={{ background: '#f1f5f9', height: '8px', borderRadius: '4px', overflow: 'hidden' }}>
-                              <div style={{ background: color, width: `${pct}%`, height: '100%', borderRadius: '4px' }}></div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })()}
-              </div>
-            </div>
-
-            {/* Devices and Roles Breakdown */}
-            <div className="grid-2 mb-4" style={{ gap: '20px' }}>
-              {/* Device & Browser summary */}
-              <div className="card">
-                <h4 className="mb-3" style={{ fontSize: '16px', color: 'var(--dark-blue)' }}>
-                  💻 Пристрої та браузери відвідувачів
-                </h4>
-                {(() => {
-                  let desktop = 0;
-                  let mobile = 0;
-                  let tablet = 0;
-                  const browserMap: { [key: string]: number } = {};
-
-                  (state.visits || []).forEach(v => {
-                    if (v.device_type === 'Mobile') mobile++;
-                    else if (v.device_type === 'Tablet') tablet++;
-                    else desktop++;
-
-                    const b = v.browser?.split(' ')[0] || 'Інше';
-                    browserMap[b] = (browserMap[b] || 0) + 1;
-                  });
-
-                  const total = (desktop + mobile + tablet) || 1;
-                  const dPct = Math.round((desktop / total) * 100);
-                  const mPct = Math.round((mobile / total) * 100);
-                  const tPct = Math.round((tablet / total) * 100);
-
-                  return (
-                    <div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '18px', textAlign: 'center' }}>
-                        <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                          <span style={{ fontSize: '20px' }}>🖥️</span>
-                          <h5 style={{ margin: '4px 0 2px', fontSize: '16px', color: '#1e293b' }}>{dPct}%</h5>
-                          <span style={{ fontSize: '11px', color: '#64748b' }}>Десктоп ({desktop})</span>
-                        </div>
-                        <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                          <span style={{ fontSize: '20px' }}>📱</span>
-                          <h5 style={{ margin: '4px 0 2px', fontSize: '16px', color: '#1e293b' }}>{mPct}%</h5>
-                          <span style={{ fontSize: '11px', color: '#64748b' }}>Мобільні ({mobile})</span>
-                        </div>
-                        <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                          <span style={{ fontSize: '20px' }}>📟</span>
-                          <h5 style={{ margin: '4px 0 2px', fontSize: '16px', color: '#1e293b' }}>{tPct}%</h5>
-                          <span style={{ fontSize: '11px', color: '#64748b' }}>Планшети ({tablet})</span>
-                        </div>
-                      </div>
-
-                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                        {Object.entries(browserMap).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([bName, bCount]) => (
-                          <span key={bName} style={{ 
-                            background: '#eff6ff', 
-                            color: '#1d4ed8', 
-                            padding: '4px 10px', 
-                            borderRadius: '12px', 
-                            fontSize: '12px',
-                            border: '1px solid #bfdbfe'
-                          }}>
-                            🌐 {bName}: <strong>{bCount}</strong>
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-
-              {/* Roles Breakdown */}
-              <div className="card">
-                <h4 className="mb-3" style={{ fontSize: '16px', color: 'var(--dark-blue)' }}>
-                  👥 Розподіл відвідувань за ролями
-                </h4>
-                {(() => {
-                  let adminCount = 0;
-                  let teacherCount = 0;
-                  let userCount = 0;
-                  let guestCount = 0;
-
-                  (state.visits || []).forEach(v => {
-                    if (v.user_role === 'admin') adminCount++;
-                    else if (v.user_role === 'teacher') teacherCount++;
-                    else if (v.user_role === 'user') userCount++;
-                    else guestCount++;
-                  });
-
-                  const total = (adminCount + teacherCount + userCount + guestCount) || 1;
-
-                  const roles = [
-                    { name: 'Кандидати (user)', count: userCount, color: '#3b82f6' },
-                    { name: 'Адміністратори (admin)', count: adminCount, color: '#ef4444' },
-                    { name: 'Викладачі (teacher)', count: teacherCount, color: '#a855f7' },
-                    { name: 'Гості (guest)', count: guestCount, color: '#64748b' }
-                  ];
-
-                  return (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                      {roles.map(r => {
-                        const pct = Math.round((r.count / total) * 100);
-                        return (
-                          <div key={r.name}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' }}>
-                              <span style={{ fontWeight: '600' }}>{r.name}</span>
-                              <span style={{ fontWeight: 'bold', color: r.color }}>{r.count} ({pct}%)</span>
-                            </div>
-                            <div style={{ background: '#f1f5f9', height: '8px', borderRadius: '4px', overflow: 'hidden' }}>
-                              <div style={{ background: r.color, width: `${pct}%`, height: '100%', borderRadius: '4px' }}></div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })()}
-              </div>
-            </div>
-
-            {/* Visits History Log */}
-            <div className="card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
-                <div>
-                  <h4 style={{ margin: '0 0 4px', fontSize: '18px', color: 'var(--dark-blue)' }}>
-                    📜 Журнал історії відвідувань
-                  </h4>
-                  <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-muted)' }}>
-                    Детальний хронологічний запис входів, активних сесій та навігації по розділах.
-                  </p>
-                </div>
-
-                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                  <button 
-                    className="btn btn-outline" 
-                    style={{ padding: '6px 14px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}
-                    onClick={() => exportVisitsToCsv((state.visits || []))}
-                  >
-                    <span>📥</span>
-                    <span>Експорт в CSV</span>
-                  </button>
-                  <button 
-                    className="btn btn-outline" 
-                    style={{ padding: '6px 14px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}
-                    onClick={() => window.print()}
-                  >
-                    <span>🖨️</span>
-                    <span>Друк звіту</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Filters Bar */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '20px' }}>
-                <div>
-                  <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Пошук</label>
-                  <input 
-                    type="text" 
-                    className="form-control" 
-                    placeholder="ПІБ, email, розділ, браузер..." 
-                    value={visitsSearchTerm} 
-                    onChange={e => { setVisitsSearchTerm(e.target.value); setVisitsPage(1); }} 
-                    style={{ height: '38px', fontSize: '13px' }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Період</label>
-                  <select 
-                    className="form-control" 
-                    value={visitsPeriodFilter} 
-                    onChange={e => { setVisitsPeriodFilter(e.target.value); setVisitsPage(1); }}
-                    style={{ height: '38px', fontSize: '13px' }}
-                  >
-                    <option value="today">Сьогодні</option>
-                    <option value="yesterday">Вчора</option>
-                    <option value="7days">Останні 7 днів</option>
-                    <option value="30days">Останні 30 днів</option>
-                    <option value="all">Весь час</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Роль</label>
-                  <select 
-                    className="form-control" 
-                    value={visitsRoleFilter} 
-                    onChange={e => { setVisitsRoleFilter(e.target.value); setVisitsPage(1); }}
-                    style={{ height: '38px', fontSize: '13px' }}
-                  >
-                    <option value="all">Всі ролі</option>
-                    <option value="user">Кандидати (user)</option>
-                    <option value="teacher">Викладачі (teacher)</option>
-                    <option value="admin">Адміністратори (admin)</option>
-                    <option value="guest">Гості (guest)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Тип події</label>
-                  <select 
-                    className="form-control" 
-                    value={visitsActionFilter} 
-                    onChange={e => { setVisitsActionFilter(e.target.value); setVisitsPage(1); }}
-                    style={{ height: '38px', fontSize: '13px' }}
-                  >
-                    <option value="all">Всі події</option>
-                    <option value="login">🔑 Вхід (login)</option>
-                    <option value="visit">👁️ Перегляд (visit)</option>
-                    <option value="logout">🚪 Вихід (logout)</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Visits Table */}
-              {(() => {
-                const filtered = (state.visits || []).filter(v => {
-                  const matchesSearch = 
-                    (v.user_name || '').toLowerCase().includes(visitsSearchTerm.toLowerCase()) ||
-                    (v.user_email || '').toLowerCase().includes(visitsSearchTerm.toLowerCase()) ||
-                    (v.path || '').toLowerCase().includes(visitsSearchTerm.toLowerCase()) ||
-                    (v.browser || '').toLowerCase().includes(visitsSearchTerm.toLowerCase()) ||
-                    (v.os || '').toLowerCase().includes(visitsSearchTerm.toLowerCase());
-                  
-                  const matchesRole = visitsRoleFilter === 'all' || v.user_role === visitsRoleFilter;
-                  const matchesAction = visitsActionFilter === 'all' || v.action === visitsActionFilter;
-
-                  let matchesPeriod = true;
-                  if (v.created_at) {
-                    const vTime = new Date(v.created_at).getTime();
-                    const now = Date.now();
-                    if (visitsPeriodFilter === 'today') {
-                      const todayStart = new Date();
-                      todayStart.setHours(0, 0, 0, 0);
-                      matchesPeriod = vTime >= todayStart.getTime();
-                    } else if (visitsPeriodFilter === 'yesterday') {
-                      const yStart = new Date();
-                      yStart.setDate(yStart.getDate() - 1);
-                      yStart.setHours(0, 0, 0, 0);
-                      const yEnd = new Date();
-                      yEnd.setDate(yEnd.getDate() - 1);
-                      yEnd.setHours(23, 59, 59, 999);
-                      matchesPeriod = vTime >= yStart.getTime() && vTime <= yEnd.getTime();
-                    } else if (visitsPeriodFilter === '7days') {
-                      matchesPeriod = (now - vTime) <= 7 * 86400000;
-                    } else if (visitsPeriodFilter === '30days') {
-                      matchesPeriod = (now - vTime) <= 30 * 86400000;
-                    }
-                  }
-
-                  return matchesSearch && matchesRole && matchesAction && matchesPeriod;
-                });
-
-                const totalItems = filtered.length;
-                const totalPages = Math.ceil(totalItems / visitsPerPage) || 1;
-                const startIndex = (visitsPage - 1) * visitsPerPage;
-                const paginatedItems = filtered.slice(startIndex, startIndex + visitsPerPage);
-
-                if (paginatedItems.length === 0) {
-                  return (
-                    <div style={{ textAlign: 'center', padding: '40px 20px', background: '#f8fafc', borderRadius: '8px' }}>
-                      <span style={{ fontSize: '32px', display: 'block', marginBottom: '8px' }}>🔍</span>
-                      <h5 style={{ margin: '0 0 4px', color: '#64748b' }}>Записів не знайдено</h5>
-                      <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>Спробуйте змінити параметри пошуку або фільтри періоду</p>
-                    </div>
-                  );
-                }
-
-                return (
-                  <>
-                    <div style={{ overflowX: 'auto' }}>
-                      <table className="data-table">
-                        <thead>
-                          <tr>
-                            <th style={{ width: '150px' }}>Час події</th>
-                            <th>Користувач</th>
-                            <th>Роль</th>
-                            <th>Подія</th>
-                            <th>Розділ / Сторінка</th>
-                            <th>Пристрій & Браузер</th>
-                            <th style={{ textAlign: 'center' }}>Останній контакт</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {paginatedItems.map((v, index) => {
-                            const isOnline = v.last_seen_at && (Date.now() - new Date(v.last_seen_at).getTime() <= 120000);
-                            const roleColor = v.user_role === 'admin' ? '#ef4444' : v.user_role === 'teacher' ? '#a855f7' : v.user_role === 'user' ? '#3b82f6' : '#64748b';
-                            const roleLabel = v.user_role === 'admin' ? 'Адміністратор' : v.user_role === 'teacher' ? 'Викладач' : v.user_role === 'user' ? 'Кандидат' : 'Гість';
-                            
-                            const actionBadge = v.action === 'login' 
-                              ? { text: '🔑 Вхід', bg: '#dbeafe', color: '#1d4ed8' }
-                              : v.action === 'logout'
-                              ? { text: '🚪 Вихід', bg: '#fee2e2', color: '#b91c1c' }
-                              : { text: '👁️ Перегляд', bg: '#f1f5f9', color: '#475569' };
-
-                            return (
-                              <tr key={v.id || index}>
-                                <td style={{ fontSize: '12.5px', whiteSpace: 'nowrap' }}>
-                                  <div style={{ fontWeight: '600', color: '#1e293b' }}>
-                                    {v.created_at ? new Date(v.created_at).toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-'}
-                                  </div>
-                                  <div style={{ fontSize: '11px', color: '#64748b' }}>
-                                    {v.created_at ? new Date(v.created_at).toLocaleDateString('uk-UA') : ''}
-                                  </div>
-                                </td>
-                                <td>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <span style={{ 
-                                      width: '8px', 
-                                      height: '8px', 
-                                      borderRadius: '50%', 
-                                      background: isOnline ? '#22c55e' : '#cbd5e1', 
-                                      display: 'inline-block',
-                                      flexShrink: 0,
-                                      boxShadow: isOnline ? '0 0 6px #22c55e' : 'none'
-                                    }} title={isOnline ? 'Онлайн зараз' : 'Офлайн'} />
-                                    <div>
-                                      <div style={{ fontWeight: 'bold', color: 'var(--text-dark)', fontSize: '13.5px' }}>
-                                        {v.user_name || 'Гість'}
-                                      </div>
-                                      {v.user_email && (
-                                        <div style={{ fontSize: '11.5px', color: '#64748b' }}>
-                                          {v.user_email}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </td>
-                                <td>
-                                  <span style={{
-                                    background: `${roleColor}15`,
-                                    color: roleColor,
-                                    fontSize: '11.5px',
-                                    fontWeight: 'bold',
-                                    padding: '2px 8px',
-                                    borderRadius: '10px',
-                                    border: `1px solid ${roleColor}30`
-                                  }}>
-                                    {roleLabel}
-                                  </span>
-                                </td>
-                                <td>
-                                  <span style={{
-                                    background: actionBadge.bg,
-                                    color: actionBadge.color,
-                                    fontSize: '11.5px',
-                                    fontWeight: '600',
-                                    padding: '3px 8px',
-                                    borderRadius: '6px'
-                                  }}>
-                                    {actionBadge.text}
-                                  </span>
-                                </td>
-                                <td>
-                                  <div style={{ fontWeight: '600', color: 'var(--dark-blue)', fontSize: '13px' }}>
-                                    {v.page_title || v.path}
-                                  </div>
-                                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>
-                                    {v.path}
-                                  </div>
-                                </td>
-                                <td style={{ fontSize: '12.5px' }}>
-                                  <div style={{ color: '#334155', fontWeight: '500' }}>
-                                    {v.device_type === 'Mobile' ? '📱' : v.device_type === 'Tablet' ? '📟' : '🖥️'} {v.browser || 'Браузер'}
-                                  </div>
-                                  <div style={{ fontSize: '11px', color: '#64748b' }}>
-                                    {v.os || 'ОС'}
-                                  </div>
-                                </td>
-                                <td style={{ textAlign: 'center', fontSize: '12px', whiteSpace: 'nowrap' }}>
-                                  {isOnline ? (
-                                    <span style={{ color: '#16a34a', fontWeight: 'bold' }}>🟢 Онлайн</span>
-                                  ) : (
-                                    <span style={{ color: '#64748b' }}>{timeAgo(v.last_seen_at || v.created_at)}</span>
-                                  )}
-                                  {v.created_at && v.last_seen_at && v.created_at !== v.last_seen_at && (
-                                    <div style={{ fontSize: '10.5px', color: '#94a3b8', marginTop: '2px' }}>
-                                      тривалість {formatSessionDuration(v.created_at, v.last_seen_at)}
-                                    </div>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Pagination Controls */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', flexWrap: 'wrap', gap: '10px' }}>
-                      <div style={{ fontSize: '13px', color: '#64748b' }}>
-                        Показано <strong>{startIndex + 1}–{Math.min(startIndex + visitsPerPage, totalItems)}</strong> із <strong>{totalItems}</strong> записів
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <button 
-                          className="btn btn-outline" 
-                          style={{ padding: '4px 10px', fontSize: '12px' }}
-                          disabled={visitsPage <= 1}
-                          onClick={() => setVisitsPage(p => Math.max(1, p - 1))}
-                        >
-                          ← Попередня
-                        </button>
-                        
-                        <span style={{ fontSize: '13px', padding: '0 8px', fontWeight: 'bold' }}>
-                          {visitsPage} / {totalPages}
-                        </span>
-
-                        <button 
-                          className="btn btn-outline" 
-                          style={{ padding: '4px 10px', fontSize: '12px' }}
-                          disabled={visitsPage >= totalPages}
-                          onClick={() => setVisitsPage(p => Math.min(totalPages, p + 1))}
-                        >
-                          Наступна →
-                        </button>
-
-                        <select 
-                          value={visitsPerPage} 
-                          onChange={e => { setVisitsPerPage(Number(e.target.value)); setVisitsPage(1); }}
-                          className="form-control"
-                          style={{ width: '80px', height: '32px', fontSize: '12px', marginLeft: '8px' }}
-                        >
-                          <option value="15">15</option>
-                          <option value="25">25</option>
-                          <option value="50">50</option>
-                        </select>
-                      </div>
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-          </div>
+          <VisitsTab
+            onlineUsers={state.onlineUsers || []}
+            visits={state.visits || []}
+            users={state.users || []}
+            autoRefreshOnline={autoRefreshOnline}
+            onToggleAutoRefresh={setAutoRefreshOnline}
+            lastRefreshedAt={lastRefreshedAt}
+            onRefreshVisits={handleRefreshVisits}
+            timeAgo={timeAgo}
+            nowMs={nowMs}
+            onOpenUserAnalytics={(userId) => {
+              setViewingUserAnalyticsId(userId);
+              setActiveTab('users');
+            }}
+          />
         )}
 
         {isAdmin && activeTab === 'tests' && (
@@ -3085,7 +1387,7 @@ export const AdminDashboard: React.FC = () => {
                           <button 
                             className="btn btn-outline" 
                             style={{ padding: '4px 8px', fontSize: '12px', marginRight: '5px' }}
-                            onClick={() => setSelectedApp(app)}
+                            onClick={async () => setSelectedApp(await loadApplicationDetails(app.id) || app)}
                           >
                             👁 Деталі
                           </button>
@@ -3273,104 +1575,7 @@ export const AdminDashboard: React.FC = () => {
 
         {/* ANALYTICS TAB */}
         {activeTab === 'analytics' && (
-          <div>
-            {(() => {
-              const totalUsers = (state.users || []).filter(u => u.role === 'user').length;
-              const allScores = (state.users || []).flatMap(u => u.testScores || []);
-              const totalAttempts = allScores.length;
-              
-              const avgPercent = totalAttempts > 0 
-                ? Math.round(allScores.reduce((acc, s) => acc + (s.score / s.total * 100), 0) / totalAttempts)
-                : 0;
-
-              const passedCount = allScores.filter(s => s.passed).length;
-              const passRate = totalAttempts > 0
-                ? Math.round((passedCount / totalAttempts) * 100)
-                : 0;
-                
-              return (
-                <>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '30px' }}>
-                    <div className="card" style={{ textAlign: 'center', background: 'linear-gradient(135deg, #23395d 0%, #4069a5 100%)', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                      <span style={{ fontSize: '32px', marginBottom: '10px' }}>👥</span>
-                      <h3 style={{ fontSize: '28px', margin: '0 0 5px', color: '#fff' }}>{totalUsers}</h3>
-                      <p style={{ margin: 0, fontSize: '13px', opacity: 0.8 }}>Зареєстровано кандидатів</p>
-                    </div>
-                    <div className="card" style={{ textAlign: 'center', background: 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                      <span style={{ fontSize: '32px', marginBottom: '10px' }}>🎯</span>
-                      <h3 style={{ fontSize: '28px', margin: '0 0 5px', color: '#fff' }}>{totalAttempts}</h3>
-                      <p style={{ margin: 0, fontSize: '13px', opacity: 0.8 }}>Спроб тестування</p>
-                    </div>
-                    <div className="card" style={{ textAlign: 'center', background: 'linear-gradient(135deg, #2ecc71 0%, #27ae60 100%)', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                      <span style={{ fontSize: '32px', marginBottom: '10px' }}>📈</span>
-                      <h3 style={{ fontSize: '28px', margin: '0 0 5px', color: '#fff' }}>{avgPercent}%</h3>
-                      <p style={{ margin: 0, fontSize: '13px', opacity: 0.8 }}>Середній результат</p>
-                    </div>
-                    <div className="card" style={{ textAlign: 'center', background: 'linear-gradient(135deg, #f1c40f 0%, #f39c12 100%)', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                      <span style={{ fontSize: '32px', marginBottom: '10px' }}>🎓</span>
-                      <h3 style={{ fontSize: '28px', margin: '0 0 5px', color: '#fff' }}>{passRate}%</h3>
-                      <p style={{ margin: 0, fontSize: '13px', opacity: 0.8 }}>Показник успішності ({'>='}75%)</p>
-                    </div>
-                  </div>
-
-                  <div className="grid-2" style={{ gap: '20px' }}>
-                    {/* Category Performance */}
-                    <div className="card">
-                      <h4 className="mb-4">Успішність за трудовими функціями</h4>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                        {[
-                          { id: 'А', name: 'Організація і планування роботи', rate: Math.max(40, Math.min(95, 85 + (avgPercent - 70) / 2)) },
-                          { id: 'Б', name: 'Ведення обліку ветеранів війни', rate: Math.max(30, Math.min(95, 62 + (avgPercent - 70) / 2)) },
-                          { id: 'В', name: 'Проведення зустрічей та виявлення потреб', rate: Math.max(40, Math.min(95, 78 + (avgPercent - 70) / 2)) },
-                          { id: 'Г', name: 'Інформування та консультування', rate: Math.max(40, Math.min(95, 72 + (avgPercent - 70) / 2)) },
-                          { id: 'Д', name: 'Здійснення супроводу', rate: Math.max(40, Math.min(95, 80 + (avgPercent - 70) / 2)) },
-                          { id: 'Е', name: 'Підготовка до цивільного життя', rate: Math.max(40, Math.min(95, 75 + (avgPercent - 70) / 2)) },
-                          { id: 'Є', name: 'Моніторинг та оцінювання потреб', rate: Math.max(30, Math.min(95, 68 + (avgPercent - 70) / 2)) },
-                          { id: 'Ж', name: 'Професійна компетентність', rate: Math.max(25, Math.min(95, 59 + (avgPercent - 70) / 2)) },
-                        ].map(cat => {
-                          const color = cat.rate >= 75 ? '#2ecc71' : cat.rate >= 60 ? '#f39c12' : '#e74c3c';
-                          return (
-                            <div key={cat.id}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '5px' }}>
-                                <span style={{ fontWeight: 'bold' }}>{cat.id}. {cat.name}</span>
-                                <span style={{ color, fontWeight: 'bold', marginLeft: 'auto' }}>{Math.round(cat.rate)}%</span>
-                              </div>
-                              <div style={{ background: '#eee', height: '8px', borderRadius: '4px', overflow: 'hidden' }}>
-                                <div style={{ background: color, width: `${cat.rate}%`, height: '100%' }}></div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Hardest Questions */}
-                    <div className="card">
-                      <h4 className="mb-4">Складні питання для кандидатів</h4>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                        {[
-                          { cat: 'Ж', text: 'Що таке професійне (емоційне) вигорання?', rate: 35, options: 'Регулярна участь у супервізійних групах...' },
-                          { cat: 'Б', text: 'Що таке Єдиний державний реєстр ветеранів війни (ЄДРВВ)?', rate: 42, options: 'Державна інформаційно-телекомунікаційна система...' },
-                          { cat: 'Є', text: 'Яка основна мета моніторингу в супроводі ветерана?', rate: 48, options: 'Регулярне відстеження прогресу та коригування...' },
-                          { cat: 'Ж', text: 'Що таке "супервізія" у контексті соціальної роботи?', rate: 52, options: 'Професійна підтримка та наставництво...' },
-                          { cat: 'Г', text: 'Яка знижка на оплату ЖКП передбачена для учасників бойових дій (УБД)?', rate: 58, options: '75%' }
-                        ].map((q, i) => (
-                          <div key={i} style={{ padding: '12px', background: '#fffcf9', borderRadius: '8px', border: '1px solid #fceae6', borderLeft: '4px solid #e74c3c' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
-                              <span style={{ background: '#e74c3c', color: 'white', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>Функція {q.cat}</span>
-                              <span style={{ color: '#e74c3c', fontWeight: 'bold', marginLeft: 'auto' }}>{q.rate}% вірних відповідей</span>
-                            </div>
-                            <p style={{ fontSize: '13px', fontWeight: 'bold', margin: '5px 0' }}>{q.text}</p>
-                            <p style={{ fontSize: '12px', color: '#666', margin: 0 }}><strong>Правильна відповідь:</strong> {q.options}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </>
-              );
-            })()}
-          </div>
+          <AnalyticsTab users={state.users || []} />
         )}
 
       </div>
@@ -3492,7 +1697,7 @@ export const AdminDashboard: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedUser.testScores.map((score: any) => (
+                    {selectedUser.testScores.map((score: TestScore) => (
                       <tr key={score.id}>
                         <td>{new Date(score.created_at || '').toLocaleString('uk-UA')}</td>
                         <td>{score.mode === 'exam' ? '🎯 Іспит' : '📝 Тренування'}</td>
@@ -3651,6 +1856,9 @@ export const AdminDashboard: React.FC = () => {
 
               const isAlternative = sigDetails.type === 'ID-паспорт + Селфі + Email-OTP' || sigDetails.type === 'ID-паспорт + Селфі + OTP';
 
+              // Only an RSA signature checked against the attached certificate counts as verified.
+              // Certificate validity (TSL / OCSP) is not checked by the portal.
+              const UNVERIFIABLE_SIGNATURE = 'Формат ключа не дозволяє перевірити підпис на порталі. Перевірте КЕП заявника окремо (напр., czo.gov.ua/verify).';
               let verified = false;
               let error: string | null = null;
               let cryptoStandardDisplay = 'ДСТУ 4145-2002 / PKCS#7 (Кваліфікований електронний підпис)';
@@ -3673,24 +1881,18 @@ export const AdminDashboard: React.FC = () => {
                       const md = forge.md.sha256.create();
                       md.update(sigDetails.signedData, 'utf8');
                       const signatureBytes = forge.util.decode64(sigDetails.signature);
-                      verified = (publicKey as any).verify(md.digest().bytes(), signatureBytes);
+                      verified = (publicKey as forge.pki.rsa.PublicKey).verify(md.digest().bytes(), signatureBytes);
                       cryptoStandardDisplay = 'RSA PKCS#12 / X.509 (Міжнародний та державний стандарт)';
                       if (!verified) {
                         error = 'Криптографічна перевірка не пройшла (підпис не відповідає даним)';
                       }
                     } catch {
-                      // Fallback for non-standard certificates
-                      if (sigDetails.signature.length > 20) {
-                        verified = true;
-                        cryptoStandardDisplay = 'PKCS#12 / ДСТУ 4145-2002 (КНЕДП України)';
-                      } else {
-                        error = 'Не вдалося верифікувати сертифікат';
-                      }
+                      error = 'Не вдалося розібрати сертифікат, підпис не перевірено';
                     }
                   } else if (isJks) {
                     // JKS Java KeyStore / PrivatBank QES
                     if (sigDetails.signature && sigDetails.signature.length >= 16) {
-                      verified = true;
+                      error = UNVERIFIABLE_SIGNATURE;
                       cryptoStandardDisplay = 'ДСТУ 4145-2002 / Java KeyStore (АЦСК АТ КБ «ПРИВАТБАНК»)';
                     } else {
                       error = 'Пошкоджена структура підпису JKS ПриватБанк';
@@ -3698,7 +1900,7 @@ export const AdminDashboard: React.FC = () => {
                   } else if (isDstu) {
                     // DSTU 4145-2002 national standard (DPS, NAIS, MIA, Treasury, AFU)
                     if (sigDetails.signature && sigDetails.signature.length >= 16) {
-                      verified = true;
+                      error = UNVERIFIABLE_SIGNATURE;
                       cryptoStandardDisplay = `ДСТУ 4145-2002 (Національний стандарт України — ${issuer || 'КНЕДП'})`;
                     } else {
                       error = 'Пошкоджений зліпок підпису ДСТУ 4145';
@@ -3706,7 +1908,7 @@ export const AdminDashboard: React.FC = () => {
                   } else if (isZs2) {
                     // M.E.Doc / Sota / Ukraine CSQ
                     if (sigDetails.signature && sigDetails.signature.length >= 16) {
-                      verified = true;
+                      error = UNVERIFIABLE_SIGNATURE;
                       cryptoStandardDisplay = 'ДСТУ 4145-2002 (КНЕДП ТОВ «ЦСК «Україна» / M.E.Doc)';
                     } else {
                       error = 'Пошкоджений підпис пакета M.E.Doc';
@@ -3714,14 +1916,14 @@ export const AdminDashboard: React.FC = () => {
                   } else if (isDiia) {
                     // Diia.Sign
                     if (sigDetails.signature && sigDetails.signature.length >= 16) {
-                      verified = true;
+                      error = UNVERIFIABLE_SIGNATURE;
                       cryptoStandardDisplay = 'КНЕДП Дія.Підпис (ДП «Дія» / Мінцифри)';
                     } else {
                       error = 'Пошкоджений підпис Дія.Підпис';
                     }
                   } else if (sigDetails.signature && sigDetails.signature.length >= 16) {
                     // Generic verified Ukrainian QES from any official TSP
-                    verified = true;
+                    error = UNVERIFIABLE_SIGNATURE;
                     cryptoStandardDisplay = `ДСТУ 4145-2002 / ECDSA (${issuer || 'Акредитований КНЕДП України'})`;
                   } else {
                     error = 'Невідомий або пошкоджений формат цифрового підпису';
@@ -3831,10 +2033,10 @@ export const AdminDashboard: React.FC = () => {
                       alignItems: 'center',
                       gap: '5px'
                     }}>
-                      {verified ? '✓ КЕП ВЕРИФІКОВАНО (Кваліфікований електронний підпис)' : '⚠️ КЕП НЕВЕРИФІКОВАНО'}
+                      {verified ? '✓ Підпис відповідає сертифікату заявника' : '⚠️ Підпис не перевірено'}
                     </span>
                     <span style={{ fontSize: '12px', color: verified ? '#166534' : '#b45309', fontWeight: '600' }}>
-                      {verified ? '🛡️ Сертифікат чинний (TSL / OCSP OK)' : 'Помилка валідації'}
+                      {verified ? 'Чинність сертифіката (TSL / OCSP) порталом не перевірялась' : 'Потрібна окрема перевірка КЕП'}
                     </span>
                   </div>
                   
@@ -3888,13 +2090,13 @@ export const AdminDashboard: React.FC = () => {
               );
             })()}
 
-            <h4 className="mb-3" style={{ borderBottom: '1px solid #eee', paddingBottom: '8px', fontSize: '16px' }}>Завантажені документи (КЕП-шифровані)</h4>
+            <h4 className="mb-3" style={{ borderBottom: '1px solid #eee', paddingBottom: '8px', fontSize: '16px' }}>Завантажені документи</h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '30px' }}>
               {(() => {
-                let sig: any = null;
+                let sig: SignatureDetails | null = null;
                 if (selectedApp.signature_details) {
                   if (typeof selectedApp.signature_details === 'string') {
-                    try { sig = JSON.parse(selectedApp.signature_details); } catch(e) {}
+                    try { sig = JSON.parse(selectedApp.signature_details); } catch { /* malformed legacy JSON: show as unsigned */ }
                   } else {
                     sig = selectedApp.signature_details;
                   }
@@ -3903,48 +2105,18 @@ export const AdminDashboard: React.FC = () => {
                 const items: Array<{ category: string; name: string; size: string; dataUrl?: string; type?: string }> = [];
 
                 if (docs) {
-                  docs.passport?.forEach((f: any) => items.push({ category: 'Паспорт / ID-картка', name: f.name, size: f.size, dataUrl: f.dataUrl, type: f.type }));
-                  docs.education?.forEach((f: any) => items.push({ category: 'Документ про освіту', name: f.name, size: f.size, dataUrl: f.dataUrl, type: f.type }));
-                  docs.experience?.forEach((f: any) => items.push({ category: 'Підтвердження стажу', name: f.name, size: f.size, dataUrl: f.dataUrl, type: f.type }));
-                  docs.other?.forEach((f: any) => items.push({ category: 'Інші документи', name: f.name, size: f.size, dataUrl: f.dataUrl, type: f.type }));
+                  docs.passport?.forEach((f: UploadedDocument) => items.push({ category: 'Паспорт / ID-картка', name: f.name, size: f.size, dataUrl: f.dataUrl, type: f.type }));
+                  docs.education?.forEach((f: UploadedDocument) => items.push({ category: 'Документ про освіту', name: f.name, size: f.size, dataUrl: f.dataUrl, type: f.type }));
+                  docs.experience?.forEach((f: UploadedDocument) => items.push({ category: 'Підтвердження стажу', name: f.name, size: f.size, dataUrl: f.dataUrl, type: f.type }));
+                  docs.other?.forEach((f: UploadedDocument) => items.push({ category: 'Інші документи', name: f.name, size: f.size, dataUrl: f.dataUrl, type: f.type }));
                 }
 
                 if (items.length === 0) {
-                  const demoDocs = [
-                    { category: 'Паспорт / ID-картка', name: 'passport_scan_signed.pdf', size: '2.4 MB' },
-                    { category: 'Документ про освіту', name: 'diploma_and_supplements.pdf', size: '3.1 MB' },
-                    ...(selectedApp.experience > 0 ? [{ category: 'Підтвердження стажу', name: 'employment_record.pdf', size: '1.8 MB' }] : [])
-                  ];
-
-                  return demoDocs.map((doc, idx) => (
-                    <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', background: '#f8fafd', borderRadius: '8px', border: '1px solid #e1e8ed' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <span style={{ fontSize: '24px' }}>📄</span>
-                        <div>
-                          <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b' }}>{doc.name}</div>
-                          <div style={{ fontSize: '12px', color: '#64748b' }}>{doc.category} • {doc.size} • Підпис КЕП перевірено</div>
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button 
-                          type="button"
-                          className="btn btn-outline" 
-                          style={{ padding: '5px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }} 
-                          onClick={() => handlePreviewDoc(doc)}
-                        >
-                          👁️ Переглянути
-                        </button>
-                        <button 
-                          type="button"
-                          className="btn btn-primary" 
-                          style={{ padding: '5px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }} 
-                          onClick={() => handleDownloadDoc(doc)}
-                        >
-                          ⬇️ Завантажити
-                        </button>
-                      </div>
+                  return (
+                    <div style={{ padding: '12px 14px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', fontSize: '14px', color: '#78350f' }}>
+                      Документи не завантажено.
                     </div>
-                  ));
+                  );
                 }
 
                 return items.map((item, idx) => (
@@ -3953,7 +2125,7 @@ export const AdminDashboard: React.FC = () => {
                       <span style={{ fontSize: '24px' }}>📄</span>
                       <div>
                         <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e293b' }}>{item.name}</div>
-                        <div style={{ fontSize: '12px', color: '#64748b' }}>{item.category} • {item.size} • Засвідчено КЕП</div>
+                        <div style={{ fontSize: '12px', color: '#64748b' }}>{item.category} • {item.size} • Завантажено заявником</div>
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: '8px' }}>
@@ -4293,7 +2465,7 @@ export const AdminDashboard: React.FC = () => {
                   <div style={{ background: '#f8fafd', border: '1px solid #e1e8ed', borderRadius: '8px', padding: '15px', textAlign: 'center' }}>
                     <span style={{ fontSize: '24px' }}>⏱️</span>
                     <h4 style={{ margin: '8px 0 2px', fontSize: '20px', color: 'var(--dark-blue)', fontFamily: 'Comfortaa, cursive' }}>
-                      {formatTime(selectedScore.details.totalTime)}
+                      {formatTime(selectedScore.details.totalTime ?? 0)}
                     </h4>
                     <span className="text-muted" style={{ fontSize: '11px' }}>Загальний час</span>
                   </div>
@@ -4301,24 +2473,24 @@ export const AdminDashboard: React.FC = () => {
                   <div style={{ background: '#f8fafd', border: '1px solid #e1e8ed', borderRadius: '8px', padding: '15px', textAlign: 'center' }}>
                     <span style={{ fontSize: '24px' }}>🔄</span>
                     <h4 style={{ margin: '8px 0 2px', fontSize: '20px', color: 'var(--dark-blue)', fontFamily: 'Comfortaa, cursive' }}>
-                      {selectedScore.details.questions ? selectedScore.details.questions.reduce((acc: number, q: any) => acc + (q.changes || 0), 0) : 0}
+                      {selectedScore.details.questions ? selectedScore.details.questions.reduce((acc: number, q: QuestionResult) => acc + (q.changes || 0), 0) : 0}
                     </h4>
                     <span className="text-muted" style={{ fontSize: '11px' }}>Змін відповідей</span>
                   </div>
 
-                  <div style={{ background: selectedScore.details.tabSwitches > 0 ? '#fdf2f2' : '#f8fafd', border: `1px solid ${selectedScore.details.tabSwitches > 0 ? '#f5c6cb' : '#e1e8ed'}`, borderRadius: '8px', padding: '15px', textAlign: 'center' }}>
+                  <div style={{ background: (selectedScore.details.tabSwitches ?? 0) > 0 ? '#fdf2f2' : '#f8fafd', border: `1px solid ${(selectedScore.details.tabSwitches ?? 0) > 0 ? '#f5c6cb' : '#e1e8ed'}`, borderRadius: '8px', padding: '15px', textAlign: 'center' }}>
                     <span style={{ fontSize: '24px' }}>⚠️</span>
-                    <h4 style={{ margin: '8px 0 2px', fontSize: '20px', color: selectedScore.details.tabSwitches > 0 ? '#c0392b' : 'var(--dark-blue)', fontFamily: 'Comfortaa, cursive' }}>
+                    <h4 style={{ margin: '8px 0 2px', fontSize: '20px', color: (selectedScore.details.tabSwitches ?? 0) > 0 ? '#c0392b' : 'var(--dark-blue)', fontFamily: 'Comfortaa, cursive' }}>
                       {selectedScore.details.tabSwitches || 0}
                     </h4>
-                    <span className="text-muted" style={{ fontSize: '11px', color: selectedScore.details.tabSwitches > 0 ? '#c0392b' : 'inherit' }}>
+                    <span className="text-muted" style={{ fontSize: '11px', color: (selectedScore.details.tabSwitches ?? 0) > 0 ? '#c0392b' : 'inherit' }}>
                       Перемикань вкладок
                     </span>
                   </div>
                 </div>
 
                 {/* Behavioral profile card */}
-                {selectedScore.details.behaviorProfile && (
+                {selectedProfile && (
                   <div className="card mb-4" style={{ background: '#fcfdfe', border: '1px solid #e1e8ed', borderLeft: '5px solid var(--rich-blue)', padding: '20px', borderRadius: '8px', cursor: 'default', transform: 'none', boxShadow: 'none' }}>
                     <h4 style={{ fontSize: '16px', color: 'var(--dark-blue)', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                       🧠 Психометричний портрет кандидата
@@ -4328,32 +2500,32 @@ export const AdminDashboard: React.FC = () => {
                       <div style={{ fontSize: '13px' }}>
                         <span className="text-muted">Манера відповідей:</span>{' '}
                         <span className="badge" style={{ background: '#e3f2fd', color: '#1976d2', padding: '3px 8px', borderRadius: '4px', fontWeight: 'bold', fontSize: '12px' }}>
-                          {selectedScore.details.behaviorProfile.style}
+                          {selectedProfile.style}
                         </span>
                       </div>
                       <div style={{ fontSize: '13px' }}>
                         <span className="text-muted">Впевненість:</span>{' '}
                         <span className="badge" style={{ background: '#e8f5e9', color: '#2e7d32', padding: '3px 8px', borderRadius: '4px', fontWeight: 'bold', fontSize: '12px' }}>
-                          {selectedScore.details.behaviorProfile.confidence}
+                          {selectedProfile.confidence}
                         </span>
                       </div>
                       <div style={{ fontSize: '13px' }}>
                         <span className="text-muted">Темп роботи:</span>{' '}
                         <span className="badge" style={{ background: '#fff3e0', color: '#e65100', padding: '3px 8px', borderRadius: '4px', fontWeight: 'bold', fontSize: '12px' }}>
-                          {selectedScore.details.behaviorProfile.speedCategory}
+                          {selectedProfile.speedCategory}
                         </span>
                       </div>
                     </div>
 
                     <p style={{ fontSize: '14px', lineHeight: '1.5', marginBottom: '20px', color: '#555' }}>
-                      {selectedScore.details.behaviorProfile.description}
+                      {selectedProfile.description}
                     </p>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '20px' }}>
                       <div>
                         <h5 style={{ fontSize: '13px', color: '#2e7d32', marginBottom: '8px', fontWeight: 'bold' }}>✓ Сильні сторони манери:</h5>
                         <ul style={{ paddingLeft: '15px', margin: 0, listStyleType: 'disc', fontSize: '13px', color: '#555' }}>
-                          {selectedScore.details.behaviorProfile.strengths?.map((str: string, i: number) => (
+                          {selectedProfile.strengths?.map((str: string, i: number) => (
                             <li key={i} style={{ marginBottom: '4px' }}>{str}</li>
                           ))}
                         </ul>
@@ -4361,7 +2533,7 @@ export const AdminDashboard: React.FC = () => {
                       <div>
                         <h5 style={{ fontSize: '13px', color: '#c62828', marginBottom: '8px', fontWeight: 'bold' }}>✗ Зони ризику / Слабкості:</h5>
                         <ul style={{ paddingLeft: '15px', margin: 0, listStyleType: 'disc', fontSize: '13px', color: '#555' }}>
-                          {selectedScore.details.behaviorProfile.weaknesses?.map((weak: string, i: number) => (
+                          {selectedProfile.weaknesses?.map((weak: string, i: number) => (
                             <li key={i} style={{ marginBottom: '4px' }}>{weak}</li>
                           ))}
                         </ul>
@@ -4373,7 +2545,7 @@ export const AdminDashboard: React.FC = () => {
                         🔮 Прогноз професійної успішності:
                       </span>
                       <p style={{ fontSize: '13px', color: 'var(--text-dark)', margin: 0, fontWeight: '500' }}>
-                        {selectedScore.details.behaviorProfile.forecast}
+                        {selectedProfile.forecast}
                       </p>
                     </div>
 
@@ -4382,7 +2554,7 @@ export const AdminDashboard: React.FC = () => {
                         💡 Рекомендації для кандидата:
                       </span>
                       <p style={{ fontSize: '13px', color: 'var(--text-dark)', margin: 0 }}>
-                        {selectedScore.details.behaviorProfile.recommendations}
+                        {selectedProfile.recommendations}
                       </p>
                     </div>
                   </div>
@@ -4406,7 +2578,7 @@ export const AdminDashboard: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedScore.details.questions?.map((q: any, index: number) => {
+                      {selectedScore.details.questions?.map((q: QuestionResult, index: number) => {
                         const isCorrect = q.selected === q.correct;
                         return (
                           <tr key={index} style={{ background: isCorrect ? '#fcfdfe' : '#fff9f9' }}>
@@ -4449,8 +2621,8 @@ export const AdminDashboard: React.FC = () => {
                                 })}
                               </div>
                             </td>
-                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>{formatTime(q.timeSpent)}</td>
-                            <td style={{ textAlign: 'center', fontWeight: q.changes > 0 ? 'bold' : 'normal', color: q.changes > 0 ? '#e65100' : 'inherit' }}>
+                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>{formatTime(q.timeSpent ?? 0)}</td>
+                            <td style={{ textAlign: 'center', fontWeight: (q.changes ?? 0) > 0 ? 'bold' : 'normal', color: (q.changes ?? 0) > 0 ? '#e65100' : 'inherit' }}>
                               {q.changes || 0}
                             </td>
                             <td style={{ textAlign: 'center' }}>
@@ -4538,7 +2710,7 @@ export const AdminDashboard: React.FC = () => {
                     type="button" 
                     className="btn btn-outline" 
                     style={{ padding: '2px 8px', fontSize: '11px' }}
-                    onClick={() => setCertForm({ ...certForm, cert: generateCertNumber() })}
+                    onClick={async () => { const cert = await generateCertNumber(); if (cert) setCertForm(prev => ({ ...prev, cert })); }}
                   >
                     🎲 Згенерувати новий
                   </button>
@@ -4609,14 +2781,14 @@ export const AdminDashboard: React.FC = () => {
                 <span style={{ fontSize: '24px' }}>📄</span>
                 <div>
                   <h4 className="mb-0" style={{ fontSize: '16px', color: '#1e293b' }}>{previewDoc.name}</h4>
-                  <span className="text-muted" style={{ fontSize: '12px' }}>{previewDoc.category || 'Документ'} • Засвідчено КЕП</span>
+                  <span className="text-muted" style={{ fontSize: '12px' }}>{previewDoc.category || 'Документ'} • Завантажено заявником</span>
                 </div>
               </div>
               <button className="btn btn-outline" style={{ padding: '4px 10px' }} onClick={() => setPreviewDoc(null)}>❌</button>
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', padding: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '320px' }}>
-              {previewDoc.dataUrl && previewDoc.dataUrl.startsWith('data:image') ? (
+              {previewDoc.dataUrl && previewDoc.dataUrl.startsWith('data:image/') ? (
                 <img src={previewDoc.dataUrl} alt={previewDoc.name} style={{ maxWidth: '100%', maxHeight: '60vh', objectFit: 'contain', borderRadius: '6px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }} />
               ) : previewDoc.dataUrl && previewDoc.dataUrl.startsWith('data:application/pdf') ? (
                 <iframe src={previewDoc.dataUrl} title={previewDoc.name} style={{ width: '100%', height: '60vh', border: 'none', borderRadius: '6px' }} />

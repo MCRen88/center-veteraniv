@@ -1,18 +1,37 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { supabaseAdmin } from '../lib/supabaseAdmin';
-import type { Database } from '../lib/database.types';
-import { casesDb, type CaseQuestion as Case } from '../data/casesDb';
-import { questionsDb } from '../data/questionsDb';
+import { apiRequest } from '../lib/api';
+import type { RegistryRow, TestScoreRow, ApplicationRow } from '../lib/database.types';
 import { trackActivity, type VisitRecord } from '../utils/tracker';
+import type { TestDetails } from '../utils/testAnalytics';
 
 export type Role = 'user' | 'teacher' | 'admin';
-export type { Case, VisitRecord };
+export type { VisitRecord };
 
-export type RegistryItem = Database['public']['Tables']['registry']['Row'];
-export type Question = Database['public']['Tables']['questions']['Row'];
-export type TestScore = Database['public']['Tables']['test_scores']['Row'];
-export type Application = Database['public']['Tables']['applications']['Row'];
+export type RegistryItem = RegistryRow;
+export type TestScore = TestScoreRow;
+export type Application = ApplicationRow;
+
+// correct / explanation are present only for admins and teachers (migration 012).
+export interface Question {
+  id: number;
+  catId: string;
+  catName: string;
+  question: string;
+  options: string[];
+  correct?: number;
+  explanation?: string;
+}
+
+export interface Case {
+  id: number;
+  title: string;
+  situation: string;
+  question: string;
+  options: string[];
+  correctAnswer: number;
+  explanation: string;
+}
 
 export interface User {
   id: string;
@@ -40,48 +59,6 @@ export interface OnlineUser {
   sessionId?: string;
 }
 
-export interface EmailVerificationConfig {
-  provider: 'smtp' | 'resend' | 'sendgrid' | 'demo';
-  smtpHost: string;
-  smtpPort: number;
-  smtpUser: string;
-  smtpPass: string;
-  senderEmail: string;
-  senderName: string;
-  emailSubject: string;
-  emailTemplate: string;
-  codeLength: number;
-  codeExpiryMinutes: number;
-  enabled: boolean;
-}
-
-export const defaultEmailConfig: EmailVerificationConfig = {
-  provider: 'demo',
-  smtpHost: 'mail.zoippo.net.ua',
-  smtpPort: 465,
-  smtpUser: 'orgmetodcentr@zoippo.net.ua',
-  smtpPass: '',
-  senderEmail: 'orgmetodcentr@zoippo.net.ua',
-  senderName: 'КЗ «ЗОІППО» ЗОР (Кваліфікаційний центр)',
-  emailSubject: 'Код підтвердження для підписання заяви про присвоєння/підтвердження кваліфікації',
-  emailTemplate: `Шановний(а) {name}!\n\nВаш одноразовий код підтвердження для верифікації особи та підписання заяви про присвоєння та/або підтвердження професійної кваліфікації в Кваліфікаційному центрі:\n\n{code}\n\nКод дійсний протягом {expiry} хвилин. Якщо ви не подавали заяву в КЗ «ЗОІППО» ЗОР, проігноруйте цей лист.\n\nЗ повагою,\nКваліфікаційний центр КЗ «ЗОІППО» ЗОР\norgmetodcentr@zoippo.net.ua`,
-  codeLength: 6,
-  codeExpiryMinutes: 10,
-  enabled: true
-};
-
-const getStoredEmailConfig = (): EmailVerificationConfig => {
-  try {
-    const stored = localStorage.getItem('lms_email_verification_config');
-    if (stored) {
-      return { ...defaultEmailConfig, ...JSON.parse(stored) };
-    }
-  } catch (e) {
-    console.error('Error reading email config from localStorage:', e);
-  }
-  return defaultEmailConfig;
-};
-
 interface AppState {
   registry: RegistryItem[];
   questions: Question[];
@@ -93,7 +70,6 @@ interface AppState {
   currentUser: User | null;
   originalAdminUser: User | null;
   isLoading: boolean;
-  emailConfig: EmailVerificationConfig;
 }
 
 interface AppContextType {
@@ -102,7 +78,8 @@ interface AppContextType {
   updateRegistryItem: (id: number, item: Omit<RegistryItem, 'id'>) => Promise<void>;
   deleteRegistryItem: (id: number) => Promise<void>;
   // Auth
-  login: (email: string, pass: string) => Promise<boolean>;
+  // Resolves to the signed-in user's role, or null when the credentials are wrong.
+  login: (email: string, pass: string) => Promise<Role | null>;
   logout: () => Promise<void>;
   // Admin User Mgmt
   adminCreateUser: (user: {email: string, password: string, name: string, role: Role, testPermission: boolean}) => Promise<void>;
@@ -112,8 +89,9 @@ interface AppContextType {
   impersonateUser: (userId: string) => void;
   stopImpersonating: () => void;
   // User Actions
-  saveTestScore: (score: Omit<TestScore, 'id' | 'created_at' | 'user_id'> & { details?: any }) => Promise<void>;
-  submitApplication: (app: Omit<Application, 'id' | 'created_at' | 'status'>) => Promise<boolean>;
+  saveTestScore: (score: Omit<TestScore, 'id' | 'created_at' | 'user_id'> & { details?: TestDetails }) => Promise<TestScore | null>;
+  submitApplication: (app: Omit<Application, 'id' | 'created_at' | 'status' | 'app_number' | 'email_verified'>) => Promise<string | null>;
+  loadApplicationDetails: (id: string) => Promise<Application | null>;
   updateApplicationStatus: (id: string, status: 'pending' | 'approved' | 'rejected') => Promise<void>;
   deleteApplication: (id: string) => Promise<boolean>;
   // Admin Test Mgmt
@@ -124,9 +102,9 @@ interface AppContextType {
   addCase: (c: Omit<Case, 'id'>) => Promise<void>;
   updateCase: (id: number, c: Omit<Case, 'id'>) => Promise<void>;
   deleteCase: (id: number) => Promise<void>;
-  // Email / OTP Config
-  updateEmailConfig: (config: Partial<EmailVerificationConfig>) => void;
-  sendVerificationEmail: (toEmail: string, recipientName?: string) => Promise<{ success: boolean; code: string; message: string }>;
+  // Email verification (codes are generated and checked by the api service)
+  sendVerificationEmail: (toEmail: string, recipientName?: string) => Promise<{ success: boolean; message: string }>;
+  verifyEmailCode: (toEmail: string, code: string) => Promise<{ success: boolean; message: string }>;
   fetchData: () => Promise<void>;
   fetchVisitsData: () => Promise<void>;
 }
@@ -141,8 +119,130 @@ const defaultState: AppState = {
   onlineUsers: [],
   currentUser: null,
   originalAdminUser: null,
-  isLoading: true,
-  emailConfig: getStoredEmailConfig()
+  isLoading: true
+};
+
+const ONLINE_MS = 2 * 60 * 1000;
+const AWAY_MS = 5 * 60 * 1000;
+
+// Application list columns: signature_details (with uploaded scans) is loaded per application.
+const APPLICATION_LIST_COLUMNS = 'id, app_number, lname, fname, mname, birthdate, passport, phone, email, level, education, experience, status, created_at, email_verified';
+
+// Raw database rows as returned by PostgREST (snake_case).
+interface QuestionRow {
+  id: number;
+  cat_id?: string;
+  catId?: string;
+  cat_name?: string;
+  catName?: string;
+  question?: string;
+  options?: string[];
+  correct?: number;
+  explanation?: string;
+}
+
+interface CaseRow {
+  id: number;
+  title: string;
+  situation: string;
+  question: string;
+  options: string[];
+  correct_answer?: number;
+  correctAnswer?: number;
+  explanation: string;
+}
+
+interface ProfileRow {
+  id: string;
+  name: string;
+  email: string | null;
+  role: Role;
+  last_seen_at: string | null;
+  current_page: string | null;
+  current_device: string | null;
+}
+
+const errorMessage = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+const toQuestion = (q: QuestionRow): Question => ({
+  id: q.id,
+  catId: q.cat_id || q.catId || '1',
+  catName: q.cat_name || q.catName || 'Загальні питання',
+  question: q.question || '',
+  options: q.options || [],
+  correct: typeof q.correct === 'number' ? q.correct : undefined,
+  explanation: typeof q.explanation === 'string' ? q.explanation : undefined
+});
+
+const toCase = (c: CaseRow): Case => ({
+  id: c.id,
+  title: c.title,
+  situation: c.situation,
+  question: c.question,
+  options: c.options,
+  correctAnswer: c.correct_answer ?? c.correctAnswer ?? 0,
+  explanation: c.explanation
+});
+
+// Registered users come from profiles.last_seen_at, guests from their latest visit row.
+const buildOnlineList = (profiles: ProfileRow[] | null, visits: VisitRecord[] | null): OnlineUser[] => {
+  const now = Date.now();
+  const list: OnlineUser[] = [];
+
+  (profiles || []).forEach(p => {
+    if (!p.last_seen_at) return;
+    const diffMs = now - new Date(p.last_seen_at).getTime();
+    if (diffMs > AWAY_MS) return;
+    list.push({
+      id: p.id,
+      name: p.name,
+      email: p.email || '',
+      role: p.role as Role,
+      lastSeenAt: p.last_seen_at,
+      currentPage: p.current_page || '/',
+      currentDevice: p.current_device || 'Невідомий пристрій',
+      isOnline: diffMs <= ONLINE_MS,
+      isAway: diffMs > ONLINE_MS
+    });
+  });
+
+  const seenSessions = new Set<string>();
+  (visits || []).forEach(v => {
+    if (v.user_id || !v.session_id || seenSessions.has(v.session_id)) return;
+    const lastSeenAt = v.last_seen_at || v.created_at || new Date(0).toISOString();
+    const diffMs = now - new Date(lastSeenAt).getTime();
+    if (diffMs > AWAY_MS) return;
+    seenSessions.add(v.session_id);
+    list.push({
+      id: `guest_${v.session_id}`,
+      name: `Гість (${v.session_id.slice(0, 8)})`,
+      email: 'Неавторизований відвідувач',
+      role: 'guest',
+      lastSeenAt,
+      currentPage: v.path || '/',
+      currentDevice: v.browser ? `${v.device_type === 'Mobile' ? '📱' : '🖥️'} ${v.browser} (${v.os || ''})` : 'Гість',
+      isOnline: diffMs <= ONLINE_MS,
+      isAway: diffMs > ONLINE_MS,
+      sessionId: v.session_id
+    });
+  });
+
+  return list;
+};
+
+// Database errors raised by migration 011 -> messages for people.
+const DB_ERROR_MESSAGES: Record<string, string> = {
+  test_not_permitted: 'Допуск до тестування відсутній або вже використаний. Зверніться до адміністратора.',
+  too_few_questions: 'Тест містить недостатньо питань. Результат не зараховано.',
+  unknown_question: 'Тест містить питання, яких немає в банку завдань. Результат не зараховано.',
+  duplicate_questions: 'Тест містить повторювані питання. Результат не зараховано.',
+  invalid_mode: 'Для кандидатів зараховується лише режим екзамену.',
+  email_not_verified: 'Email не підтверджено. Отримайте та введіть код підтвердження ще раз.',
+  missing_required_fields: 'Не заповнені обовʼязкові поля заяви.'
+};
+const dbErrorMessage = (message?: string) => {
+  const key = Object.keys(DB_ERROR_MESSAGES).find(k => message?.includes(k));
+  return key ? DB_ERROR_MESSAGES[key] : (message || 'Невідома помилка');
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -173,53 +273,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const fetchData = async () => {
     setState(prev => ({ ...prev, isLoading: true }));
     
-    // Fetch generic data based on roles later, or fetch open data
-    const { data: dbQuestions, error: qError } = await supabase.from('questions').select('*');
-    if (qError) console.error('AppContext error fetching questions:', qError.message);
-    
     const { data: registry, error: rError } = await supabase.from('registry').select('*');
     if (rError) console.error('AppContext error fetching registry:', rError.message);
-    
-    let questionsList: Question[] = [];
-    if (dbQuestions && dbQuestions.length > 0) {
-      questionsList = dbQuestions.map((q: any) => ({
-        id: q.id,
-        catId: q.cat_id || q.catId || '1',
-        catName: q.cat_name || q.catName || 'Загальні питання',
-        question: q.question || '',
-        options: q.options || [],
-        correct: typeof q.correct === 'number' ? q.correct : 0,
-        explanation: q.explanation || ''
-      }));
-    } else {
-      questionsList = [...questionsDb];
-    }
 
-    let casesList: Case[] = [];
-    try {
-      const { data: dbCases, error: cError } = await supabase.from('cases').select('*').order('id', { ascending: true });
-      if (cError) {
-        console.error('AppContext error fetching cases:', cError.message);
-        casesList = [...casesDb];
-      } else if (dbCases && dbCases.length > 0) {
-        casesList = dbCases.map((c: any) => ({
-          id: c.id,
-          title: c.title,
-          situation: c.situation,
-          question: c.question,
-          options: c.options,
-          correctAnswer: c.correct_answer !== undefined ? c.correct_answer : c.correctAnswer,
-          explanation: c.explanation
-        }));
-      } else {
-        casesList = [...casesDb];
-      }
-    } catch (err) {
-      console.error('Error fetching cases from DB, falling back to static casesDb:', err);
-      casesList = [...casesDb];
-    }
-    console.log('AppContext: casesList loaded with', casesList.length, 'items');
-    
     let usersList: User[] = [];
     let applicationsList: Application[] = [];
     let visitsList: VisitRecord[] = [];
@@ -242,104 +298,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
     
+    // Test content is only for signed-in users; correct answers only for staff.
+    let questionsList: Question[] = [];
+    let casesList: Case[] = [];
+    if (session?.user) {
+      const isStaff = currentRole === 'admin' || currentRole === 'teacher';
+      const [questionsRes, casesRes] = await Promise.all([
+        isStaff
+          ? supabase.rpc('get_questions_full')
+          : supabase.from('questions').select('id, cat_id, cat_name, question, options').order('id'),
+        supabase.from('cases').select('*').order('id', { ascending: true })
+      ]);
+      if (questionsRes.error) console.error('AppContext error fetching questions:', questionsRes.error.message);
+      if (casesRes.error) console.error('AppContext error fetching cases:', casesRes.error.message);
+      questionsList = (questionsRes.data || []).map(toQuestion);
+      casesList = (casesRes.data || []).map(toCase);
+    }
+
     if (currentRole === 'admin' || currentRole === 'teacher') {
-      const { data: profiles, error: pError } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
-      if (pError) {
-        console.error('AppContext error fetching profiles list:', pError.message);
-      }
-      
-      if (profiles) {
-        const { data: allScores, error: sError } = await supabase.from('test_scores').select('*');
-        if (sError) {
-          console.error('AppContext error fetching test scores:', sError.message);
-        }
-        
-        usersList = profiles.map(p => ({
-          id: p.id,
-          name: p.name,
-          email: p.email || '',
-          role: p.role as Role,
-          testPermission: p.test_permission,
-          testScores: allScores?.filter(s => s.user_id === p.id) || [],
-          lastSeenAt: p.last_seen_at || null,
-          lastSignInAt: p.last_sign_in_at || null,
-          currentPage: p.current_page || null,
-          currentDevice: p.current_device || null
-        }));
+      const [profilesRes, scoresRes, appsRes, visitsRes] = await Promise.all([
+        supabase.from('profiles').select('*').order('created_at', { ascending: false }),
+        supabase.from('test_scores').select('*'),
+        supabase.from('applications').select(APPLICATION_LIST_COLUMNS).order('created_at', { ascending: false }),
+        supabase.from('user_visits').select('*').order('created_at', { ascending: false }).limit(500)
+      ]);
+      if (profilesRes.error) console.error('AppContext error fetching profiles list:', profilesRes.error.message);
+      if (scoresRes.error) console.error('AppContext error fetching test scores:', scoresRes.error.message);
+      if (appsRes.error) console.error('AppContext error fetching applications list:', appsRes.error.message);
+      if (visitsRes.error) console.error('AppContext error fetching user_visits:', visitsRes.error.message);
 
-        // Calculate online registered users
-        const now = Date.now();
-        profiles.forEach(p => {
-          if (p.last_seen_at) {
-            const lastSeenTime = new Date(p.last_seen_at).getTime();
-            const diffMs = now - lastSeenTime;
-            if (diffMs <= 5 * 60 * 1000) {
-              onlineUsersList.push({
-                id: p.id,
-                name: p.name,
-                email: p.email || '',
-                role: p.role as Role,
-                lastSeenAt: p.last_seen_at,
-                currentPage: p.current_page || '/',
-                currentDevice: p.current_device || 'Невідомий пристрій',
-                isOnline: diffMs <= 2 * 60 * 1000,
-                isAway: diffMs > 2 * 60 * 1000 && diffMs <= 5 * 60 * 1000
-              });
-            }
-          }
-        });
-      }
-      
-      const { data: apps, error: appError } = await supabase.from('applications').select('*').order('created_at', { ascending: false });
-      if (appError) {
-        console.error('AppContext error fetching applications list:', appError.message);
-      }
-      if (apps) {
-        applicationsList = apps;
-      }
+      const scoresByUser = new Map<string, TestScore[]>();
+      (scoresRes.data || []).forEach(sc => {
+        const list = scoresByUser.get(sc.user_id) || [];
+        list.push(sc);
+        scoresByUser.set(sc.user_id, list);
+      });
 
-      // Fetch visit logs
-      const { data: vData, error: vError } = await supabase
-        .from('user_visits')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(500);
-
-      if (vError) {
-        console.error('AppContext error fetching user_visits:', vError.message);
-      } else if (vData) {
-        visitsList = vData;
-
-        // Extract active guest sessions
-        const now = Date.now();
-        const guestMap = new Map<string, any>();
-        vData.forEach(v => {
-          if (!v.user_id && v.session_id) {
-            const lastSeenTime = new Date(v.last_seen_at || v.created_at).getTime();
-            const diffMs = now - lastSeenTime;
-            if (diffMs <= 5 * 60 * 1000 && !guestMap.has(v.session_id)) {
-              guestMap.set(v.session_id, v);
-            }
-          }
-        });
-
-        guestMap.forEach((v, sessId) => {
-          const lastSeenTime = new Date(v.last_seen_at || v.created_at).getTime();
-          const diffMs = now - lastSeenTime;
-          onlineUsersList.push({
-            id: `guest_${sessId}`,
-            name: `Гість (${sessId.slice(0, 8)})`,
-            email: 'Неавторизований відвідувач',
-            role: 'guest',
-            lastSeenAt: v.last_seen_at || v.created_at,
-            currentPage: v.path || '/',
-            currentDevice: v.browser ? `${v.device_type === 'Mobile' ? '📱' : '🖥️'} ${v.browser} (${v.os || ''})` : 'Гість',
-            isOnline: diffMs <= 2 * 60 * 1000,
-            isAway: diffMs > 2 * 60 * 1000 && diffMs <= 5 * 60 * 1000,
-            sessionId: sessId
-          });
-        });
-      }
+      usersList = (profilesRes.data || []).map(p => ({
+        id: p.id,
+        name: p.name,
+        email: p.email || '',
+        role: p.role as Role,
+        testPermission: p.test_permission,
+        testScores: scoresByUser.get(p.id) || [],
+        lastSeenAt: p.last_seen_at || null,
+        lastSignInAt: p.last_sign_in_at || null,
+        currentPage: p.current_page || null,
+        currentDevice: p.current_device || null
+      }));
+      applicationsList = (appsRes.data || []) as Application[];
+      visitsList = visitsRes.data || [];
+      onlineUsersList = buildOnlineList(profilesRes.data, visitsRes.data);
     }
 
     setState(prev => ({
@@ -357,106 +366,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const fetchVisitsData = async () => {
     try {
-      const { data: vData, error: vError } = await supabase
-        .from('user_visits')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(500);
+      const [visitsRes, profilesRes] = await Promise.all([
+        supabase.from('user_visits').select('*').order('created_at', { ascending: false }).limit(500),
+        supabase.from('profiles').select('*').order('created_at', { ascending: false })
+      ]);
+      if (visitsRes.error) console.error('Error in fetchVisitsData (user_visits):', visitsRes.error.message);
+      if (profilesRes.error) console.error('Error in fetchVisitsData (profiles):', profilesRes.error.message);
 
-      if (vError) {
-        console.error('Error in fetchVisitsData (user_visits):', vError.message);
-      }
-
-      const { data: profiles, error: pError } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (pError) {
-        console.error('Error in fetchVisitsData (profiles):', pError.message);
-      }
-
-      const now = Date.now();
-      const onlineList: OnlineUser[] = [];
-
-      if (profiles && profiles.length > 0) {
-        profiles.forEach(p => {
-          if (p.last_seen_at) {
-            const lastSeenTime = new Date(p.last_seen_at).getTime();
-            const diffMs = now - lastSeenTime;
-            if (diffMs <= 5 * 60 * 1000) {
-              onlineList.push({
-                id: p.id,
-                name: p.name,
-                email: p.email || '',
-                role: p.role as Role,
-                lastSeenAt: p.last_seen_at,
-                currentPage: p.current_page || '/',
-                currentDevice: p.current_device || 'Невідомий пристрій',
-                isOnline: diffMs <= 2 * 60 * 1000,
-                isAway: diffMs > 2 * 60 * 1000 && diffMs <= 5 * 60 * 1000
-              });
-            }
-          }
-        });
-      }
-
-      if (vData && vData.length > 0) {
-        const guestMap = new Map<string, any>();
-        vData.forEach(v => {
-          if (!v.user_id && v.session_id) {
-            const lastSeenTime = new Date(v.last_seen_at || v.created_at).getTime();
-            const diffMs = now - lastSeenTime;
-            if (diffMs <= 5 * 60 * 1000 && !guestMap.has(v.session_id)) {
-              guestMap.set(v.session_id, v);
-            }
-          }
-        });
-
-        guestMap.forEach((v, sessId) => {
-          const lastSeenTime = new Date(v.last_seen_at || v.created_at).getTime();
-          const diffMs = now - lastSeenTime;
-          onlineList.push({
-            id: `guest_${sessId}`,
-            name: `Гість (${sessId.slice(0, 8)})`,
-            email: 'Неавторизований відвідувач',
-            role: 'guest',
-            lastSeenAt: v.last_seen_at || v.created_at,
-            currentPage: v.path || '/',
-            currentDevice: v.browser ? `${v.device_type === 'Mobile' ? '📱' : '🖥️'} ${v.browser} (${v.os || ''})` : 'Гість',
-            isOnline: diffMs <= 2 * 60 * 1000,
-            isAway: diffMs > 2 * 60 * 1000 && diffMs <= 5 * 60 * 1000,
-            sessionId: sessId
-          });
-        });
-      }
-
-      // Also update usersList in state with refreshed lastSeenAt / currentPage
-      setState(prev => {
-        let updatedUsers = prev.users;
-        if (profiles && profiles.length > 0) {
-          updatedUsers = prev.users.map(u => {
-            const p = profiles.find(prof => prof.id === u.id);
-            if (p) {
-              return {
-                ...u,
-                lastSeenAt: p.last_seen_at || null,
-                lastSignInAt: p.last_sign_in_at || null,
-                currentPage: p.current_page || null,
-                currentDevice: p.current_device || null
-              };
-            }
-            return u;
-          });
-        }
-
-        return {
-          ...prev,
-          visits: vData || [],
-          onlineUsers: onlineList,
-          users: updatedUsers
-        };
-      });
+      const profiles = profilesRes.data || [];
+      const profileById = new Map(profiles.map(p => [p.id, p]));
+      setState(prev => ({
+        ...prev,
+        visits: visitsRes.data || [],
+        onlineUsers: buildOnlineList(profiles, visitsRes.data),
+        users: prev.users.map(u => {
+          const p = profileById.get(u.id);
+          return p ? {
+            ...u,
+            lastSeenAt: p.last_seen_at || null,
+            lastSignInAt: p.last_sign_in_at || null,
+            currentPage: p.current_page || null,
+            currentDevice: p.current_device || null
+          } : u;
+        })
+      }));
     } catch (err) {
       console.error('Error fetching visits data:', err);
     }
@@ -478,9 +411,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (event === 'SIGNED_IN' && session?.user) {
         const userProfile = await fetchCurrentUserProfile(session.user.id, session.user.email || '');
         setState(prev => ({ ...prev, currentUser: userProfile }));
+        // INITIAL_SESSION is handled by getSession() above; this is a real sign-in.
         fetchData();
       } else if (event === 'SIGNED_OUT') {
-        setState(prev => ({ ...prev, currentUser: null, users: [] }));
+        setState(prev => ({ ...prev, currentUser: null, originalAdminUser: null, users: [], applications: [], visits: [], onlineUsers: [] }));
       }
     });
 
@@ -488,12 +422,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       authListener.subscription.unsubscribe();
     };
   }, []);
-
-  useEffect(() => {
-    if (state.currentUser) {
-      fetchData();
-    }
-  }, [state.currentUser?.role]);
 
   const addRegistryItem = async (item: Omit<RegistryItem, 'id'>) => {
     const { data, error } = await supabase.from('registry').insert([item]).select();
@@ -531,23 +459,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const login = async (email: string, pass: string) => {
+  const login = async (email: string, pass: string): Promise<Role | null> => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
-    if (error) {
-      alert("Невірний логін або пароль");
-      return false;
+    if (error || !data?.user) {
+      return null;
     }
-    if (data?.user) {
-      const userProfile = await fetchCurrentUserProfile(data.user.id, data.user.email || email);
-      if (userProfile) {
-        await trackActivity({
-          path: window.location.pathname,
-          action: 'login',
-          user: userProfile
-        });
-      }
+    const userProfile = await fetchCurrentUserProfile(data.user.id, data.user.email || email);
+    if (userProfile) {
+      await trackActivity({
+        path: window.location.pathname,
+        action: 'login',
+        user: userProfile
+      });
     }
-    return true;
+    return userProfile?.role ?? 'user';
   };
 
   const logout = async () => {
@@ -561,73 +486,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await supabase.auth.signOut();
   };
 
+  // User accounts are managed by the api service; the browser never holds the service_role key.
   const adminCreateUser = async (userParams: {email: string, password: string, name: string, role: Role, testPermission: boolean}) => {
-    // Uses service role to bypass auth restriction on user creation
-    const { data, error } = await supabaseAdmin.auth.admin.createUser({
-      email: userParams.email,
-      password: userParams.password,
-      email_confirm: true,
-      user_metadata: { name: userParams.name, role: userParams.role }
-    });
-
-    if (error) {
-      alert("Помилка створення користувача: " + error.message);
-      return;
-    }
-
-    if (data.user) {
-      const { error: profileError } = await supabaseAdmin.from('profiles').insert({
-        id: data.user.id,
-        name: userParams.name,
-        email: userParams.email,
-        role: userParams.role,
-        test_permission: userParams.testPermission
-      });
-      if (profileError) {
-        alert("Користувача створено, але помилка з профілем: " + profileError.message);
-      }
+    try {
+      await apiRequest('/admin/users', 'POST', userParams);
       await fetchData();
+    } catch (e) {
+      alert("Помилка створення користувача: " + errorMessage(e));
     }
   };
 
   const adminUpdateUser = async (userId: string, updates: { name?: string, email?: string, password?: string, role?: Role, testPermission?: boolean }) => {
     setState(prev => ({ ...prev, isLoading: true }));
     try {
-      const authUpdates: any = {};
-      if (updates.email) authUpdates.email = updates.email;
-      if (updates.password) authUpdates.password = updates.password;
-      if (updates.name || updates.role) {
-        authUpdates.user_metadata = {};
-        if (updates.name) authUpdates.user_metadata.name = updates.name;
-        if (updates.role) authUpdates.user_metadata.role = updates.role;
-      }
-
-      if (Object.keys(authUpdates).length > 0) {
-        const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(userId, authUpdates);
-        if (authError) {
-          alert("Помилка оновлення акаунту: " + authError.message);
-          return;
-        }
-      }
-
-      const profileUpdates: any = {};
-      if (updates.name) profileUpdates.name = updates.name;
-      if (updates.email) profileUpdates.email = updates.email;
-      if (updates.role) profileUpdates.role = updates.role;
-      if (updates.testPermission !== undefined) profileUpdates.test_permission = updates.testPermission;
-
-      if (Object.keys(profileUpdates).length > 0) {
-        const { error: profileError } = await supabase.from('profiles').update(profileUpdates).eq('id', userId);
-        if (profileError) {
-          alert("Помилка оновлення профілю: " + profileError.message);
-          return;
-        }
-      }
-
+      await apiRequest(`/admin/users/${encodeURIComponent(userId)}`, 'PATCH', updates);
       await fetchData();
-    } catch (e: any) {
-      console.error(e);
-      alert("Помилка при оновленні: " + e.message);
+    } catch (e) {
+      alert("Помилка при оновленні: " + errorMessage(e));
     } finally {
       setState(prev => ({ ...prev, isLoading: false }));
     }
@@ -636,17 +511,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const adminDeleteUser = async (userId: string) => {
     setState(prev => ({ ...prev, isLoading: true }));
     try {
-      const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
-      if (error) {
-        alert("Помилка видалення користувача з Auth: " + error.message);
-        return;
-      }
-
-      await supabase.from('profiles').delete().eq('id', userId);
+      await apiRequest(`/admin/users/${encodeURIComponent(userId)}`, 'DELETE');
       await fetchData();
-    } catch (e: any) {
-      console.error(e);
-      alert("Помилка при видаленні: " + e.message);
+    } catch (e) {
+      alert("Помилка при видаленні: " + errorMessage(e));
     } finally {
       setState(prev => ({ ...prev, isLoading: false }));
     }
@@ -661,22 +529,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const saveTestScore = async (score: Omit<TestScore, 'id' | 'created_at' | 'user_id'> & { details?: any }) => {
-    if (!state.currentUser) return;
-    
+  const saveTestScore = async (score: Omit<TestScore, 'id' | 'created_at' | 'user_id'> & { details?: TestDetails }) => {
+    if (!state.currentUser) return null;
+
+    // The returned row carries the score and correct answers set by the database.
     const { data, error } = await supabase.from('test_scores').insert([{
       ...score,
       user_id: state.currentUser.id
     }]).select();
 
     if (!error && data) {
+      // For candidates the database scores the test and revokes the permission
+      // (migration 011). An impersonating admin revokes it explicitly.
       let nextPermission = state.currentUser.testPermission;
-      
       if (state.currentUser.role === 'user') {
         nextPermission = false;
-        const { error: permError } = await supabase.from('profiles').update({ test_permission: false }).eq('id', state.currentUser.id);
-        if (permError) {
-          console.error("Error revoking test permission:", permError.message);
+        if (state.originalAdminUser) {
+          const { error: permError } = await supabase.from('profiles').update({ test_permission: false }).eq('id', state.currentUser.id);
+          if (permError) {
+            console.error("Error revoking test permission:", permError.message);
+          }
         }
       }
 
@@ -689,19 +561,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }));
       fetchData();
-    } else {
-      alert("Помилка збереження результату: " + (error?.message || "Невідома помилка"));
+      return data[0] as TestScore;
     }
+    alert("Помилка збереження результату: " + dbErrorMessage(error?.message));
+    return null;
   };
 
-  const submitApplication = async (app: Omit<Application, 'id' | 'created_at' | 'status'>) => {
-    const { error } = await supabase.from('applications').insert([app]);
-    if (error) {
-      alert("Помилка подачі заяви: " + error.message);
-      return false;
+  // Returns the application number assigned by the database, or null on error.
+  const submitApplication = async (app: Omit<Application, 'id' | 'created_at' | 'status' | 'app_number' | 'email_verified'>) => {
+    const { data, error } = await supabase.rpc('submit_application', { p: app });
+    if (error || typeof data !== 'string') {
+      alert("Помилка подачі заяви: " + dbErrorMessage(error?.message));
+      return null;
     }
-    await fetchData();
-    return true;
+    return data;
+  };
+
+  const loadApplicationDetails = async (id: string) => {
+    const { data, error } = await supabase.from('applications').select('*').eq('id', id).single();
+    if (error) {
+      alert("Не вдалося завантажити заяву: " + error.message);
+      return null;
+    }
+    return data as Application;
   };
 
   const updateApplicationStatus = async (id: string, status: 'pending' | 'approved' | 'rejected') => {
@@ -739,17 +621,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       correct: q.correct,
       explanation: q.explanation
     };
-    const { data, error } = await supabase.from('questions').insert([dbQ]).select();
+    const { data, error } = await supabase.from('questions').insert([dbQ]).select('id, cat_id, cat_name, question, options');
     if (!error && data) {
-      const mapped = {
-        id: data[0].id,
-        catId: data[0].cat_id,
-        catName: data[0].cat_name,
-        question: data[0].question,
-        options: data[0].options,
-        correct: data[0].correct,
-        explanation: data[0].explanation
-      };
+      const mapped = { ...toQuestion(data[0]), correct: q.correct, explanation: q.explanation };
       setState(prev => ({ ...prev, questions: [...prev.questions, mapped] }));
     } else {
       alert("Помилка додавання питання: " + (error?.message || ""));
@@ -765,17 +639,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       correct: q.correct,
       explanation: q.explanation
     };
-    const { data, error } = await supabase.from('questions').update(dbQ).eq('id', id).select();
+    const { data, error } = await supabase.from('questions').update(dbQ).eq('id', id).select('id, cat_id, cat_name, question, options');
     if (!error && data) {
-      const mapped = {
-        id: data[0].id,
-        catId: data[0].cat_id,
-        catName: data[0].cat_name,
-        question: data[0].question,
-        options: data[0].options,
-        correct: data[0].correct,
-        explanation: data[0].explanation
-      };
+      const mapped = { ...toQuestion(data[0]), correct: q.correct, explanation: q.explanation };
       setState(prev => ({
         ...prev,
         questions: prev.questions.map(old => old.id === id ? mapped : old)
@@ -808,15 +674,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     const { data, error } = await supabase.from('cases').insert([dbCase]).select();
     if (!error && data) {
-      const mapped = {
-        id: data[0].id,
-        title: data[0].title,
-        situation: data[0].situation,
-        question: data[0].question,
-        options: data[0].options,
-        correctAnswer: data[0].correct_answer,
-        explanation: data[0].explanation
-      };
+      const mapped = toCase(data[0]);
       setState(prev => ({ ...prev, cases: [...prev.cases, mapped] }));
     } else {
       alert("Помилка додавання кейсу: " + (error?.message || ""));
@@ -834,15 +692,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     const { data, error } = await supabase.from('cases').update(dbCase).eq('id', id).select();
     if (!error && data) {
-      const mapped = {
-        id: data[0].id,
-        title: data[0].title,
-        situation: data[0].situation,
-        question: data[0].question,
-        options: data[0].options,
-        correctAnswer: data[0].correct_answer,
-        explanation: data[0].explanation
-      };
+      const mapped = toCase(data[0]);
       setState(prev => ({
         ...prev,
         cases: prev.cases.map(old => old.id === id ? mapped : old)
@@ -886,59 +736,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
-  const updateEmailConfig = (configUpdates: Partial<EmailVerificationConfig>) => {
-    setState(prev => {
-      const updated = { ...prev.emailConfig, ...configUpdates };
-      try {
-        localStorage.setItem('lms_email_verification_config', JSON.stringify(updated));
-      } catch (e) {
-        console.error('Failed to save email config to localStorage:', e);
-      }
-      return {
-        ...prev,
-        emailConfig: updated
-      };
-    });
+  const sendVerificationEmail = async (toEmail: string, recipientName: string = 'Заявник') => {
+    try {
+      await apiRequest('/otp/send', 'POST', { email: toEmail, name: recipientName });
+      return { success: true, message: `Код підтвердження надіслано на пошту ${toEmail}` };
+    } catch (e) {
+      return { success: false, message: errorMessage(e) };
+    }
   };
 
-  const sendVerificationEmail = async (toEmail: string, recipientName: string = 'Заявник'): Promise<{ success: boolean; code: string; message: string }> => {
-    const config = state.emailConfig;
-    if (!config.enabled) {
-      return {
-        success: false,
-        code: '',
-        message: 'Сервіс Email-верифікації вимкнено адміністратором.'
-      };
+  const verifyEmailCode = async (toEmail: string, code: string) => {
+    try {
+      await apiRequest('/otp/verify', 'POST', { email: toEmail, code });
+      return { success: true, message: 'Email підтверджено' };
+    } catch (e) {
+      return { success: false, message: errorMessage(e) };
     }
-
-    const digits = config.codeLength || 6;
-    const min = Math.pow(10, digits - 1);
-    const max = Math.pow(10, digits) - 1;
-    const code = Math.floor(min + Math.random() * (max - min + 1)).toString();
-
-    // Prepare text template
-    const textBody = (config.emailTemplate || defaultEmailConfig.emailTemplate)
-      .replace(/{code}/g, code)
-      .replace(/{name}/g, recipientName)
-      .replace(/{email}/g, toEmail)
-      .replace(/{expiry}/g, String(config.codeExpiryMinutes || 10));
-
-    console.log(`[Email Service - Provider: ${config.provider}]`, {
-      to: toEmail,
-      subject: config.emailSubject,
-      from: `${config.senderName} <${config.senderEmail}>`,
-      code,
-      body: textBody
-    });
-
-    // Simulating slight network latency for authentic feel
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    return {
-      success: true,
-      code,
-      message: `Код підтвердження надіслано на пошту ${toEmail}`
-    };
   };
 
   return (
@@ -965,8 +778,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addCase, 
       updateCase, 
       deleteCase, 
-      updateEmailConfig,
       sendVerificationEmail,
+      verifyEmailCode,
+      loadApplicationDetails,
       fetchData,
       fetchVisitsData
     }}>
@@ -975,6 +789,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   );
 };
 
+// The hook lives next to its provider on purpose (one import for every page).
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAppContext = () => {
   const context = useContext(AppContext);
   if (context === undefined) {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Navbar } from './Navbar';
 import { Footer } from './Footer';
@@ -10,15 +10,21 @@ export const Layout: React.FC = () => {
   const [ttsError, setTtsError] = useState<string | null>(null);
   const location = useLocation();
   const { state } = useAppContext();
+  // Effects re-run per page or per signed-in user; the latest profile is read from the ref.
+  const currentUserRef = useRef(state.currentUser);
+  useEffect(() => {
+    currentUserRef.current = state.currentUser;
+  });
+  const userId = state.currentUser?.id;
 
   // Track page visits on location change
   useEffect(() => {
     trackActivity({
       path: location.pathname,
       action: 'visit',
-      user: state.currentUser
+      user: currentUserRef.current
     });
-  }, [location.pathname, state.currentUser?.id]);
+  }, [location.pathname, userId]);
 
   // Periodic heartbeat every 25 seconds while tab is active
   useEffect(() => {
@@ -27,7 +33,7 @@ export const Layout: React.FC = () => {
         trackActivity({
           path: location.pathname,
           action: 'heartbeat',
-          user: state.currentUser
+          user: currentUserRef.current
         });
       }
     };
@@ -46,7 +52,7 @@ export const Layout: React.FC = () => {
       clearInterval(intervalId);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [location.pathname, state.currentUser?.id]);
+  }, [location.pathname, userId]);
 
   useEffect(() => {
     const handleTtsError = (e: Event) => {
@@ -71,7 +77,9 @@ export const Layout: React.FC = () => {
             </div>
           </div>
         )}
-        <Outlet />
+        <Suspense fallback={<div className="container mt-5 mb-5 text-center" role="status">Завантаження…</div>}>
+          <Outlet />
+        </Suspense>
       </main>
       <AccessibilityPanel />
       <Footer />

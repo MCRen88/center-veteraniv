@@ -1,9 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useAppContext } from '../context/AppContext';
 import type { Question } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { casesDb } from '../data/casesDb';
-import { questionsDb } from '../data/questionsDb';
 import { speakText, stopSpeaking } from '../utils/tts';
 import { variant1Questions, variant2Questions } from '../data/variantsData';
 
@@ -16,16 +14,19 @@ export const Test: React.FC = () => {
   const [mode, setMode] = useState<TestMode>(null);
   const [selectedVariant, setSelectedVariant] = useState<number | null>(null);
 
-  const casesList = state.cases && state.cases.length > 0 ? state.cases : casesDb;
-  const activeCases = selectedVariant ? casesList.filter(c => selectedVariant === 2 ? c.id > 10 : c.id <= 10) : casesList;
+  const activeCases = useMemo(() => {
+    const casesList = state.cases || [];
+    return selectedVariant ? casesList.filter(c => selectedVariant === 2 ? c.id > 10 : c.id <= 10) : casesList;
+  }, [state.cases, selectedVariant]);
 
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [testQuestions, setTestQuestions] = useState<Question[]>(() => 
-    (state.questions && state.questions.length > 0) ? state.questions : questionsDb
-  );
+  // Candidates receive questions without correct answers; those come back from the
+  // database after the attempt is saved (see applySavedResult).
+  const [testQuestions, setTestQuestions] = useState<Question[]>(() => state.questions || []);
   const [answers, setAnswers] = useState<number[]>([]);
   const [isFinished, setIsFinished] = useState(false);
   const [score, setScore] = useState(0);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const [timeLeft, setTimeLeft] = useState(7200); // 2 hours in seconds
   const [warnings, setWarnings] = useState(0);
@@ -71,8 +72,7 @@ export const Test: React.FC = () => {
 
   // Stop speaking and optionally auto-read when navigating
   useEffect(() => {
-    stopSpeaking();
-    setIsSpeaking(false);
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
     if (autoReadState && mode && !isFinished) {
       let textToSpeak = '';
@@ -93,17 +93,23 @@ export const Test: React.FC = () => {
       }
 
       if (textToSpeak) {
-        const timer = setTimeout(() => {
+        timer = setTimeout(() => {
           speakText(
             textToSpeak,
             () => setIsSpeaking(true),
             () => setIsSpeaking(false)
           );
         }, 300);
-        return () => clearTimeout(timer);
       }
     }
-  }, [currentQuestionIndex, currentCaseIndex, showCases, casesFinished, isFinished, mode, autoReadState]);
+
+    // Leaving a question (or the page) stops any reading in progress.
+    return () => {
+      if (timer) clearTimeout(timer);
+      stopSpeaking();
+      setIsSpeaking(false);
+    };
+  }, [currentQuestionIndex, currentCaseIndex, showCases, casesFinished, isFinished, mode, autoReadState, activeCases, testQuestions]);
 
   const speakCurrentQuestion = () => {
     if (isSpeaking) {
@@ -160,6 +166,9 @@ export const Test: React.FC = () => {
           if (restoredMode === 'practice' && state.currentUser?.role !== 'admin' && !isImpersonating) {
             restoredMode = 'exam';
           }
+          // One-time restore of an unfinished attempt from localStorage once the user is known
+          // (on a hard refresh the user loads after mount, so lazy initial state cannot do it).
+          // eslint-disable-next-line react-hooks/set-state-in-effect
           setMode(restoredMode);
           setSelectedVariant(parsed.selectedVariant ?? null);
           setCurrentQuestionIndex(parsed.currentQuestionIndex ?? 0);
@@ -168,7 +177,7 @@ export const Test: React.FC = () => {
             const qLen = parsed.testQuestions.length;
             const restoredAnswers = new Array(qLen).fill(-1);
             if (Array.isArray(parsed.answers)) {
-              parsed.answers.forEach((ans: any, i: number) => {
+              parsed.answers.forEach((ans: unknown, i: number) => {
                 if (i < qLen && typeof ans === 'number') {
                   restoredAnswers[i] = ans;
                 }
@@ -206,7 +215,7 @@ export const Test: React.FC = () => {
       }
     }
     isRestored.current = true;
-  }, [state.currentUser]);
+  }, [state.currentUser, isImpersonating]);
 
   // Save test state to localStorage on state changes
   useEffect(() => {
@@ -351,6 +360,7 @@ export const Test: React.FC = () => {
     setSelectedVariant(variant);
 
     setMode(effectiveMode);
+    setSaveError(null);
     setWarnings(0);
     setShowWarningModal(false);
     setShowCompletionModal(false);
@@ -386,7 +396,7 @@ export const Test: React.FC = () => {
       return matches / Math.max(words1.length, words2.length);
     };
 
-    const pool = (state.questions && state.questions.length > 0) ? state.questions : questionsDb;
+    const pool = state.questions || [];
     const matchedQs: Question[] = [];
     variantList.forEach((vQText) => {
       const normVQ = normalizeText(vQText);
@@ -458,156 +468,73 @@ export const Test: React.FC = () => {
     }
   };
 
-  const buildTestDetails = (finalScore: number, wasTerminatedOnViolation = false) => {
-    const now = Date.now();
-    const elapsed = Math.round((now - questionStartTime) / 1000);
+  // Raw attempt data. The database adds the correct answers and the score
+  // (trigger enforce_test_score); the behaviour profile is derived from the saved row.
+  const buildRawDetails = (terminated: boolean) => {
+    const elapsed = Math.round((Date.now() - questionStartTime) / 1000);
     const finalTimePerQuestion = {
       ...timePerQuestion,
       [currentQuestionIndex]: (timePerQuestion[currentQuestionIndex] || 0) + elapsed
     };
     const totalTimeSpent = Object.values(finalTimePerQuestion).reduce((a, b) => a + b, 0);
 
-    const totalQuestions = testQuestions.length;
-    const avgTime = totalQuestions > 0 ? totalTimeSpent / totalQuestions : 0;
-    
-    const categoryStats: { [key: string]: { correct: number; total: number } } = {};
-    testQuestions.forEach((q, idx) => {
-      if (!q) return;
-      const cat = q.catName || 'Загальні питання';
-      if (!categoryStats[cat]) {
-        categoryStats[cat] = { correct: 0, total: 0 };
-      }
-      categoryStats[cat].total++;
-      if (answers[idx] === q.correct) {
-        categoryStats[cat].correct++;
-      }
-    });
-    
-    let strongest = '';
-    let weakest = '';
-    let maxRate = -1;
-    let minRate = 2;
-    
-    Object.keys(categoryStats).forEach(cat => {
-      const rate = categoryStats[cat].correct / categoryStats[cat].total;
-      if (rate > maxRate) {
-        maxRate = rate;
-        strongest = cat;
-      }
-      if (rate < minRate) {
-        minRate = rate;
-        weakest = cat;
-      }
-    });
-
-    const totalChanges = Object.values(answerChanges).reduce((a, b) => a + b, 0);
-
-    let style = 'Збалансований';
-    let description = 'Кандидат демонструє оптимальний баланс швидкості та якості прийняття рішень. Працює в стабільному темпі, приділяючи помірну увагу кожному питанню.';
-    let strengths: string[] | string = ['Стабільний темп роботи', 'Адекватна самооцінка впевненості', 'Низький рівень помилок через неуважність'];
-    let weaknesses: string[] | string = ['Можлива легка нерішучість на складних запитаннях'];
-
-    const scoreRate = totalQuestions > 0 ? finalScore / totalQuestions : 0;
-
-    if (avgTime < 15 && totalChanges <= 2) {
-      style = 'Імпульсивний';
-      description = 'Кандидат відповідає дуже швидко, практично без вагань та виправлень. Це може свідчити про високу впевненість у своїх знаннях або схильність до поспішних висновків без глибокого аналізу варіантів.';
-      strengths = ['Висока швидкість реакції', 'Інтуїтивне розуміння матеріалу', 'Рішучість'];
-      weaknesses = ['Помилки через поспіх', 'Поверхневий аналіз складних ситуацій', 'Ігнорування важливих деталей у формулюваннях'];
-    } else if (avgTime > 35 && totalChanges >= 3) {
-      style = 'Вагаючий / Невпевнений';
-      description = 'Кандидат витрачає багато часу на роздуми та часто змінює вже обрані відповіді. Це вказує на невпевненість у власних знаннях, тривожність під час тесту або бажання перестрахуватися.';
-      strengths = ['Ретельна перевірка варіантів', 'Уважність до деталей', 'Бажання уникнути помилок'];
-      weaknesses = ['Повільний темп прийняття рішень', 'Часті сумніви', 'Схильність змінювати правильну відповідь на неправильну'];
-    } else if (avgTime >= 20 && scoreRate >= 0.75 && totalChanges < 3) {
-      style = 'Аналітичний / Системний';
-      description = 'Кандидат демонструє структурований підхід: уважно вчитується в кожне питання, аналізує всі варіанти відповідей і приймає зважене рішення з першого разу.';
-      strengths = ['Глибокий логічний аналіз', 'Висока концентрація уваги', 'Стабільна впевненість'];
-      weaknesses = ['Ризик не вкластися в жорсткі часові ліміти при ускладненні питань'];
-    }
-
-    let speedCategory = 'Помірна';
-    if (avgTime < 15) speedCategory = 'Швидка';
-    if (avgTime > 35) speedCategory = 'Уповільнена';
-
-    let confidence = 'Середня';
-    if (totalChanges <= 1) confidence = 'Висока';
-    if (totalChanges >= 4) confidence = 'Низька';
-
-    let forecast = `Кандидат готовий до практичної діяльності. Слабке місце — "${weakest.split('.')[0] || weakest}", де спостерігається найбільший відсоток помилок.`;
-    if (wasTerminatedOnViolation) {
-      forecast = 'Тестування заблоковано та анульовано через систематичні порушення правил (вихід з вкладки/вікна браузера). Спрогнозувати професійну успішність неможливо через недостатність даних.';
-    } else if (scoreRate >= 0.75) {
-      forecast = `Прогноз позитивний. Кандидат демонструє високий рівень професійної компетентності. Його стиль прийняття рішень (${style.toLowerCase()}) та сильна сторона у сфері "${strongest}" дозволять йому ефективно виконувати обов'язки фахівця із супроводу ветеранів.`;
-    } else {
-      forecast = `Рекомендується додаткова підготовка. Наразі рівень знань недостатній для успішної сертифікації. Потрібно звернути увагу на зону "${weakest}", а також переглянути підхід до темпу відповідей (зменшити поспіх або сумніви).`;
-    }
-
-    let recommendations = 'Повторіть матеріал та спробуйте ще раз.';
-    if (wasTerminatedOnViolation) {
-      recommendations = 'Дотримуйтеся правил академічної доброчесності та не залишайте вікно тестування під час наступної спроби.';
-    } else if (style === 'Імпульсивний') {
-      recommendations = 'Уповільніть темп. Уважно дочитуйте питання та всі 4 варіанти відповідей до кінця перед вибором.';
-    } else if (style === 'Вагаючий / Невпевнений') {
-      recommendations = 'Довіряйте першій інтуїтивній відповіді. Намагайтеся не змінювати обраний варіант без вагомих логічних аргументів.';
-    } else if (style === 'Аналітичний / Системний') {
-      recommendations = 'Дотримуйтеся обраної стратегії. Ви демонструєте ідеальний баланс темпу та якості.';
-    }
-
-    const questionsBreakdown = testQuestions.filter(Boolean).map((q, idx) => ({
-      id: q?.id || idx,
-      question: q?.question || '',
-      catId: q?.catId || '1',
-      catName: q?.catName || 'Загальні питання',
-      options: q?.options || [],
-      correct: q?.correct ?? 0,
+    const questions = testQuestions.filter(Boolean).map((q, idx) => ({
+      id: q.id,
+      question: q.question || '',
+      catId: q.catId || '1',
+      catName: q.catName || 'Загальні питання',
+      options: q.options || [],
+      // Known only to admins/teachers; for candidates the database fills it in.
+      ...(typeof q.correct === 'number' ? { correct: q.correct } : {}),
       selected: answers[idx],
       timeSpent: finalTimePerQuestion[idx] || 0,
       changes: answerChanges[idx] || 0
     }));
 
     return {
-      questions: questionsBreakdown,
+      questions,
       totalTime: totalTimeSpent,
       tabSwitches: warnings,
       selectedVariant,
-      behaviorProfile: {
-        style,
-        confidence,
-        speedCategory,
-        description,
-        strengths,
-        weaknesses,
-        forecast,
-        recommendations
-      }
+      terminated
     };
   };
 
-  const finishTest = async () => {
+  const submitAttempt = async (terminated: boolean) => {
     if (isSavingRef.current) return;
     isSavingRef.current = true;
     setIsSubmitting(true);
     setShowCompletionModal(false);
+    setSaveError(null);
+    if (terminated) setWasTerminated(true);
 
-    let finalScore = 0;
-    testQuestions.forEach((q, index) => {
-      if (answers[index] === q.correct) finalScore++;
-    });
-    
-    const percentage = Math.round((finalScore / testQuestions.length) * 100);
-    const details = buildTestDetails(finalScore, false);
-    
+    const details = buildRawDetails(terminated);
+    const answersKnown = testQuestions.every(q => typeof q.correct === 'number');
+    const localScore = answersKnown ? testQuestions.filter((q, i) => answers[i] === q.correct).length : 0;
+    const localPassed = answersKnown && Math.round((localScore / testQuestions.length) * 100) >= 75;
+
+    let finalScore = localScore;
     try {
-      await saveTestScore({
+      const saved = await saveTestScore({
         mode: mode || 'unknown',
-        score: finalScore,
+        score: localScore,
         total: testQuestions.length,
-        passed: percentage >= 75 && !wasTerminated,
+        // For candidates the database decides; it can only lower this flag.
+        passed: !terminated && (answersKnown ? localPassed : true),
         details
       });
+      if (saved) {
+        finalScore = saved.score;
+        const verified = saved.details?.questions as { correct?: number }[] | undefined;
+        if (verified && verified.length === testQuestions.length) {
+          setTestQuestions(prev => prev.map((q, i) => ({ ...q, correct: verified[i]?.correct ?? q.correct })));
+        }
+      } else {
+        setSaveError('Результат не вдалося зберегти. Зверніться до адміністратора.');
+      }
     } catch (err) {
       console.error("Помилка збереження результату:", err);
+      setSaveError('Результат не вдалося зберегти. Зверніться до адміністратора.');
     } finally {
       setIsSubmitting(false);
       isSavingRef.current = false;
@@ -617,38 +544,8 @@ export const Test: React.FC = () => {
     setIsFinished(true);
   };
 
-  const terminateTest = async () => {
-    if (isSavingRef.current) return;
-    isSavingRef.current = true;
-    setIsSubmitting(true);
-    setShowCompletionModal(false);
-
-    setWasTerminated(true);
-    let finalScore = 0;
-    testQuestions.forEach((q, index) => {
-      if (answers[index] === q.correct) finalScore++;
-    });
-    
-    const details = buildTestDetails(finalScore, true);
-    
-    try {
-      await saveTestScore({
-        mode: mode || 'unknown',
-        score: finalScore,
-        total: testQuestions.length,
-        passed: false,
-        details
-      });
-    } catch (err) {
-      console.error("Помилка збереження результату при анулюванні:", err);
-    } finally {
-      setIsSubmitting(false);
-      isSavingRef.current = false;
-    }
-
-    setScore(finalScore);
-    setIsFinished(true);
-  };
+  const finishTest = () => submitAttempt(false);
+  const terminateTest = () => submitAttempt(true);
 
   const finishTestRef = useRef(finishTest);
   const finishCasesRef = useRef(finishCases);
@@ -661,16 +558,8 @@ export const Test: React.FC = () => {
     terminateTestRef.current = terminateTest;
   });
 
-  // Auto-submit test if time left becomes 0 in exam mode
-  useEffect(() => {
-    if (mode === 'exam' && timeLeft === 0 && !isSubmitting) {
-      if (showCases && !casesFinished) {
-        finishCases();
-      } else if (!showCases && !isFinished) {
-        finishTest();
-      }
-    }
-  }, [mode, timeLeft, isFinished, showCases, casesFinished, isSubmitting]);
+  // Time-out submission happens in the timer below: it fires on the first tick
+  // even when a restored exam already has timeLeft = 0.
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -1036,7 +925,21 @@ export const Test: React.FC = () => {
     }
 
     const percentage = Math.round((score / testQuestions.length) * 100);
-    const passed = percentage >= 75 && !wasTerminated;
+    const passed = percentage >= 75 && !wasTerminated && !saveError;
+
+    if (saveError) {
+      return (
+        <div className="container mt-5 mb-5">
+          <div className="card text-center" style={{ maxWidth: '800px', margin: '0 auto' }}>
+            <h2>Результати тестування</h2>
+            <div className="alert alert-danger" role="alert">{saveError}</div>
+            <div className="mt-4 d-flex justify-content-center gap-3">
+              <button className="btn btn-outline" onClick={exitTest}>В кабінет</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="container mt-5 mb-5">
@@ -1097,7 +1000,7 @@ export const Test: React.FC = () => {
       );
     }
 
-    const question = testQuestions[currentQuestionIndex] || testQuestions[0] || questionsDb[0];
+    const question = testQuestions[currentQuestionIndex] || testQuestions[0];
     if (!question) {
       return (
         <div className="container mt-5 mb-5 text-center">

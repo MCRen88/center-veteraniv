@@ -1,17 +1,20 @@
-import React from 'react';
+import React, { lazy } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
 import { Layout } from './components/Layout';
 import { Home } from './pages/Home';
-import { Docs } from './pages/Docs';
-import { Test } from './pages/Test';
-import { Application } from './pages/Application';
-import { Registry } from './pages/Registry';
-import { Login } from './pages/Login';
-import { UserDashboard } from './pages/UserDashboard';
-import { AdminDashboard } from './pages/AdminDashboard';
-import { TestAnalysis } from './pages/TestAnalysis';
-import { Booklet } from './pages/Booklet';
+
+// Heavy pages (node-forge, admin tools, the exam) load on demand, so the home page stays light.
+// The Suspense boundary is in Layout, so the navbar stays visible while a page loads.
+const Docs = lazy(() => import('./pages/Docs').then(m => ({ default: m.Docs })));
+const Booklet = lazy(() => import('./pages/Booklet').then(m => ({ default: m.Booklet })));
+const Test = lazy(() => import('./pages/Test').then(m => ({ default: m.Test })));
+const Application = lazy(() => import('./pages/Application').then(m => ({ default: m.Application })));
+const Registry = lazy(() => import('./pages/Registry').then(m => ({ default: m.Registry })));
+const Login = lazy(() => import('./pages/Login').then(m => ({ default: m.Login })));
+const UserDashboard = lazy(() => import('./pages/UserDashboard').then(m => ({ default: m.UserDashboard })));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
+const TestAnalysis = lazy(() => import('./pages/TestAnalysis').then(m => ({ default: m.TestAnalysis })));
 
 export const App: React.FC = () => {
   return (

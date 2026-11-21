@@ -1,53 +1,13 @@
+import { getBehaviorProfile, type QuestionResult } from '../utils/testAnalytics';
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAppContext } from '../context/AppContext';
-
-interface QuestionDetail {
-  id?: number;
-  question: string;
-  catId?: string;
-  catName?: string;
-  options: string[];
-  correct: number;
-  selected: number;
-  timeSpent: number;
-  changes: number;
-  explanation?: string;
-}
-
-interface BehaviorProfile {
-  style: string;
-  confidence: string;
-  speedCategory: string;
-  description: string;
-  strengths?: string[];
-  weaknesses?: string[];
-  forecast: string;
-  recommendations: string;
-}
-
-interface TestScoreDetails {
-  questions?: QuestionDetail[];
-  totalTime: number;
-  tabSwitches: number;
-  behaviorProfile?: BehaviorProfile;
-}
-
-interface TestScoreWithDetails {
-  id: string;
-  user_id: string;
-  score: number;
-  total: number;
-  passed: boolean;
-  mode: string;
-  created_at: string;
-  details: TestScoreDetails | null;
-}
+import { useAppContext, type TestScore } from '../context/AppContext';
 
 export const UserDashboard: React.FC = () => {
   const { state } = useAppContext();
   const navigate = useNavigate();
-  const [selectedScore, setSelectedScore] = useState<TestScoreWithDetails | null>(null);
+  const [selectedScore, setSelectedScore] = useState<TestScore | null>(null);
+  const selectedProfile = getBehaviorProfile(selectedScore?.details);
 
   const user = state.currentUser;
 
@@ -266,7 +226,7 @@ export const UserDashboard: React.FC = () => {
                   <div style={{ background: '#f8fafd', border: '1px solid #e1e8ed', borderRadius: '8px', padding: '15px', textAlign: 'center' }}>
                     <span style={{ fontSize: '24px' }}>⏱️</span>
                     <h4 style={{ margin: '8px 0 2px', fontSize: '20px', color: 'var(--dark-blue)', fontFamily: 'Comfortaa, cursive' }}>
-                      {formatTime(selectedScore.details.totalTime)}
+                      {formatTime(selectedScore.details.totalTime ?? 0)}
                     </h4>
                     <span className="text-muted" style={{ fontSize: '11px' }}>Загальний час</span>
                   </div>
@@ -274,24 +234,24 @@ export const UserDashboard: React.FC = () => {
                   <div style={{ background: '#f8fafd', border: '1px solid #e1e8ed', borderRadius: '8px', padding: '15px', textAlign: 'center' }}>
                     <span style={{ fontSize: '24px' }}>🔄</span>
                     <h4 style={{ margin: '8px 0 2px', fontSize: '20px', color: 'var(--dark-blue)', fontFamily: 'Comfortaa, cursive' }}>
-                      {selectedScore.details.questions ? selectedScore.details.questions.reduce((acc: number, q: QuestionDetail) => acc + (q.changes || 0), 0) : 0}
+                      {selectedScore.details.questions ? selectedScore.details.questions.reduce((acc: number, q: QuestionResult) => acc + (q.changes || 0), 0) : 0}
                     </h4>
                     <span className="text-muted" style={{ fontSize: '11px' }}>Змін відповідей</span>
                   </div>
 
-                  <div style={{ background: selectedScore.details.tabSwitches > 0 ? '#fdf2f2' : '#f8fafd', border: `1px solid ${selectedScore.details.tabSwitches > 0 ? '#f5c6cb' : '#e1e8ed'}`, borderRadius: '8px', padding: '15px', textAlign: 'center' }}>
+                  <div style={{ background: (selectedScore.details.tabSwitches ?? 0) > 0 ? '#fdf2f2' : '#f8fafd', border: `1px solid ${(selectedScore.details.tabSwitches ?? 0) > 0 ? '#f5c6cb' : '#e1e8ed'}`, borderRadius: '8px', padding: '15px', textAlign: 'center' }}>
                     <span style={{ fontSize: '24px' }}>⚠️</span>
-                    <h4 style={{ margin: '8px 0 2px', fontSize: '20px', color: selectedScore.details.tabSwitches > 0 ? '#c0392b' : 'var(--dark-blue)', fontFamily: 'Comfortaa, cursive' }}>
+                    <h4 style={{ margin: '8px 0 2px', fontSize: '20px', color: (selectedScore.details.tabSwitches ?? 0) > 0 ? '#c0392b' : 'var(--dark-blue)', fontFamily: 'Comfortaa, cursive' }}>
                       {selectedScore.details.tabSwitches || 0}
                     </h4>
-                    <span className="text-muted" style={{ fontSize: '11px', color: selectedScore.details.tabSwitches > 0 ? '#c0392b' : 'inherit' }}>
+                    <span className="text-muted" style={{ fontSize: '11px', color: (selectedScore.details.tabSwitches ?? 0) > 0 ? '#c0392b' : 'inherit' }}>
                       Перемикань вкладок
                     </span>
                   </div>
                 </div>
 
                 {/* Behavioral profile card */}
-                {selectedScore.details.behaviorProfile && (
+                {selectedProfile && (
                   <div className="card mb-4" style={{ background: '#fcfdfe', border: '1px solid #e1e8ed', borderLeft: '5px solid var(--rich-blue)', padding: '20px', borderRadius: '8px', cursor: 'default', transform: 'none', boxShadow: 'none' }}>
                     <h4 style={{ fontSize: '16px', color: 'var(--dark-blue)', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                       🧠 Психометричний портрет кандидата
@@ -301,32 +261,32 @@ export const UserDashboard: React.FC = () => {
                       <div style={{ fontSize: '13px' }}>
                         <span className="text-muted">Манера відповідей:</span>{' '}
                         <span className="badge" style={{ background: '#e3f2fd', color: '#1976d2', padding: '3px 8px', borderRadius: '4px', fontWeight: 'bold', fontSize: '12px' }}>
-                          {selectedScore.details.behaviorProfile.style}
+                          {selectedProfile.style}
                         </span>
                       </div>
                       <div style={{ fontSize: '13px' }}>
                         <span className="text-muted">Впевненість:</span>{' '}
                         <span className="badge" style={{ background: '#e8f5e9', color: '#2e7d32', padding: '3px 8px', borderRadius: '4px', fontWeight: 'bold', fontSize: '12px' }}>
-                          {selectedScore.details.behaviorProfile.confidence}
+                          {selectedProfile.confidence}
                         </span>
                       </div>
                       <div style={{ fontSize: '13px' }}>
                         <span className="text-muted">Темп роботи:</span>{' '}
                         <span className="badge" style={{ background: '#fff3e0', color: '#e65100', padding: '3px 8px', borderRadius: '4px', fontWeight: 'bold', fontSize: '12px' }}>
-                          {selectedScore.details.behaviorProfile.speedCategory}
+                          {selectedProfile.speedCategory}
                         </span>
                       </div>
                     </div>
 
                     <p style={{ fontSize: '14px', lineHeight: '1.5', marginBottom: '20px', color: '#555' }}>
-                      {selectedScore.details.behaviorProfile.description}
+                      {selectedProfile.description}
                     </p>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '20px' }}>
                       <div>
                         <h5 style={{ fontSize: '13px', color: '#2e7d32', marginBottom: '8px', fontWeight: 'bold' }}>✓ Сильні сторони манери:</h5>
                         <ul style={{ paddingLeft: '15px', margin: 0, listStyleType: 'disc', fontSize: '13px', color: '#555' }}>
-                          {selectedScore.details.behaviorProfile.strengths?.map((str: string, i: number) => (
+                          {selectedProfile.strengths?.map((str: string, i: number) => (
                             <li key={i} style={{ marginBottom: '4px' }}>{str}</li>
                           ))}
                         </ul>
@@ -334,7 +294,7 @@ export const UserDashboard: React.FC = () => {
                       <div>
                         <h5 style={{ fontSize: '13px', color: '#c62828', marginBottom: '8px', fontWeight: 'bold' }}>✗ Зони ризику / Слабкості:</h5>
                         <ul style={{ paddingLeft: '15px', margin: 0, listStyleType: 'disc', fontSize: '13px', color: '#555' }}>
-                          {selectedScore.details.behaviorProfile.weaknesses?.map((weak: string, i: number) => (
+                          {selectedProfile.weaknesses?.map((weak: string, i: number) => (
                             <li key={i} style={{ marginBottom: '4px' }}>{weak}</li>
                           ))}
                         </ul>
@@ -346,7 +306,7 @@ export const UserDashboard: React.FC = () => {
                         🔮 Прогноз професійної успішності:
                       </span>
                       <p style={{ fontSize: '13px', color: 'var(--text-dark)', margin: 0, fontWeight: '500' }}>
-                        {selectedScore.details.behaviorProfile.forecast}
+                        {selectedProfile.forecast}
                       </p>
                     </div>
 
@@ -355,7 +315,7 @@ export const UserDashboard: React.FC = () => {
                         💡 Рекомендації для кандидата:
                       </span>
                       <p style={{ fontSize: '13px', color: 'var(--text-dark)', margin: 0 }}>
-                        {selectedScore.details.behaviorProfile.recommendations}
+                        {selectedProfile.recommendations}
                       </p>
                     </div>
                   </div>
@@ -379,7 +339,7 @@ export const UserDashboard: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedScore.details.questions?.map((q: QuestionDetail, index: number) => {
+                      {selectedScore.details.questions?.map((q: QuestionResult, index: number) => {
                         const isCorrect = q.selected === q.correct;
                         return (
                           <tr key={index} style={{ background: isCorrect ? '#fcfdfe' : '#fff9f9' }}>
@@ -422,7 +382,7 @@ export const UserDashboard: React.FC = () => {
                                 })}
                               </div>
                             </td>
-                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>{formatTime(q.timeSpent)}</td>
+                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>{formatTime(q.timeSpent ?? 0)}</td>
                             <td style={{ textAlign: 'center' }}>{q.changes || 0}</td>
                             <td style={{ textAlign: 'center' }}>
                               <span style={{

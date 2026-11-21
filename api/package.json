@@ -1,0 +1,17 @@
+{
+  "name": "lms-portal-api",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Server-side api for the LMS portal: admin user management and email verification codes",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.108.2",
+    "nodemailer": "10.4.0"
+  }
+}

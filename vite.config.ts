@@ -6,6 +6,9 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
+      // Local api service (api/server.js): admin user management and email codes
+      '/api/admin': { target: process.env.API_DEV_URL || 'http://localhost:8787', changeOrigin: true },
+      '/api/otp': { target: process.env.API_DEV_URL || 'http://localhost:8787', changeOrigin: true },
       '/api/tts': {
         target: 'https://translate.google.com',
         changeOrigin: true,

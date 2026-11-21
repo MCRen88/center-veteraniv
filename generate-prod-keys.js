@@ -20,6 +20,7 @@ function signJWT(payload, secret) {
 // Generate random secure strings
 const postgresPassword = crypto.randomBytes(24).toString('hex');
 const jwtSecret = crypto.randomBytes(32).toString('hex');
+const otpSecret = crypto.randomBytes(32).toString('hex');
 
 // Standard Supabase payload definitions
 const anonPayload = {
@@ -47,10 +48,10 @@ console.log(`POSTGRES_PASSWORD=${postgresPassword}`);
 console.log(`JWT_SECRET=${jwtSecret}`);
 console.log(`ANON_KEY=${anonKey}`);
 console.log(`SERVICE_ROLE_KEY=${serviceRoleKey}`);
+console.log(`OTP_SECRET=${otpSecret}`);
 console.log('\n------------------------------------------------------------------------');
 console.log('Vite клієнтські змінні (також скопіюйте їх у .env):');
 console.log(`VITE_SUPABASE_ANON_KEY=${anonKey}`);
-console.log(`VITE_SUPABASE_SERVICE_KEY=${serviceRoleKey}`);
 console.log('========================================================================');
 console.log('💡 Зверніть увагу: Ці ключі згенеровані на основі унікального JWT_SECRET.');
 console.log('Зберігайте їх у безпечному місці та не коммітьте файл .env у Git!');
