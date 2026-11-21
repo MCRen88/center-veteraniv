@@ -34,13 +34,11 @@ const getSupabaseUrl = () => {
 export const supabaseUrl = getSupabaseUrl();
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-console.log('Resolved Supabase URL:', supabaseUrl);
-
 if (!supabaseAnonKey) {
   console.error("Missing VITE_SUPABASE_ANON_KEY environment variable.");
 }
 
-export const supabase = createClient<any>(
+export const supabase = createClient(
   supabaseUrl, 
   supabaseAnonKey || ''
 );

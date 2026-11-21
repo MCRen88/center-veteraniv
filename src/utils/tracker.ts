@@ -100,6 +100,16 @@ export function getDeviceInfo(): DeviceInfo {
   };
 }
 
+// crypto.randomUUID exists only in secure contexts (https, localhost); LAN dev over http needs the fallback.
+function randomUuid(): string {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
 /**
  * Returns or generates a stable session ID for current browser tab/session
  */
@@ -108,7 +118,8 @@ export function getSessionId(): string {
   
   let sessionId = sessionStorage.getItem('lms_session_id');
   if (!sessionId) {
-    sessionId = 'sess_' + Math.random().toString(36).substring(2, 10) + '_' + Date.now().toString(36);
+    // Unguessable: the heartbeat RPC only updates a visit row when it knows this id.
+    sessionId = 'sess_' + randomUuid();
     sessionStorage.setItem('lms_session_id', sessionId);
   }
   return sessionId;
@@ -164,11 +175,14 @@ export async function trackActivity(params: {
     const userRole = user ? user.role : 'guest';
     const userId = user ? user.id : null;
 
-    // 1. Insert into user_visits table
+    // 1. Log the visit. Visitors may only insert (RLS); the row id is generated here
+    // so no read-back is needed, and the heartbeat goes through touch_visit().
     if (action === 'visit' || action === 'login' || action === 'logout' || !currentVisitDbId) {
-      const { data, error } = await supabase
+      const visitId = randomUuid();
+      const { error } = await supabase
         .from('user_visits')
         .insert([{
+          id: visitId,
           user_id: userId,
           user_name: userName,
           user_email: userEmail,
@@ -180,46 +194,28 @@ export async function trackActivity(params: {
           user_agent: deviceInfo.userAgent,
           browser: deviceInfo.browser,
           os: deviceInfo.os,
-          device_type: deviceInfo.deviceType,
-          created_at: new Date().toISOString(),
-          last_seen_at: new Date().toISOString()
-        }])
-        .select('id')
-        .single();
+          device_type: deviceInfo.deviceType
+        }]);
 
-      if (!error && data) {
-        currentVisitDbId = data.id;
+      if (!error) {
+        currentVisitDbId = visitId;
       }
     } else if (action === 'heartbeat' && currentVisitDbId) {
-      // Update existing visit record last_seen_at
-      await supabase
-        .from('user_visits')
-        .update({
-          path,
-          page_title: pageTitle,
-          last_seen_at: new Date().toISOString()
-        })
-        .eq('id', currentVisitDbId);
+      await supabase.rpc('touch_visit', {
+        p_id: currentVisitDbId,
+        p_session: sessionId,
+        p_path: path,
+        p_title: pageTitle
+      });
     }
 
-    // 2. If user is authenticated, update public.profiles for fast real-time online status
+    // 2. Presence of a signed-in user (profiles.last_seen_at etc.)
     if (user && user.id) {
-      const profileUpdates: any = {
-        last_seen_at: action === 'logout' 
-          ? new Date(Date.now() - 15 * 60 * 1000).toISOString() // mark offline immediately
-          : new Date().toISOString(),
-        current_page: path,
-        current_device: deviceInfo.summary
-      };
-
-      if (action === 'login') {
-        profileUpdates.last_sign_in_at = new Date().toISOString();
-      }
-
-      await supabase
-        .from('profiles')
-        .update(profileUpdates)
-        .eq('id', user.id);
+      await supabase.rpc('touch_profile', {
+        p_path: path,
+        p_device: deviceInfo.summary,
+        p_action: action
+      });
     }
   } catch (err) {
     console.warn('Track activity error (non-critical):', err);

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 
 export const Login: React.FC = () => {
-  const { login, state } = useAppContext();
+  const { login } = useAppContext();
   const navigate = useNavigate();
   
   const [formData, setFormData] = useState({ email: '', password: '' });
@@ -15,15 +15,9 @@ export const Login: React.FC = () => {
     const email = (data.get('email') as string || '').trim().toLowerCase();
     const password = data.get('password') as string || '';
 
-    const success = await login(email, password);
-    console.log(`Submit Debug: email=[${email}] (len=${email.length}) password=[${password}] (len=${password.length})`);
-    if (success) {
-      const matchedUser = state.users.find(u => u.email === email);
-      if (matchedUser?.role === 'admin' || matchedUser?.role === 'teacher') {
-        navigate('/admin');
-      } else {
-        navigate('/dashboard');
-      }
+    const role = await login(email, password);
+    if (role) {
+      navigate(role === 'admin' || role === 'teacher' ? '/admin' : '/dashboard');
     } else {
       setError('Невірний логін або пароль');
     }

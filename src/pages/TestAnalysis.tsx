@@ -1,3 +1,4 @@
+import { getBehaviorProfile } from '../utils/testAnalytics';
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
@@ -176,6 +177,7 @@ export const TestAnalysis: React.FC = () => {
   const percentage = Math.round((score.score / score.total) * 100);
   const passed = score.passed;
   const details = score.details;
+  const behaviorProfile = getBehaviorProfile(details);
 
   return (
     <>
@@ -530,7 +532,7 @@ export const TestAnalysis: React.FC = () => {
         </div>
 
         {/* PSYCHOMETRIC PORTRAIT / BEHAVIORAL PROFILE */}
-        {details && details.behaviorProfile && (
+        {behaviorProfile && (
           <div className="card profile-card">
             <h4 className="profile-title">
               🧠 Психометричний портрет кандидата
@@ -538,25 +540,25 @@ export const TestAnalysis: React.FC = () => {
             
             <div className="profile-badges">
               <div className="profile-badge badge-style">
-                Манера: {details.behaviorProfile.style}
+                Манера: {behaviorProfile.style}
               </div>
               <div className="profile-badge badge-conf">
-                Впевненість: {details.behaviorProfile.confidence}
+                Впевненість: {behaviorProfile.confidence}
               </div>
               <div className="profile-badge badge-speed">
-                Темп: {details.behaviorProfile.speedCategory}
+                Темп: {behaviorProfile.speedCategory}
               </div>
             </div>
 
             <p className="profile-text">
-              {details.behaviorProfile.description}
+              {behaviorProfile.description}
             </p>
 
             <div className="strengths-weaknesses-grid">
               <div className="strengths-column">
                 <h5>✓ Сильні сторони манери:</h5>
                 <ul className="profile-list">
-                  {details.behaviorProfile.strengths?.map((str: string, i: number) => (
+                  {behaviorProfile.strengths?.map((str: string, i: number) => (
                     <li key={i}>{str}</li>
                   ))}
                 </ul>
@@ -564,7 +566,7 @@ export const TestAnalysis: React.FC = () => {
               <div className="weaknesses-column">
                 <h5>✗ Зони ризику / Слабкості:</h5>
                 <ul className="profile-list">
-                  {details.behaviorProfile.weaknesses?.map((weak: string, i: number) => (
+                  {behaviorProfile.weaknesses?.map((weak: string, i: number) => (
                     <li key={i}>{weak}</li>
                   ))}
                 </ul>
@@ -576,7 +578,7 @@ export const TestAnalysis: React.FC = () => {
                 🔮 Прогноз професійної успішності:
               </span>
               <p className="block-desc" style={{ fontWeight: '500', color: 'var(--text-dark)' }}>
-                {details.behaviorProfile.forecast}
+                {behaviorProfile.forecast}
               </p>
             </div>
 
@@ -585,7 +587,7 @@ export const TestAnalysis: React.FC = () => {
                 💡 Рекомендації для кандидата:
               </span>
               <p className="block-desc" style={{ color: 'var(--text-dark)' }}>
-                {details.behaviorProfile.recommendations}
+                {behaviorProfile.recommendations}
               </p>
             </div>
           </div>

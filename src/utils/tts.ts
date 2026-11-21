@@ -1,5 +1,5 @@
 let activeUtterance: SpeechSynthesisUtterance | null = null;
-let keepAliveTimer: any = null;
+let keepAliveTimer: ReturnType<typeof setInterval> | null = null;
 
 /**
  * Returns available voices from SpeechSynthesis, handling asynchronous loading.

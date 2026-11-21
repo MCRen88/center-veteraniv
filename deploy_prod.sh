@@ -6,6 +6,7 @@
 
 # Ensure script is run from the directory where it's located
 cd "$(dirname "$0")"
+set -euo pipefail
 
 echo "==========================================="
 echo " 🌐 Початок оновлення продуктового серверу"
@@ -17,18 +18,25 @@ git pull
 
 # 2. Apply database migrations
 echo "🗄️ [2/4] Застосування нових міграцій бази даних..."
-if [ -f "./apply_migration.sh" ]; then
-    ./apply_migration.sh
-else
-    echo "⚠️ Попередження: Скрипт apply_migration.sh не знайдено, пробуємо запустити міграцію напряму..."
-    docker exec -i supabase-db-lms psql -U postgres -d postgres -f /docker-entrypoint-initdb.d/004_update_questions.sql
-fi
+# Applies only migrations that were not applied yet (see apply_migration.sh).
+./apply_migration.sh
+
+# Visit logs hold personal data: keep 180 days.
+docker exec -i supabase-db-lms psql -U postgres -d postgres -tAc "SELECT 'Видалено старих записів візитів: ' || public.purge_old_visits(180);"
+
+# Rebuild and (re)start the api service if its code changed.
+docker compose up -d --build api
+
+# Access rules must hold after every deploy.
+./scripts/check-rls.sh
 
 # 3. Build frontend assets
 echo "📦 [3/4] Збирання продуктового фронтенду..."
 if command -v npm &> /dev/null; then
-    npm install
+    npm ci
     npm run build
+    # The service_role key must never end up in the public bundle.
+    node scripts/check-bundle.mjs dist
 else
     echo "❌ Помилка: Node.js / npm не знайдено. Будь ласка, встановіть їх для збирання фронтенду."
     exit 1

@@ -8,10 +8,11 @@ echo "==========================================="
 cd "$(dirname "$0")"
 
 # Завантажуємо змінні з .env якщо файл існує
-if [ -f .env ]; then
-  # Експортуємо змінні, ігноруючи коментарі та пусті рядки
-  export $(grep -v '^#' .env | xargs)
-fi
+# Read single values without sourcing .env (values such as MAIL_FROM_NAME contain spaces)
+env_get() {
+  [ -f .env ] && grep -E "^$1=" .env | tail -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//' || true
+}
+DB_PORT=$(env_get DB_PORT); STUDIO_PORT=$(env_get STUDIO_PORT); KONG_PORT=$(env_get KONG_PORT)
 
 # Налаштовуємо порти за замовчуванням
 DB_PORT=${DB_PORT:-54328}
