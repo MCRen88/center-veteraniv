@@ -31,12 +31,8 @@ docker exec -i supabase-db-lms psql -U postgres -d postgres -tAc "SELECT 'Вид
 # GOTRUE_DISABLE_SIGNUP) and rebuild the api service.
 docker compose up -d --build
 
-# Wait for the gateway before the access checks.
-KONG_PORT=$(grep -E '^KONG_PORT=' .env | tail -1 | cut -d= -f2- || true)
-for _ in $(seq 1 30); do
-  curl -s -o /dev/null "http://127.0.0.1:${KONG_PORT:-54471}/rest/v1/" && break
-  sleep 2
-done
+# Wait until PostgREST has its schema cache and Kong reaches GoTrue.
+./scripts/wait-stack.sh 180
 
 # Access rules must hold after every deploy.
 ./scripts/check-rls.sh
