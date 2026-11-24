@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
+import logoZoippo from '../assets/logo-zoippo.png';
 
 export const Home: React.FC = () => {
   const { state } = useAppContext();
@@ -205,7 +206,7 @@ export const Home: React.FC = () => {
       <section className="hero">
         <div className="container hero-content">
           <a href="https://zoippo.zp.ua/main/" target="_blank" rel="noopener noreferrer">
-            <img src="/logo-zoippo.png" alt='КЗ "ЗОІППО" ЗОР' className="hero-logo" />
+            <img src={logoZoippo} alt='КЗ "ЗОІППО" ЗОР' className="hero-logo" />
           </a>
           <div className="hero-institution">
             <a href="https://zoippo.zp.ua/main/" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>

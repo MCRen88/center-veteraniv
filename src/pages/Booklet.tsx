@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import logoZoippo from '../assets/logo-zoippo.png';
 
 export const Booklet: React.FC = () => {
   return (
@@ -466,7 +467,7 @@ export const Booklet: React.FC = () => {
         {/* Top Header Bar */}
         <div className="banner-topbar">
           <div className="topbar-institution">
-            <img src="/logo-zoippo.png" alt="КЗ «ЗОІППО» ЗОР" />
+            <img src={logoZoippo} alt="КЗ «ЗОІППО» ЗОР" />
             <span>Комунальний заклад «Запорізький обласний інститут післядипломної педагогічної освіти» ЗОР</span>
           </div>
           <div className="topbar-badge">

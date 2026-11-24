@@ -1,4 +1,5 @@
 import React from 'react';
+import logoZoippo from '../assets/logo-zoippo.png';
 
 export const Footer: React.FC = () => {
   return (
@@ -61,7 +62,7 @@ export const Footer: React.FC = () => {
           <div className="footer-grid">
             <div>
               <a href="https://zoippo.zp.ua/main/" target="_blank" rel="noopener noreferrer">
-                <img src="/logo-zoippo.png" alt='КЗ "ЗОІППО" ЗОР' className="footer-logo" />
+                <img src={logoZoippo} alt='КЗ "ЗОІППО" ЗОР' className="footer-logo" />
               </a>
               <div className="footer-heading">
                 <a href="https://zoippo.zp.ua/main/" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>
